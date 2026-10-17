@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Callable, Optional, TextIO
+from typing import Optional, TextIO
 
 from .events import Event
 
@@ -33,10 +33,13 @@ class ProgressPrinter:
             self._say("note: %s" % d["message"])
         elif kind == "run_started":
             self._say("reviewing %s#%d at %s: %s" % (d["repo"], d["number"], d["head"][:10], d["title"]))
+        elif kind == "pii_redacted":
+            self._say("replaced %d email address%s in the PR text with [email] before sending it" % (d["emails"], "" if d["emails"] == 1 else "es"))
         elif kind == "diff_ready":
             self._say("diff: %d files, %d changed lines (%d excluded)" % (d["files"], d["changed_lines"], d["excluded"]))
         elif kind == "checkout_ready":
-            self._say("read-only checkout ready (%d files, %d symlinks skipped)" % (d["files"], d["skipped_links"]))
+            self._say("read-only checkout ready (%d files, %d symlinks skipped)%s" % (
+                d["files"], d["skipped_links"], "; kept at %s" % d["path"] if d.get("kept") else ""))
         elif kind == "resolver_started":
             self._say("resolving project criteria from AGENTS.md (%d candidate files) ..." % d["candidates"])
         elif kind == "criteria_resolved":

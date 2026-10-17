@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from code_reviewer.claude_cli import ClaudeResult
-from code_reviewer.engine import PRContext
+from code_reviewer.models import PRContext
 
 APP_BASE = 'def get(user_id):\n    return db.run("SELECT 1")\n'
 APP_HEAD = (
@@ -56,7 +56,7 @@ def make_repo(root: Path) -> PRContext:
 
 def finding(**overrides: Any) -> Dict[str, Any]:
     data = {
-        "local_id": "x", "title": "SQL built by concatenation", "description": "user_id is concatenated into SQL, allowing injection.",
+        "title": "SQL built by concatenation", "description": "user_id is concatenated into SQL, allowing injection.",
         "severity": "high", "kind": "present", "rule_id": "GEN-004", "file": "app.py", "line": 2,
         "quote": 'query = "SELECT * FROM t WHERE id=" + user_id', "suggestion": "Use a parameterized query.",
         "self_check": {"verdict": "confirmed", "reason": "no validation upstream"},

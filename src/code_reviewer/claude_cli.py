@@ -6,7 +6,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 TOKEN_KEYS = ("input", "output", "cache_creation", "cache_read")
 
@@ -62,47 +62,56 @@ def _as_int(value: Any) -> int:
         return 0
 
 
-def parse_envelope(stdout: str) -> ClaudeResult:
-    """Parse the JSON envelope printed by `claude -p --output-format json`."""
+def _decode_envelope(stdout: str) -> Tuple[Optional[Dict[str, Any]], Optional[ClaudeResult]]:
+    """The result object printed by `claude -p --output-format json`, or a failed ClaudeResult explaining why there is none."""
     stdout = (stdout or "").strip()
     if not stdout:
-        return ClaudeResult(ok=False, error="empty output from claude")
+        return None, ClaudeResult(ok=False, error="empty output from claude")
     try:
         envelope = json.loads(stdout)
     except ValueError:
-        return ClaudeResult(ok=False, error="claude output is not JSON: %s" % stdout[:200], text=stdout)
-    if isinstance(envelope, list):
+        return None, ClaudeResult(ok=False, error="claude output is not JSON: %s" % stdout[:200], text=stdout)
+    if isinstance(envelope, list):  # some modes print every message; the last "result" message is the answer
         results = [item for item in envelope if isinstance(item, dict) and item.get("type") == "result"]
         if not results:
-            return ClaudeResult(ok=False, error="no result message in claude output", raw=envelope)
+            return None, ClaudeResult(ok=False, error="no result message in claude output", raw=envelope)
         envelope = results[-1]
     if not isinstance(envelope, dict):
-        return ClaudeResult(ok=False, error="unexpected claude output shape", raw=envelope)
+        return None, ClaudeResult(ok=False, error="unexpected claude output shape", raw=envelope)
+    return envelope, None
 
+
+def _token_counts(envelope: Dict[str, Any]) -> Dict[str, int]:
     usage = envelope.get("usage") or {}
-    tokens = {
+    return {
         "input": _as_int(usage.get("input_tokens")),
         "output": _as_int(usage.get("output_tokens")),
         "cache_creation": _as_int(usage.get("cache_creation_input_tokens")),
         "cache_read": _as_int(usage.get("cache_read_input_tokens")),
     }
+
+
+def parse_envelope(stdout: str) -> ClaudeResult:
+    """Parse the JSON envelope printed by `claude -p --output-format json`."""
+    envelope, failure = _decode_envelope(stdout)
+    if envelope is None:
+        return failure  # type: ignore[return-value]
+
     cost = envelope.get("total_cost_usd", envelope.get("cost_usd"))
     model_usage = envelope.get("modelUsage")
-    model = ", ".join(sorted(model_usage)) if isinstance(model_usage, dict) and model_usage else None
     text = envelope.get("result") if isinstance(envelope.get("result"), str) else ""
     subtype = str(envelope.get("subtype") or "")
     is_error = bool(envelope.get("is_error")) or subtype.startswith("error")
-    budget_exceeded = "budget" in subtype.lower() or (is_error and "budget" in text.lower()[:200])
 
     result = ClaudeResult(
         ok=False,
         text=text,
         cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
-        tokens=tokens,
+        tokens=_token_counts(envelope),
         duration_ms=_as_int(envelope.get("duration_ms")) or None,
         num_turns=_as_int(envelope.get("num_turns")) or None,
-        model=model,
-        budget_exceeded=bool(budget_exceeded),
+        model=", ".join(sorted(model_usage)) if isinstance(model_usage, dict) and model_usage else None,
+        budget_exceeded="budget" in subtype.lower() or (is_error and "budget" in text.lower()[:200]),
         raw=envelope,
     )
     if is_error:

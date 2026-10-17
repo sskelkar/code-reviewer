@@ -3,7 +3,8 @@ import re
 import unittest
 
 from code_reviewer.config import Config
-from code_reviewer.repl import COMMAND_GROUPS, Session, welcome_text
+from code_reviewer.repl import Session
+from code_reviewer.repl_help import COMMAND_GROUPS, welcome_text
 
 from .helpers import FakeRunner
 

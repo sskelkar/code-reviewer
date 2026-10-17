@@ -6,7 +6,8 @@ from pathlib import Path
 from code_reviewer import git_ops
 from code_reviewer.claude_cli import ClaudeResult
 from code_reviewer.config import Config
-from code_reviewer.engine import Engine, ReviewRefused
+from code_reviewer.engine import Engine
+from code_reviewer.models import ReviewRefused
 from code_reviewer.events import Event
 from code_reviewer.repl import Session, load_labels
 
@@ -68,9 +69,10 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         result = self.engine(runner).review(self.ctx)
         run = result.run_dir
         for name in ("config.json", "master.json", "stats.json", "report.md", "labels.json", "input/criteria_index.json",
-                     "input/diff.txt", "pass-01/reviewer.raw.json", "pass-02/comparator.raw.json", "pass-03/mapping.json"):
+                     "input/diff.txt", "input/pr.json", "input/reviewer.system.md", "input/reviewer.user.md",
+                     "pass-01/reviewer.raw.json", "pass-02/comparator.raw.json", "pass-03/mapping.json"):
             self.assertTrue((run / name).exists(), name)
-        self.assertFalse((run / "checkout").exists())  # cleaned up
+        self.assertFalse(Path(runner.calls_for("reviewer")[0]["cwd"]).exists())  # the checkout is cleaned up
         config = json.loads((run / "config.json").read_text())
         self.assertEqual(len(config["prompt_hashes"]), 9)
         self.assertEqual(config["versions"]["claude_code"], "fake-1.0")
@@ -346,6 +348,42 @@ class BudgetAndSinglePassTests(TempDirTestMixin, unittest.TestCase):
         report = result.report_path.read_text()
         self.assertIn("## High confidence (1)", report)
         self.assertNotIn("unrated", report)
+
+
+
+class ReviewerPromptTests(TempDirTestMixin, unittest.TestCase):
+    """Every pass must receive exactly the same input, and the reviewer must be asked to be thorough."""
+
+    def setUp(self):
+        self.tmp = self.make_tmp()
+        self.ctx = make_repo(self.tmp)
+
+    def reviewer_calls(self):
+        runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], comparator=[match("p2-f1"), match("p3-f1")], resolver=RESOLVER_OK)
+        Engine(Config(runs_dir=str(self.tmp / "runs")), runner).review(self.ctx)
+        calls = runner.calls_for("reviewer")
+        self.assertGreaterEqual(len(calls), 3)
+        return calls
+
+    def test_every_pass_gets_byte_identical_prompts(self):
+        calls = self.reviewer_calls()
+        self.assertEqual(len({c["user_prompt"] for c in calls}), 1)
+        self.assertEqual(len({c["system_prompt"] for c in calls}), 1)
+
+    def test_reviewer_is_not_told_which_pass_it_is(self):
+        call = self.reviewer_calls()[0]
+        for text in (call["user_prompt"], call["system_prompt"]):
+            self.assertNotIn("review pass", text.lower())
+            self.assertNotIn("pass_number", text)
+            self.assertNotRegex(text, r"p\d+-f\d")
+
+    def test_reviewer_is_asked_to_be_thorough_not_to_stop_at_one_finding(self):
+        system = self.reviewer_calls()[0]["system_prompt"]
+        for phrase in ("Do not stop at the first finding", "report every issue", "Verify claims against the code",
+                       "Report each distinct issue as its own finding", "never in `findings`"):
+            self.assertIn(phrase, system)
+        self.assertNotIn("15 tool calls", system)  # an early-stopping nudge that was removed
+        self.assertNotIn("compared with other", system)  # tells the model others will cover the rest
 
 
 if __name__ == "__main__":

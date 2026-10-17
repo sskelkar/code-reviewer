@@ -1,4 +1,4 @@
-Review pull request #{{pr_number}} of {{repo}}. This is review pass {{pass_number}}.
+Review pull request #{{pr_number}} of {{repo}}.
 
 Base branch: {{base_ref}} at {{base_sha}}
 PR head commit: {{head_sha}}
@@ -15,8 +15,6 @@ Commit messages:
 </untrusted_pr_metadata>
 
 <review_criteria>
-Rules marked `project` come from the reviewed project and take precedence over rules marked `default`.
-
 {{criteria_block}}
 </review_criteria>
 
@@ -32,4 +30,4 @@ These files changed but are left out of the diff (lockfiles, vendored, generated
 {{diff_block}}
 </diff>
 
-Produce your review now. Your final message must be only the JSON object.
+Produce your review now.

@@ -76,6 +76,8 @@ class Config:
     criteria_max_chars: int = 120000
     exclude_patterns: List[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
     grounding_line_window: int = 30
+    # Replace email addresses in the PR title, description and commit messages before they are sent to the model
+    redact_emails: bool = True
 
     # Budgets and timeouts
     call_budget_usd: float = 0.50

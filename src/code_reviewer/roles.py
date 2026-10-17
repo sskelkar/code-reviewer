@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Sequence
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 from .claude_cli import ClaudeResult
 from .config import Config
-from .events import Event
 from .findings import compact
 from .llm import CallSpec, ClaudeCaller, requires_lists
 from .master import validate_decisions
@@ -51,29 +50,35 @@ class Reviewer:
     def __init__(self, caller: ClaudeCaller, prompt: PromptSet, cfg: Config, inputs: ReviewInput):
         self.caller, self.prompt, self.cfg, self.inputs = caller, prompt, cfg, inputs
 
-    def _variables(self, pass_no: int) -> Dict[str, Any]:
-        ctx = self.inputs.ctx
+    @staticmethod
+    def _variables(inputs: ReviewInput) -> Dict[str, Any]:
+        ctx = inputs.ctx
         return {
             "pr_number": ctx.number,
             "repo": ctx.repo,
-            "pass_number": pass_no,
             "base_ref": ctx.base_ref,
             "base_sha": ctx.base_sha[:12],
             "head_sha": ctx.head_sha[:12],
             "pr_title": escape_untrusted(ctx.title),
             "pr_body": escape_untrusted(ctx.body) if ctx.body.strip() else "(no description)",
             "commit_messages": escape_untrusted(ctx.commit_messages) if ctx.commit_messages.strip() else "(none)",
-            "criteria_block": self.inputs.criteria_block,
-            "changed_files_list": escape_untrusted(self.inputs.changed_files),
-            "excluded_files_list": escape_untrusted(self.inputs.excluded_files),
-            "diff_block": escape_untrusted(self.inputs.diff_block),
+            "criteria_block": inputs.criteria_block,
+            "changed_files_list": escape_untrusted(inputs.changed_files),
+            "excluded_files_list": escape_untrusted(inputs.excluded_files),
+            "diff_block": escape_untrusted(inputs.diff_block),
         }
 
+    @staticmethod
+    def render(prompt: PromptSet, cfg: Config, inputs: ReviewInput) -> Tuple[str, str]:
+        """The exact (system, user) prompts of a review. They do not depend on the pass number: every pass gets the same."""
+        return (render(prompt.system, {}, {"self_check": cfg.self_check}),
+                render(prompt.user, Reviewer._variables(inputs)))
+
     def review(self, pass_no: int, raw_path: Path) -> ClaudeResult:
+        """Run one review. Every pass receives identical input."""
+        system, user = self.render(self.prompt, self.cfg, self.inputs)
         spec = CallSpec(
-            role="reviewer", pass_no=pass_no,
-            system=render(self.prompt.system, {}, {"self_check": self.cfg.self_check}),
-            user=render(self.prompt.user, self._variables(pass_no)),
+            role="reviewer", pass_no=pass_no, system=system, user=user,
             schema=self.prompt.schema, model=self.cfg.model_reviewer, tools=self.TOOLS, cwd=self.inputs.checkout,
         )
         return self.caller.call(spec, requires_lists("findings"), raw_path)

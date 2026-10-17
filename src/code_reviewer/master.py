@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple
 
 from .findings import SEVERITY_RANK
 
@@ -17,6 +17,7 @@ class PassOutcome:
     new_ids: List[str] = field(default_factory=list)       # master entries created in this pass
     matched_ids: List[str] = field(default_factory=list)   # pre-existing entries that were matched
     new_scored: List[str] = field(default_factory=list)    # entries that became scored (first confirmed sighting)
+    assigned: Dict[str, str] = field(default_factory=dict)  # local finding ID -> master finding ID it was merged into
 
 
 def _canonical(finding: Dict[str, Any]) -> Dict[str, Any]:
@@ -127,6 +128,7 @@ class MasterList:
             resolved[finding["local_id"]] = ident
             self._record(ident, pass_no, finding)
         outcome.new_scored = sorted(self.scored_ids() - scored_before)
+        outcome.assigned = dict(resolved)
         return outcome
 
     # --- serialization -----------------------------------------------------------

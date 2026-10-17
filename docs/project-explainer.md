@@ -58,8 +58,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "doctor":                  # `reviewer doctor`
         return run_doctor(cfg, runner, live=args.live)
     if args.command == "review":                  # `reviewer review <url>`
-        ...                                       # builds an Engine and calls engine.review(ctx)
-    Session(cfg, runner).loop()                   # plain `reviewer`: the interactive REPL
+        ...                                       # parse the PR, apply the options, print the banner in a terminal,
+                                                  # call review_flow.run_review(...), print the summary, optionally post
+    Session(cfg, runner).loop()                   # plain `reviewer`: the interactive prompt
     return 0
 ```
 
@@ -76,11 +77,11 @@ if __name__ == "__main__":
 
 | You type | Entry | Goes to |
 |---|---|---|
-| `reviewer` | `cli.main` | [`repl.Session.loop`](../src/code_reviewer/repl.py): reads commands in a loop, `review <url>` calls the engine |
-| `reviewer review <url>` | `cli.main` | Builds an `Engine` directly |
+| `reviewer` | `cli.main` | [`repl.Session.loop`](../src/code_reviewer/repl.py): reads commands in a loop, `review <url>` calls `review_flow.run_review` |
+| `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
 | `reviewer doctor` | `cli.main` | [`doctor.run_doctor`](../src/code_reviewer/doctor.py): environment checks |
 
-Both review paths end in the same place: **[`Engine.review`](../src/code_reviewer/engine.py)** is the heart of the project, and the best first file to read.
+Both review paths go through `review_flow.run_review` and end in the same place: **[`Engine.review`](../src/code_reviewer/engine.py)** is the heart of the project, and the best first file to read.
 
 ### 2.3 Tests
 
@@ -91,24 +92,26 @@ Both review paths end in the same place: **[`Engine.review`](../src/code_reviewe
 ```
 reviewer review <url>
  cli.main
-  ├─ load_config()                     -> Config (settings object)
-  ├─ ClaudeRunner(...)                 -> wrapper that runs `claude -p ...` as a subprocess
-  ├─ Engine(cfg, runner, emit=ProgressPrinter())
-  ├─ engine.prepare(ref)               -> pr_source.load_pr_context -> git_ops (runs gh and git)
-  └─ engine.review(ctx)
-      ├─ RunStore.create(...)          directory for this run's files
-      ├─ _load_diff                    -> diffview.parse_unified_diff
-      ├─ git_ops.export_tree           read-only copy of the PR's code
-      ├─ _resolve_criteria             -> criteria.* (+ CriteriaResolver, an LLM call)
-      ├─ build PassRunner(...)         manual wiring of collaborators (section 10.1)
-      ├─ _run_passes: loop, asking StopPolicy whether to continue
-      │    PassRunner.run
-      │      ├─ Reviewer.review        -> ClaudeCaller.call -> ClaudeRunner.run  (`claude` process)
-      │      ├─ FindingsPreparer.prepare   validate + check evidence
-      │      ├─ Comparator.compare     -> another `claude` call (sometimes skipped)
-      │      └─ MasterList.apply       merge into the master findings
-      ├─ report.render_report          -> report.md (the detailed report)
-      └─ summary.render_summary        -> summary.md (the shareable summary, also printed)
+  ├─ load_config()                         -> Config (settings object)
+  ├─ ClaudeRunner(...)                     -> wrapper that runs `claude -p ...` as a subprocess
+  └─ review_flow.run_review(...)           shared by the one-shot command and the interactive prompt
+      ├─ Engine(cfg, runner, emit=ProgressPrinter())
+      ├─ engine.prepare(ref)               -> pr_source.load_pr_context -> git_ops (runs gh and git)
+      └─ engine.review(ctx)
+          ├─ inputs.redact                 email addresses in the PR text -> [email]
+          ├─ RunStore.create(...)          directory for this run's files
+          ├─ inputs.load_diff              -> diffview.parse_unified_diff
+          ├─ git_ops.export_tree           read-only copy of the PR's code, in its own temporary directory
+          ├─ inputs.resolve_criteria       -> criteria.* (+ CriteriaResolver, an LLM call)
+          ├─ build PassRunner(...)         manual wiring of collaborators (section 10.1)
+          ├─ _run_passes: loop, asking StopPolicy whether to continue
+          │    PassRunner.run
+          │      ├─ Reviewer.review        -> ClaudeCaller.call -> ClaudeRunner.run  (`claude` process)
+          │      ├─ FindingsPreparer.prepare   validate + check evidence
+          │      ├─ Comparator.compare     -> another `claude` call (sometimes skipped)
+          │      └─ MasterList.apply       merge into the master findings
+          ├─ report.render_report          -> report.md (the detailed report)
+          └─ summary.render_summary        -> summary.md (the shareable summary, also printed)
 ```
 
 ---
@@ -198,17 +201,17 @@ The project deliberately uses only the standard library. This is what each modul
 | `subprocess` | Run external programs (`claude`, `git`, `gh`) | `ProcessBuilder` | `claude_cli.py`, `git_ops.py`, `doctor.py` |
 | `json` | Parse and write JSON | Jackson / Gson | many (`claude_cli`, `run_store`, `engine`, ...) |
 | `pathlib` | File paths as objects; `path / "x"` joins | `java.nio.file.Path` + `Files` | nearly every module |
-| `re` | Regular expressions | `java.util.regex` | `diffview.py`, `criteria.py`, `report.py` |
+| `re` | Regular expressions | `java.util.regex` | `diffview.py`, `criteria.py`, `report.py`, `redact.py` |
 | `dataclasses` | Auto-generate data-holder classes | records / Lombok `@Data` | `models.py`, `config.py`, ... |
 | `typing` | Type-hint vocabulary (`List`, `Dict`, `Optional`, ...) | Generics syntax | everywhere |
-| `argparse` | Command-line parsing | picocli, commons-cli | `cli.py`, `repl.py` |
+| `argparse` | Command-line parsing | picocli, commons-cli | `cli.py`, `review_options.py`, `replay.py` |
 | `shlex` | Split a command line honoring quotes | none direct | `repl.py` |
-| `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `git_ops.py`, `post.py`, `doctor.py` |
+| `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `run_store.py`, `git_ops.py`, `post.py`, `doctor.py` |
 | `shutil` | High-level file ops (delete a tree) | `FileUtils` | `run_store.py`, `doctor.py` |
 | `tarfile` | Read `.tar` archives | commons-compress | `git_ops.py` |
 | `hashlib` | SHA-256 hashing | `MessageDigest` | `templates.py` |
 | `fnmatch` | Shell-style glob matching (`*.min.js`) | `PathMatcher` | `diffview.py` |
-| `itertools` | Iteration helpers (`combinations`) | Streams helpers | `master.py` |
+| `itertools` | Iteration helpers (`combinations`) | Streams helpers | `master.py`, `replay.py` |
 | `copy` | Deep copies | copy constructors | `master.py` |
 | `time`, `platform`, `os`, `sys` | Clock, interpreter info, environment variables, stdout/exit | `System`, `Instant` | several |
 | `readline` | Line editing and history for `input()` | JLine | `repl.py` (optional import) |
@@ -414,14 +417,14 @@ def requires_lists(*keys: str) -> Validator:
 
 `requires_lists` builds and returns a function. The inner `validate` captures `keys` from the enclosing scope (a closure, like a lambda capturing a variable). Callers do `requires_lists("findings")` and get a validator to pass around. In Java this would be a method returning a `Function<...>`.
 
-Java lambdas cannot reassign captured locals; Python inner functions can, if they declare `nonlocal` (see `doctor.run_doctor`, where the nested `check` function updates a `failures` counter).
+Java lambdas cannot reassign captured locals; Python inner functions can, if they declare `nonlocal` (see `redact.redact_emails`, where the nested `replace` function increments a `count` declared in the enclosing function).
 
 ### 7.3 Callable objects
 
 Any object whose class defines `__call__` can be invoked like a function. `ProgressPrinter` (in `progress.py`) and `CriteriaResolver` (in `roles.py`) do this, so an instance can be passed where a function is expected:
 
 ```python
-engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=args.verbose))   # emit expects a function Event -> None
+engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=options.verbose))   # emit expects a function Event -> None (review_flow.run_review)
 ```
 
 This is how Java would use a class implementing `Consumer<Event>`, minus the interface declaration.
@@ -432,7 +435,7 @@ This is how Java would use a class implementing `Consumer<Event>`, minus the int
 
 ### 8.1 The short answer
 
-> **Inheritance in this project is used in exactly two ways:** custom exception types (`class ReviewRefused(ValueError)`), and unit tests (`class X(unittest.TestCase)`, sometimes with a mixin). There are **no abstract classes, no interfaces, no `super()` calls, no class hierarchies and no metaclasses** in the production code. Behavior is shared by **composition** (objects holding other objects) and by passing **functions** around.
+> **Inheritance in this project is used in three ways:** custom exception types (`class ReviewRefused(ValueError)`), unit tests (`class X(unittest.TestCase)`, sometimes with a mixin), and one subclass of a standard-library class that overrides a single method (`ReplArgumentParser`, section 8.6). There are **no abstract classes, no interfaces, no `super()` calls, no class hierarchies and no metaclasses** in the production code. Behavior is shared by **composition** (objects holding other objects) and by passing **functions** around.
 
 If you are used to deep Java hierarchies, expect something flatter here.
 
@@ -510,7 +513,7 @@ class PRContext:
 
   In Python, a default value is evaluated **once** and shared. `= []` would give every instance the same list (and `@dataclass` refuses it). `default_factory=list` calls `list()` for each new object. This is the idiom you will see in `Config`, `PassRecord` and others.
 - Helpers from the `dataclasses` module: `asdict(obj)` turns an instance into a nested `dict` (used for JSON output, e.g. `PassRecord.to_dict`) and `replace(obj, ...)` makes a shallow copy (`cli.py` does `cfg = replace(cfg)` to avoid mutating shared settings).
-- There are about 20 dataclasses in this project, for example `Config`, `PRContext`, `PassRecord`, `RunResult`, `CallSpec`, `ClaudeResult`, `Event`, `Rule`.
+- There are 22 dataclasses in this project, for example `Config`, `PRContext`, `PassRecord`, `RunResult`, `CallSpec`, `ClaudeResult`, `Event`, `Rule`.
 
 ### 8.4 Decorators
 
@@ -527,7 +530,7 @@ A decorator is written `@name` above a function or class. It looks like a Java a
 
 ```python
 @staticmethod
-def is_trivial(findings, candidates) -> bool:
+def is_trivial(findings: Sequence[Dict[str, Any]], candidates: Sequence[Dict[str, Any]]) -> bool:
     """With nothing to compare against (or no findings) every finding is new and no model call is needed."""
     return not findings or (not candidates and len(findings) == 1)
 ```
@@ -536,7 +539,7 @@ def is_trivial(findings, candidates) -> bool:
 
 ```python
 @classmethod
-def create(cls, runs_path: Path, ctx: PRContext) -> "RunStore":
+def create(cls, runs_path: Path, ctx: PRContext, label: str = "") -> "RunStore":
     ...
     path.mkdir()
     return cls(path)          # cls is the class itself; cls(path) is `new RunStore(path)`
@@ -557,7 +560,7 @@ Operator overloading exists in Python and is why `Path` objects use `/`: `self.w
 
 ### 8.6 Inheritance, as it is actually used here
 
-**Exceptions** ([`models.py`](../src/code_reviewer/models.py), [`git_ops.py`](../src/code_reviewer/git_ops.py), [`claude_cli.py`](../src/code_reviewer/claude_cli.py), [`config.py`](../src/code_reviewer/config.py)):
+**Exceptions** ([`models.py`](../src/code_reviewer/models.py), [`git_ops.py`](../src/code_reviewer/git_ops.py), [`claude_cli.py`](../src/code_reviewer/claude_cli.py), [`config.py`](../src/code_reviewer/config.py), [`review_options.py`](../src/code_reviewer/review_options.py)):
 
 ```python
 class ReviewRefused(ValueError):
@@ -583,6 +586,18 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
 ```
 
 This is **multiple inheritance**: `EngineTests` extends both. Python allows any number of parent classes; they are searched left to right (the "method resolution order") when a method is looked up. `TempDirTestMixin` is a **mixin**: a small class that adds a helper method and is not meant to be used alone, much like a Java interface with a default method. It calls `self.addCleanup`, which only exists on its sibling `unittest.TestCase`; that works because Python resolves the call on the actual object at runtime (duck typing).
+
+**A subclass that overrides one method** ([`review_options.py`](../src/code_reviewer/review_options.py)):
+
+```python
+class ReplArgumentParser(argparse.ArgumentParser):
+    """An argparse parser that raises OptionError on bad input instead of printing usage and exiting."""
+
+    def error(self, message: str) -> Any:
+        raise OptionError(message)
+```
+
+This is the one place where a method is **overridden**. The standard library's `ArgumentParser.error` prints a usage message and exits the whole process, which is right for a command-line tool but wrong inside the interactive prompt, which must stay alive. The subclass replaces `error` with a version that raises an exception the prompt can catch and report. In Java this is `extends ArgumentParser` plus an `@Override` method. Python has no `@Override`: an override is simply a method with the same name, and nothing checks that the name matches, so a typo would silently create a new method instead of overriding. It also needs no `super()` call because it does not reuse the parent's behavior.
 
 ### 8.7 Polymorphism without interfaces (duck typing)
 
@@ -620,12 +635,15 @@ finally:
 (from `llm.ClaudeCaller.call`). Other forms in this code:
 
 ```python
-except (git_ops.GitError, ConfigError, ReviewRefused, ClaudeError) as exc:   # multi-catch, binds the exception to `exc`
+REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, ClaudeError)   # review_flow.py: a tuple of exception classes
+
+except REVIEW_ERRORS as exc:                                          # multi-catch, binds the exception to `exc`
     print("error: %s" % exc, file=sys.stderr)
 
 raise GitError("command not found: %s" % cmd[0]) from exc     # `from exc` chains the cause (Java: new X(msg, cause))
 ```
 
+- A tuple of exception classes can be named once and reused in `except`, like a Java multi-catch that you can name and share between callers.
 - `raise` is `throw`; `except` is `catch`. There is **no `throws` clause and no checked exceptions.** Any function may raise anything.
 - `except Exception` catches almost everything but not `KeyboardInterrupt` (Ctrl-C) or `SystemExit`; those derive from `BaseException`. `engine.py` catches `KeyboardInterrupt` deliberately so Ctrl-C ends a review gracefully with a partial report.
 - Python culture prefers "try it and handle the failure" over pre-checking; `json.loads` is called inside `try`, for example.
@@ -652,7 +670,7 @@ pass_runner = PassRunner(
     cfg,
     Reviewer(caller, self.prompts["reviewer"], cfg, review_input),
     Comparator(caller, self.prompts["comparator"], cfg, store.input_dir),
-    FindingsPreparer(criteria.index(), cfg.self_check, FileCache(store.checkout), DiffIndex(files), cfg.grounding_line_window),
+    FindingsPreparer(criteria.index(), cfg.self_check, FileCache(checkout), DiffIndex(files), cfg.grounding_line_window),
     master, stats, store, self.emit,
 )
 ```
@@ -677,28 +695,36 @@ A typical module here reads top to bottom as: docstring, `from __future__ import
 
 ### 11.1 `Engine.review`: read this first
 
-[`engine.py`](../src/code_reviewer/engine.py), about 40 lines. Read it as a recipe; each line delegates to a module:
+[`engine.py`](../src/code_reviewer/engine.py), about 45 lines. Read it as a recipe; each line delegates to a module:
 
 ```python
 def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
     cfg = self.cfg
+    ctx, redacted_emails = self.inputs.redact(ctx)           # email addresses in the PR text become [email]
     self.emit("run_started", repo=ctx.repo, ...)             # tell the frontend
     stats = Stats()                                          # cost accounting
     store = RunStore.create(cfg.runs_path(), ctx)            # directory for artifacts
     store.dump("config.json", self._run_metadata(ctx))       # remember settings and versions
+    store.save_pr_text(ctx, redacted_emails)                 # the PR text as it is sent to the model
 
-    files, diff_summary = self._load_diff(ctx)               # parse the diff (tuple return, unpacked)
-    self.emit("checkout_ready", **git_ops.export_tree(...))  # ** spreads a dict into keyword arguments
+    files, diff_summary = self.inputs.load_diff(ctx)         # parse the diff (tuple return, unpacked)
+    checkout = store.prepare_checkout()                      # a temporary directory outside the run directory
+    try:
+        self.emit("checkout_ready", path=str(checkout), kept=keep_checkout,
+                  **git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout))   # ** spreads a dict into keyword arguments
 
-    caller = ClaudeCaller(self.runner, cfg, stats)           # all LLM calls go through this
-    criteria = self._resolve_criteria(ctx, [f.path for f in files], caller, store)
-    ...
-    passes, completed, stop_reason = self._run_passes(pass_runner, stats)
-    ...
-    return result
+        caller = ClaudeCaller(self.runner, cfg, stats)       # all LLM calls go through this
+        criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
+        ...
+        passes, completed, stop_reason = self._run_passes(pass_runner, stats)
+        ...
+        return result
+    finally:
+        if not keep_checkout:                                # runs on success and on errors alike
+            store.cleanup_checkout()
 ```
 
-Notes for a Java reader: `**git_ops.export_tree(...)` expands the returned dict into named arguments (`files=..., skipped_links=...`); `[f.path for f in files]` is a stream `map`; the three-way assignment unpacks a returned tuple.
+Notes for a Java reader: `**git_ops.export_tree(...)` expands the returned dict into named arguments (`files=..., skipped_links=...`); assignments such as `ctx, redacted_emails = ...` and `files, diff_summary = ...` unpack a returned tuple; `try/finally` works as in Java, so the checkout is deleted even if an exception escapes the method.
 
 ### 11.2 `StopPolicy`: a small pure class
 
@@ -773,21 +799,24 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 13. **Stack traces read upwards:** the last lines show where the exception happened, the first lines show the outer call.
 14. **Circular imports** break startup. Put shared types low in the dependency order (this is why `models.py` exists).
 15. **Python 3.9 compatibility.** This project supports 3.9, so it avoids newer syntax such as `match` statements and `X | Y` type unions outside annotations. Do not add them.
+16. **`assert` is on by default.** Unlike Java, where assertions need `-ea`, Python runs them unless started with `-O`. This code uses `assert` only to state an invariant (for example in `diffview._DiffParser`), never for input validation.
 
 ---
 
 ## 14. Suggested reading order
 
-1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and the three modes.
-2. [`engine.py`](../src/code_reviewer/engine.py): `Engine.review` and `_run_passes`.
+1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and the three modes (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds the steps the prompt shares).
+2. [`engine.py`](../src/code_reviewer/engine.py): `Engine.review` and `_run_passes`; then [`review_inputs.py`](../src/code_reviewer/review_inputs.py), which builds what the Reviewer is given.
 3. [`models.py`](../src/code_reviewer/models.py) and [`config.py`](../src/code_reviewer/config.py): dataclasses, your gentlest introduction to Python classes.
 4. [`stop_policy.py`](../src/code_reviewer/stop_policy.py) with its test: a plain class and its rules.
 5. [`passes.py`](../src/code_reviewer/passes.py) and [`roles.py`](../src/code_reviewer/roles.py): what happens in one pass and what each model is asked.
 6. [`llm.py`](../src/code_reviewer/llm.py) and [`claude_cli.py`](../src/code_reviewer/claude_cli.py): how a model call is made and its output parsed.
 7. [`findings.py`](../src/code_reviewer/findings.py), [`master.py`](../src/code_reviewer/master.py): validation, evidence checks and merging (the densest logic).
 8. [`criteria.py`](../src/code_reviewer/criteria.py), [`diffview.py`](../src/code_reviewer/diffview.py), [`git_ops.py`](../src/code_reviewer/git_ops.py): the input side (criteria discovery, diff parsing, git/gh).
-9. [`summary.py`](../src/code_reviewer/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py): the output side.
+9. [`summary.py`](../src/code_reviewer/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py) and [`review_flow.py`](../src/code_reviewer/review_flow.py) (the review steps both frontends share): the output side.
 10. `tests/`: executable documentation, starting with `test_engine.py`.
+
+Small supporting modules to read when you need them: [`repl_help.py`](../src/code_reviewer/repl_help.py) (the prompt's banner and help text), [`review_options.py`](../src/code_reviewer/review_options.py) (the `review` options, shared by both frontends, and the one-shot banner), [`dry_run.py`](../src/code_reviewer/dry_run.py) (`--dry-run`), [`redact.py`](../src/code_reviewer/redact.py) (email redaction) and [`replay.py`](../src/code_reviewer/replay.py) (a developer tool for evaluating the comparator).
 
 The prompt files in [`../prompts/`](../prompts/README.md) are plain Markdown and JSON, not code, but they are half of what the agent does.
 

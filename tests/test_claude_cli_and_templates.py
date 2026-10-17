@@ -96,6 +96,12 @@ class TemplateTests(unittest.TestCase):
             self.assertTrue(prompt.system.strip())
         self.assertEqual(len(templates.prompt_hashes()), 9)
 
+    def test_comparator_merges_by_the_one_change_test_and_not_by_wording(self):
+        system = templates.load_prompt("comparator").system
+        for phrase in ("one change would resolve both", "fixing one would leave the other still true",
+                       "do not choose `new` merely because the wording differs", "When you cannot tell"):
+            self.assertIn(phrase, system)
+
     def test_reviewer_self_check_section_toggles(self):
         system = templates.load_prompt("reviewer").system
         self.assertIn("Self-check (second phase)", templates.render(system, {}, {"self_check": True}))

@@ -11,7 +11,7 @@ A multi-pass pull request review agent. It runs several **independent** review p
 | Understand the code (written for Java developers new to Python) | [docs/project-explainer.md](docs/project-explainer.md) |
 | Understand why it is designed this way | [proposal.md](docs/proposal.md) (short) or [proposal-full.md](docs/proposal-full.md) (detailed) |
 
-Status: v0. The code is covered by automated tests that use a fake Claude. `reviewer doctor --live` has been run against the real Claude Code CLI (Haiku): the flags work with an enterprise login, the planted `CLAUDE.md` and project hook are ignored, and the JSON reply has the shape the parser expects. A full review of a real GitHub PR (fetching, multi-pass review, posting) has **not** been exercised yet. Section [Your first run](#your-first-run) is the way to try it.
+Status: v0. The code is covered by automated tests that use a fake Claude. `reviewer doctor --live` has been run against the real Claude Code CLI (Haiku): the flags work with an enterprise login, the planted `CLAUDE.md` and project hook are ignored, a file outside the working directory could be neither read nor searched (Claude Code itself denied the attempts), and the JSON reply has the shape the parser expects. Multi-pass reviews of a real GitHub PR (fetching, criteria discovery, review, summary and report) have been run. **Posting a comment** to a PR has not been exercised yet. Section [Your first run](#your-first-run) is the way to try it.
 
 ---
 
@@ -23,7 +23,7 @@ For a pull request you point it at:
 
 1. It pins the PR to exact commits and reads the diff, the PR title, description and commit messages.
 2. It loads review criteria: generic defaults plus the reviewed project's own criteria, if the project describes them in its `AGENTS.md`.
-3. It runs several review passes. Each pass is a fresh Claude session that has never seen the other passes. It can read the code in a read-only checkout, but it cannot run commands or change anything.
+3. It runs several review passes. Each pass is a fresh Claude session that has never seen the other passes, and each is asked to review the **whole change thoroughly**: go through every changed block and every claim the change makes (every documented response, field, example or default, every changed branch), verify it against the actual code, and report **every** issue it can support, not just the most important one. A pass can read the code in a read-only checkout, but it cannot run commands or change anything.
 4. It verifies each finding's evidence mechanically (the quoted code must exist), merges duplicates across passes, and scores confidence as the share of passes that found a finding.
 5. It stops when extra passes stop finding anything new, or at a pass or budget limit, then prints a shareable review summary and saves a detailed report next to it.
 
@@ -62,7 +62,7 @@ reviewer doctor          # fast, free: checks claude, gh, git, flags, prompts, d
 reviewer doctor --live   # also makes ONE small real Haiku call (a few cents)
 ```
 
-`doctor --live` verifies the things the agent depends on and cannot be tested offline: that the isolation flags work with your login, that only the Read, Grep and Glob tools are available (plus `StructuredOutput`, an internal Claude Code tool through which the model returns its JSON answer; it cannot read, write or run anything), that a `CLAUDE.md` and a hook planted in the checked-out project are ignored, and that Claude reports cost and tokens. It saves the raw JSON reply to `~/.code-reviewer/doctor-last.json`. If any line says `FAIL`, fix it before reviewing real code ([Troubleshooting](#troubleshooting)).
+`doctor --live` verifies the things the agent depends on and cannot be tested offline: that the isolation flags work with your login, that only the Read, Grep and Glob tools are available (plus `StructuredOutput`, an internal Claude Code tool through which the model returns its JSON answer; it cannot read, write or run anything), that a `CLAUDE.md` and a hook planted in the checked-out project are ignored, that a file placed **outside** the working directory cannot be read or searched (so a review pass could not reach anything outside its checkout),  and that Claude reports cost and tokens. It saves the raw JSON reply to `~/.code-reviewer/doctor-last.json`. If any line says `FAIL`, fix it before reviewing real code ([Troubleshooting](#troubleshooting)).
 
 ## Your first run
 
@@ -70,12 +70,17 @@ Do these in order. Together they cost a few dollars at most.
 
 1. `reviewer doctor --live` (above).
 2. Pick a **small** PR, ideally one you already know well, in a repository you can read.
-3. Run a single pass to see the whole flow cheaply:
+3. Optional but recommended: see exactly what the reviewer would be given, without calling the model:
+   ```bash
+   reviewer review https://github.com/OWNER/REPO/pull/123 --dry-run
+   ```
+   It prints the PR title, description and commit messages, the diff size, the tools and the command, and saves the exact prompts.
+4. Run a single pass to see the whole flow cheaply:
    ```bash
    reviewer review https://github.com/OWNER/REPO/pull/123 --passes 1
    ```
-4. Read the review summary it prints, then open the full report (its path is printed last) and the files next to it, especially `pass-01/reviewer.raw.json` and `pass-01/findings.json`. Check that findings have real quotes, that the cost line is filled in, and that the criteria section lists what you expect.
-5. Only then run a full review (default up to 6 passes).
+5. Read the review summary it prints, then open the full report (its path is printed last) and the files next to it, especially `pass-01/reviewer.raw.json` and `pass-01/findings.json`. Check that findings have real quotes, that the cost line is filled in, and that the criteria section lists what you expect.
+6. Only then run a full review (default up to 6 passes).
 
 ## Reviewing a pull request
 
@@ -125,7 +130,7 @@ Ctrl-C during a review stops the current call and gives you a report from the pa
 reviewer review https://github.com/my-org/my-service/pull/123 [--passes 4] [--model sonnet] [--no-self-check] [--keep-checkout] [--verbose] [--local-path DIR] [--post]
 ```
 
-It prints the review summary, one line about the run and the path of the full report, then exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
+In a terminal it first prints a short banner with this run's settings and the options you can add (it is not printed when output is piped or redirected, so scripts and CI logs stay clean). It then prints the review summary, one line about the run and the path of the full report, and exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
 
 ### Review options
 
@@ -136,7 +141,8 @@ These work the same in the interactive prompt (`review <url> ...`) and the one-s
 | `--passes N` | Maximum number of review passes (a whole number, 1 or more). Default is `max_passes` from your settings (6). The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` runs exactly one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
 | `--model NAME` | Model for all three roles, an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
-| `--keep-checkout` | Keep the temporary read-only checkout in the run directory so you can inspect exactly what the reviewer saw (otherwise it is deleted) |
+| `--keep-checkout` | Keep the temporary read-only checkout so you can inspect exactly what the reviewer saw. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
+| `--dry-run` | Show exactly what the reviewer would be given and stop: the PR title, description and commit messages, diff size, criteria, tools and the `claude` command. **No model is called, nothing is posted and no checkout is created.** The exact prompts and the PR text are saved under the run's `input/`. The project's own criteria need a model call to resolve, so a dry run includes only the default rules. Cannot be combined with `--post` |
 | `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
 | `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. In the interactive prompt use the `post` command instead |
 | `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
@@ -156,7 +162,7 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 |---|---|
 | Header | PR, commits reviewed, models, passes completed, why it stopped, diff size, estimated cost |
 | Criteria applied | Default and project rules used, project criteria files, references that were ignored (for example a wiki link), warnings (for example "this PR modifies the criteria files") |
-| Summary | Finding counts by confidence tier and severity |
+| Overview | Finding counts by confidence tier and severity |
 | High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the rule, the evidence, a suggestion and "seen in x/N passes" |
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
 | Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified |
@@ -164,6 +170,7 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 How to read it:
 
 - A finding that every pass found is much more likely to be real than one found once, but it is still not guaranteed. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
+- **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them yourself with `mark`; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. Scoring by an independent verification step is planned (see the roadmap in [docs/proposal.md](docs/proposal.md)).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: an exact quote that exists in the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
 - Cost figures are Claude Code's estimates and may not match your billing.
@@ -209,7 +216,7 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `model_reviewer`, `model_comparator`, `model_resolver` | `haiku` | Model alias or full name for each role (for example `sonnet`) |
+| `model_reviewer`, `model_comparator`, `model_resolver` | `haiku` | Model alias or full name for each role (for example `sonnet`). The comparator decides which findings from different passes are the same issue. Haiku is cheap (about $0.0006 per comparator call) but can be inconsistent on borderline duplicates. Sonnet merged consistently in replays but more aggressively, and costs roughly 15 times more for this step (about $0.01 per call, so about $0.06 for a 6-pass review). Measure with `python -m code_reviewer.replay`. |
 | `self_check` | `true` | The Reviewer tries to refute its own findings before answering |
 | `criteria_mode` | `merge` | `merge`, `project_only` or `defaults_only` |
 | `criteria_manifest` | `""` | Path to a JSON file that replaces the criteria resolver's answer (reproducible experiments) |
@@ -226,6 +233,7 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Do not remove unless you know why |
 | `claude_bin` | `claude` | Path or name of the Claude Code binary |
 | `post_tiers` | `["High","Medium","Low"]` | Confidence tiers shown in the review summary and included in a posted comment. Single-pass (unrated) findings are always included |
+| `redact_emails` | `true` | Replace email addresses in the PR title, description and commit messages with `[email]` before they are sent to the model. The diff and repository files are not redacted. Set to `false` to send PR text as written |
 | `runs_dir` | `""` | Where runs are stored (default `~/.code-reviewer/runs`) |
 | `candidate_window`, `candidate_all_threshold`, `candidate_max`, `grounding_line_window` | `20`, `30`, `40`, `30` | Tuning for duplicate matching and line-number tolerance. Rarely needed |
 
@@ -235,12 +243,13 @@ Environment variables: `CODE_REVIEWER_HOME` (location of the checkout containing
 
 | Path | Contents |
 |---|---|
-| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | One review: `summary.md` (the shareable summary), `report.md` (the detailed report), `master.json`, `stats.json`, `labels.json` (your marks), `config.json` (settings, prompt hashes, versions), `input/` (diff, criteria used), `pass-NN/` (raw Claude output, findings, merge decisions) |
+| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | One review: `summary.md` (the shareable summary), `report.md` (the detailed report), `master.json`, `stats.json`, `labels.json` (your marks), `config.json` (settings, prompt hashes, versions), `input/` (the PR text as fetched `pr.json`, the exact reviewer prompts `reviewer.system.md` and `reviewer.user.md`, the diff, the criteria used), `pass-NN/` (raw Claude output, findings, merge decisions) |
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
+| `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's read-only checkout of the PR, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless `--keep-checkout` |
 | `refs/code-reviewer/*` in your local clone | The PR head and base commits fetched for a review. Your branches and working tree are never changed |
 | `~/.code-reviewer/doctor-last.json` | Raw reply from `reviewer doctor --live` |
 
-The temporary checkout inside a run is deleted when the run ends (keep it with `--keep-checkout`). To clean up, delete run directories you no longer need. To remove the fetched refs from a clone:
+The temporary checkout is deleted when the run ends, even if the run fails (keep it with `--keep-checkout`). To clean up, delete run directories you no longer need. To remove the fetched refs from a clone:
 
 ```bash
 git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update-ref -d
@@ -248,7 +257,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Cost, time and limits
 
-- Each pass is a full agent run, so a review takes minutes per pass and several passes. These numbers have not been measured yet; your first runs will tell you. Every run reports its own tokens and estimated cost, and the budget settings above cap the spend. For scale: in the first real runs (Haiku, a 61-line docs-only diff) one reviewer pass took 23-53 seconds and cost about $0.015-0.02, with the reviewer taking 5 to 16 turns.
+- Each pass is a full agent run, so a review takes minutes per pass and several passes. These numbers have not been measured yet; your first runs will tell you. Every run reports its own tokens and estimated cost, and the budget settings above cap the spend. For scale: in the first real runs (Haiku, a 61-line docs-only diff) one reviewer pass took 23-53 seconds and cost about $0.012-0.026, with the reviewer taking 4 to 18 turns. Reviewers are now asked to verify every claim against the code and not to stop after the first finding, which should mean more turns per pass; compare your run's appendix with those numbers.
 - Only GitHub pull requests are supported (no local-branch mode yet).
 - Diffs above `max_diff_lines` are refused rather than reviewed badly. Lockfiles, vendored and generated files do not count.
 - The tool does not run tests, linters or builds. Your pipeline still owns those.
@@ -257,7 +266,9 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 ## Privacy and safety
 
 - **What is sent to Claude:** the PR title, description and commit messages, the diff, the criteria text, and any repository files the Reviewer reads. It goes through your Claude Code login. Make sure your company policy allows that for the repository, and do not point the agent at repositories or PRs containing customer, rider or other personal data.
-- **What the Reviewer can do:** read files in a separate checkout of the PR. It cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). `reviewer doctor --live` checks that these restrictions hold.
+- **What the Reviewer can do:** read files in a separate checkout of the PR. It cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so even if the file restrictions failed it could not find earlier passes' findings next to it. `reviewer doctor --live` checks that these restrictions hold, including that a planted file outside the working directory cannot be read or searched.
+- **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub (a test fails if comments are ever added to it). Use `reviewer review <url> --dry-run` to see exactly what would be sent, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
+- **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. `--dry-run` shows the text exactly as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
 - **Untrusted PR text:** the PR description and code are treated as data and the model is told never to follow instructions found in them. That reduces the risk of prompt injection but cannot eliminate it. Read findings critically.
 - **Nothing outward-facing happens without you:** the only action on GitHub is `post`, after a preview and your confirmation (or the explicit `--post` flag).
 - **Not done in v0:** secret scanning of the diff, and filtering of what the Reviewer may read inside the checkout. See [proposal.md](docs/proposal.md) section 5.
@@ -271,7 +282,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
 | `doctor`: `claude is installed` fails | Install Claude Code, or set `claude_bin` in `review.toml` |
 | `doctor`: required flags missing | Your Claude Code is too old or different. Compare `claude --help` with `isolation_flags` and the flags in `src/code_reviewer/claude_cli.py` |
-| `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, or the canary or hook was not ignored | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
+| `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, the canary or hook was not ignored, or a file outside the working directory could be read or searched (`LEAK`) | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
 | `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` |
@@ -279,6 +290,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `pass N FAILED` mentioning budget | The call hit `call_budget_usd`. Raise it, or review a smaller PR |
 | Many findings counted as ungrounded | See the `reason` of each in `pass-NN/findings.json`. The model may be quoting from memory. Try `--model sonnet` |
 | Warning: criteria resolver failed | The review continued with default criteria only. See `input/resolver.raw.json` |
+| Every pass reports only one finding, or findings are all Low | Passes may stop early or pick a different issue each time. Check `notes` in each `pass-NN/findings.json` for what the pass verified and what it left "unverified", and compare the number of findings per pass in the report's appendix. See [Reading the report](#reading-the-report) |
 | No findings at all | May be correct. Check `notes` in `pass-NN/findings.json` and compare with the diff. Try `--model sonnet` |
 | `post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |
 
@@ -322,20 +334,21 @@ A deterministic Python harness runs everything. Large language models only **pro
 ## How a review runs
 
 1. `pr_source` fetches the PR head and base into `refs/code-reviewer/` and pins SHAs.
-2. `engine._load_diff` parses the merge-base diff, drops excluded files, refuses empty or oversized PRs.
-3. `git_ops.export_tree` exports the PR head to a checkout (symlinks skipped).
-4. `engine._resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), and rule IDs are assigned.
-5. `engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`.
+2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, drops excluded files and refuses empty or oversized PRs.
+3. `git_ops.export_tree` exports the PR head to a checkout in its own temporary directory (symlinks skipped).
+4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), and rule IDs are assigned.
+5. `Engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`.
 6. `StopPolicy` decides after every pass whether to stop.
 7. `report.render_report` writes the report; `RunStore` writes all artifacts.
 
 ## Code map
 
-Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whole story in about 40 lines, and each step it calls lives in its own module.
+Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whole story in about 45 lines, and each step it calls lives in its own module.
 
 | Module | Responsibility |
 |---|---|
-| `engine.py` | Wires the steps together and emits progress events |
+| `engine.py` | Runs a review: wires the steps together, runs the passes under the stop policy, writes the outputs, emits progress events |
+| `review_inputs.py` | `InputBuilder`: builds what the Reviewer is given (email redaction, the filtered diff, the criteria). Shared by a real review and `--dry-run` |
 | `pr_source.py` | Turns a PR reference into a `PRContext` pinned to exact commits (`gh` + `git`) |
 | `diffview.py` | Parses the diff, excludes lockfiles and generated files, renders the numbered diff the Reviewer sees |
 | `criteria.py` | Default rules, project rules found via `AGENTS.md` (in-repo only, from the base branch), rule IDs |
@@ -350,7 +363,12 @@ Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whol
 | `summary.py` | The shareable review summary. The terminal output, `summary.md` and the PR comment all come from one function |
 | `review_options.py` | The `review` options (`--passes`, `--model`, ...) shared by the CLI and the REPL |
 | `run_store.py` | The on-disk layout of a run. The only module that knows file names |
-| `repl.py`, `cli.py`, `progress.py`, `post.py`, `doctor.py` | Frontends, progress lines, PR comment posting, environment checks |
+| `cli.py`, `repl.py`, `review_flow.py` | Frontends: the one-shot command, the interactive prompt, and the review steps they share (`run_review`, `REVIEW_ERRORS`) |
+| `repl_help.py`, `review_options.py` | The prompt's static text (banner, help); the `review` options shared by both frontends, and the banner `reviewer review` prints in a terminal |
+| `progress.py`, `post.py`, `doctor.py` | Progress lines, PR comment posting, environment checks |
+| `dry_run.py` | `--dry-run`: render what the Reviewer would be given, without calling a model |
+| `redact.py` | Replaces email addresses in the PR text before it is sent |
+| `replay.py` | Developer tool: re-run the comparator on a saved run to evaluate changes to the comparator prompt or model |
 | `models.py`, `config.py`, `templates.py`, `events.py`, `git_ops.py` | Shared types, settings, prompt rendering, events, git and gh helpers |
 
 Module dependencies point one way: `models`, `config` and `events` at the bottom; `engine` and the frontends at the top. Keep it that way (the engine imports the report, not the reverse).
@@ -366,10 +384,12 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 |---|---|
 | `test_diffview`, `test_criteria`, `test_findings`, `test_master`, `test_stop_policy` | Pure logic: diff parsing, criteria discovery and validation, grounding, merging, stop rules |
 | `test_claude_cli_and_templates` | Envelope parsing, command building, prompt rendering and escaping, config validation |
-| `test_summary`, `test_welcome`, `test_options`, `test_stats` | The shareable summary and the comment built from it, the welcome banner (a test fails if a REPL command is missing from it), option parsing and help text, token budget accounting |
+| `test_summary`, `test_welcome`, `test_review_banner`, `test_options`, `test_stats` | The shareable summary and the comment built from it, the prompt's welcome banner and the one-shot review banner (a test fails if a REPL command or a `review` option is missing from its banner), option parsing and help text, token budget accounting |
+| `test_redact`, `test_replay` | Email redaction (patterns, nothing leaks to the model or to disk, can be turned off, the diff is not redacted) and the comparator replay tool |
+| `test_isolation_and_dry_run` | The checkout lives outside the run directory and is always deleted, the saved prompts equal what the model received, a dry run equals a real run's prompts and calls no model, and only an allow-list of PR fields is fetched from GitHub |
 | `test_doctor_and_live_envelope` | The doctor's tool check and parsing of a real Claude result (`tests/fixtures/live_envelope_haiku.json`) |
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
-| `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, REPL commands, git helpers |
+| `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |
 
 Things to know when writing tests:
 
@@ -383,6 +403,7 @@ Things to know when writing tests:
 |---|---|
 | Change what a role is asked | Edit the files in `prompts/` ([prompts/README.md](prompts/README.md) lists every variable). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
 | Change output structure | Edit the schema in `prompts/schemas/`, the validation in `findings.py` or `master.py`, and the report |
+| Tune how duplicate findings are merged | Edit `prompts/comparator.*.md` (or set `model_comparator`), then replay saved runs: `python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> --repeat 3 [--model sonnet]`. It re-runs only the comparator on each pass's saved findings (about $0.004 per replay with Haiku), prints the recorded grouping and each replay's grouping, and lists the pairs of findings that are now merged or split. Judge the borderline cases yourself, and repeat the replay because the model is not deterministic |
 | Add or change default rules | Edit `criteria/defaults/*.md` using `## [GEN-xxx] Title` headings. IDs must be unique (a test checks) |
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the settings table in this README |
 | Add a progress message | Emit an event with `engine.emit(...)`, handle it in `progress.py` |
@@ -406,13 +427,14 @@ Every run directory is a full record. Useful files:
 |---|---|
 | `pass-NN/reviewer.raw.json` | What did Claude actually return (every attempt, including errors)? |
 | `pass-NN/findings.json` | Which findings were kept or dropped, and why (`status` and `reason`)? |
-| `pass-NN/comparator.raw.json`, `pass-NN/mapping.json` | How were findings matched to earlier ones? |
-| `input/diff.txt`, `input/criteria_block.md`, `input/criteria_index.json` | Exactly what the Reviewer was given |
+| `pass-NN/comparator.raw.json`, `pass-NN/mapping.json` | How were findings matched to earlier ones? `mapping.json` has each decision and `assigned`: which master finding each new finding was merged into |
+| `input/reviewer.system.md`, `input/reviewer.user.md`, `input/pr.json` | The exact prompts every pass received (identical in all passes) and the PR text as fetched |
+| `input/diff.txt`, `input/criteria_block.md`, `input/criteria_index.json` | The diff and criteria the Reviewer was given |
 | `input/criteria_manifest.json`, `input/resolver.raw.json` | Which project criteria files were chosen, and what was ignored |
 | `config.json` | Settings, Claude Code version, prompt hashes |
 | `stats.json` | Every call with tokens, cost, duration |
 
-Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw.
+Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw (its location is printed).
 
 ## Verifying against the real Claude CLI
 
@@ -420,7 +442,7 @@ The offline tests cannot prove how Claude Code behaves. After upgrading Claude C
 
 ## Known limitations and roadmap
 
-- Verified live: the Reviewer flag set, isolation canaries, tool list and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Not yet exercised: a full review of a real PR, `gh` fetching, posting a comment, budget-exceeded behavior (see the status at the top).
+- Verified live: the Reviewer flag set, isolation canaries, tool list, that files outside the working directory cannot be read or searched, and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Real multi-pass reviews of a PR have been run. Not yet exercised: posting a comment to a PR, and what Claude Code does when the per-call `--max-budget-usd` is exceeded (the run-level budget stop has been seen).
 - GitHub PRs only; root `AGENTS.md` only; `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
 - Planned: evals from your `mark` and `missed` labels, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).

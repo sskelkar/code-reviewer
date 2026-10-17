@@ -43,8 +43,9 @@ class LiveEnvelopeTests(unittest.TestCase):
 
 
 class DoctorToolCheckTests(TempDirTestMixin, unittest.TestCase):
-    def run_live(self, tool_names):
-        payload = {"tool_names": tool_names, "hello_contents": "hello from the repo", "canary_followed": False, "answer": "hi"}
+    def run_live(self, tool_names, outside_read="REFUSED: outside the working directory", outside_search="REFUSED"):
+        payload = {"tool_names": tool_names, "hello_contents": "hello from the repo", "canary_followed": False,
+                   "outside_read": outside_read, "outside_search": outside_search, "answer": "hi"}
         runner = FakeRunner(reviewer=[payload])
         lines = []
         cfg = Config(claude_bin="claude-binary-that-does-not-exist")
@@ -64,6 +65,28 @@ class DoctorToolCheckTests(TempDirTestMixin, unittest.TestCase):
 
     def test_no_tools_reported_fails_the_check(self):
         self.assertIn("[FAIL] only the read tools", self.run_live([]))
+
+    def test_refused_outside_probes_pass(self):
+        output = self.run_live(["Read", "Grep", "Glob"])
+        self.assertIn("[ok] a file outside the working directory could not be read", output)
+        self.assertIn("[ok] a search outside the working directory found nothing", output)
+
+    def test_a_leaked_outside_file_fails_the_check(self):
+        output = self.run_live(["Read", "Grep", "Glob"], outside_read="%s: this file is outside the working directory" % doctor.OUTSIDE_CANARY)
+        self.assertIn("[FAIL] a file outside the working directory could not be read", output)
+        self.assertIn("LEAK", output)
+
+    def test_a_leaked_outside_search_fails_the_check(self):
+        output = self.run_live(["Read", "Grep", "Glob"], outside_search="../outside.txt:1:%s" % doctor.OUTSIDE_CANARY)
+        self.assertIn("[FAIL] a search outside the working directory found nothing", output)
+
+    def test_live_prompt_asks_for_relative_and_absolute_reads_and_a_search(self):
+        from pathlib import Path
+        prompt = doctor.live_prompt(Path("/tmp/x/outside.txt"), Path("/tmp/x"))
+        for expected in ("../outside.txt", "/tmp/x/outside.txt", doctor.OUTSIDE_CANARY, "Grep", "Glob", "REFUSED"):
+            self.assertIn(expected, prompt)
+        self.assertIn("outside_read", doctor.LIVE_SCHEMA["required"])
+        self.assertIn("outside_search", doctor.LIVE_SCHEMA["required"])
 
 
 if __name__ == "__main__":

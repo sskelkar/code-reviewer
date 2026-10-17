@@ -51,80 +51,106 @@ def _clean_path(raw: str) -> str:
     return raw
 
 
-def parse_unified_diff(text: str) -> List[FileDiff]:
-    files: List[FileDiff] = []
-    current: Optional[FileDiff] = None
-    hunk: Optional[Hunk] = None
-    old_no = new_no = old_rem = new_rem = 0
+class _DiffParser:
+    """Reads a unified diff one line at a time, keeping track of the file and hunk being read."""
 
-    for line in text.split("\n"):
-        if hunk is not None and (old_rem > 0 or new_rem > 0):
-            marker = line[:1]
-            if marker == "+":
-                hunk.lines.append(DiffLine("+", None, new_no, line[1:]))
-                new_no += 1
-                new_rem -= 1
-                current.added += 1  # type: ignore[union-attr]
-                continue
-            if marker == "-":
-                hunk.lines.append(DiffLine("-", old_no, None, line[1:]))
-                old_no += 1
-                old_rem -= 1
-                current.removed += 1  # type: ignore[union-attr]
-                continue
-            if marker == " " or line == "":
-                hunk.lines.append(DiffLine(" ", old_no, new_no, line[1:]))
-                old_no += 1
-                new_no += 1
-                old_rem -= 1
-                new_rem -= 1
-                continue
-            if marker == "\\":
-                continue
-            hunk = None  # malformed hunk: fall through to header handling
+    def __init__(self) -> None:
+        self.files: List[FileDiff] = []
+        self.file: Optional[FileDiff] = None
+        self.hunk: Optional[Hunk] = None
+        self.old_no = self.new_no = self.old_rem = self.new_rem = 0  # next line numbers and lines left in the hunk
 
+    def feed(self, line: str) -> None:
+        if self._in_hunk() and self._hunk_line(line):
+            return
+        self._header_line(line)
+
+    def _in_hunk(self) -> bool:
+        return self.hunk is not None and (self.old_rem > 0 or self.new_rem > 0)
+
+    def _hunk_line(self, line: str) -> bool:
+        """Consume one body line of the current hunk. Returns False for a line that does not belong to it (a malformed
+        hunk), which ends the hunk so the line is read as a header instead."""
+        hunk, file = self.hunk, self.file
+        assert hunk is not None and file is not None
+        marker = line[:1]
+        if marker == "+":
+            hunk.lines.append(DiffLine("+", None, self.new_no, line[1:]))
+            self.new_no += 1
+            self.new_rem -= 1
+            file.added += 1
+            return True
+        if marker == "-":
+            hunk.lines.append(DiffLine("-", self.old_no, None, line[1:]))
+            self.old_no += 1
+            self.old_rem -= 1
+            file.removed += 1
+            return True
+        if marker == " " or line == "":
+            hunk.lines.append(DiffLine(" ", self.old_no, self.new_no, line[1:]))
+            self.old_no += 1
+            self.new_no += 1
+            self.old_rem -= 1
+            self.new_rem -= 1
+            return True
+        if marker == "\\":  # "\ No newline at end of file"
+            return True
+        self.hunk = None
+        return False
+
+    def _header_line(self, line: str) -> None:
         match = _DIFF_GIT.match(line)
         if match:
-            current = FileDiff(path=_clean_path(match.group(2)))
-            files.append(current)
-            hunk = None
-            continue
-        if current is None:
-            continue
+            self.file = FileDiff(path=_clean_path(match.group(2)))
+            self.files.append(self.file)
+            self.hunk = None
+            return
+        file = self.file
+        if file is None:
+            return
         if line.startswith("new file mode"):
-            current.status = "added"
+            file.status = "added"
         elif line.startswith("deleted file mode"):
-            current.status = "deleted"
+            file.status = "deleted"
         elif line.startswith("rename from "):
-            current.old_path = _clean_path(line[len("rename from "):])
-            current.status = "renamed"
+            file.old_path = _clean_path(line[len("rename from "):])
+            file.status = "renamed"
         elif line.startswith("rename to "):
-            current.path = _clean_path(line[len("rename to "):])
+            file.path = _clean_path(line[len("rename to "):])
         elif line.startswith("Binary files") or line.startswith("GIT binary patch"):
-            current.binary = True
+            file.binary = True
         elif line.startswith("--- "):
             target = _clean_path(line[4:])
-            if target != "/dev/null" and target.startswith("a/") and current.status != "renamed":
-                current.old_path = current.old_path or target[2:]
+            if target != "/dev/null" and target.startswith("a/") and file.status != "renamed":
+                file.old_path = file.old_path or target[2:]
         elif line.startswith("+++ "):
             target = _clean_path(line[4:])
             if target == "/dev/null":
-                current.status = "deleted"
-                if current.old_path:
-                    current.path = current.old_path
+                file.status = "deleted"
+                if file.old_path:
+                    file.path = file.old_path
             elif target.startswith("b/"):
-                current.path = target[2:]
+                file.path = target[2:]
         else:
-            hunk_match = _HUNK.match(line)
-            if hunk_match:
-                old_start = int(hunk_match.group(1))
-                old_len = int(hunk_match.group(2)) if hunk_match.group(2) is not None else 1
-                new_start = int(hunk_match.group(3))
-                new_len = int(hunk_match.group(4)) if hunk_match.group(4) is not None else 1
-                hunk = Hunk(old_start, old_len, new_start, new_len)
-                current.hunks.append(hunk)
-                old_no, new_no, old_rem, new_rem = old_start, new_start, old_len, new_len
-    return files
+            self._start_hunk(line, file)
+
+    def _start_hunk(self, line: str, file: FileDiff) -> None:
+        match = _HUNK.match(line)
+        if not match:
+            return
+        old_start, new_start = int(match.group(1)), int(match.group(3))
+        old_len = int(match.group(2)) if match.group(2) is not None else 1
+        new_len = int(match.group(4)) if match.group(4) is not None else 1
+        self.hunk = Hunk(old_start, old_len, new_start, new_len)
+        file.hunks.append(self.hunk)
+        self.old_no, self.new_no, self.old_rem, self.new_rem = old_start, new_start, old_len, new_len
+
+
+def parse_unified_diff(text: str) -> List[FileDiff]:
+    parser = _DiffParser()
+    for line in text.split("\n"):
+        parser.feed(line)
+    return parser.files
 
 
 def is_excluded(path: str, patterns: Sequence[str]) -> bool:

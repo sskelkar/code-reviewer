@@ -127,7 +127,7 @@ def _criteria_section(result: RunResult) -> List[str]:
 def _summary_section(result: RunResult, groups: Dict[str, List[Dict[str, Any]]]) -> List[str]:
     scored = result.master.scored()
     out = [
-        "## Summary", "",
+        "## Overview", "",
         "| Confidence | %s | Total |" % " | ".join(groups), "|---" * (len(groups) + 2) + "|",
         "| Findings | %s | %d |" % (" | ".join(str(len(items)) for items in groups.values()), len(scored)),
         "",

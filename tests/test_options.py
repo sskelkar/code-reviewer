@@ -6,12 +6,13 @@ from argparse import Namespace
 
 from code_reviewer.cli import build_parser
 from code_reviewer.config import Config, ConfigError
-from code_reviewer.repl import HELP, Session
+from code_reviewer.repl import Session
+from code_reviewer.repl_help import HELP
 from code_reviewer.review_options import apply_run_options
 
 from .helpers import FakeRunner
 
-RUN_OPTIONS = ("--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose")
+RUN_OPTIONS = ("--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose", "--dry-run")
 
 
 def squash(text):
@@ -52,7 +53,8 @@ class HelpTextTests(unittest.TestCase):
         for option in RUN_OPTIONS + ("--post", "--local-path"):
             self.assertIn(option, text)
         for phrase in ("maximum number of review passes", "refute its own findings", "temporary read-only checkout",
-                       "extra progress detail", "alias or full name", "explicit opt-in"):
+                       "extra progress detail", "alias or full name", "explicit opt-in",
+                       "no model is called"):
             self.assertIn(phrase, text)
 
     def test_repl_help_describes_the_options(self):

@@ -8,9 +8,8 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["local_id", "title", "description", "severity", "kind", "rule_id", "file", "line", "suggestion"],
+        "required": ["title", "description", "severity", "kind", "rule_id", "file", "line", "suggestion"],
         "properties": {
-          "local_id": { "type": "string" },
           "title": { "type": "string" },
           "description": { "type": "string" },
           "severity": { "type": "string", "enum": ["high", "medium", "low", "nit"] },

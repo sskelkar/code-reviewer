@@ -3,7 +3,7 @@
 
 # Models: any alias or full name accepted by `claude --model`.
 model_reviewer = "haiku"
-model_comparator = "haiku"
+model_comparator = "haiku"   # "sonnet" merges duplicate findings more consistently but costs ~15x more for this step
 model_resolver = "haiku"
 
 # Reviewer refutes its own findings in a second phase.
@@ -52,6 +52,9 @@ isolation_flags = ["--safe-mode", "--restricted"]
 
 # Confidence tiers shown in the review summary and included in a posted comment (single-pass findings are always included)
 post_tiers = ["High", "Medium", "Low"]
+
+# Replace email addresses in the PR title, description and commit messages with [email] before sending (not the diff)
+redact_emails = true
 
 # Where runs are stored (default: ~/.code-reviewer/runs)
 runs_dir = ""

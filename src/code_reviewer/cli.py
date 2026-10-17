@@ -7,20 +7,21 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import git_ops
-from .claude_cli import ClaudeError, ClaudeRunner
+from .claude_cli import ClaudeRunner
 from .config import ConfigError, load_config
 from .doctor import run_doctor
-from .engine import Engine, ReviewRefused
+from .dry_run import render_dry_run
 from .post import format_comment, post_comment
-from .progress import ProgressPrinter
 from .repl import Session
-from .review_options import add_run_options, apply_run_options
+from .review_flow import REVIEW_ERRORS, run_review
+from .review_options import add_run_options, apply_run_options, review_banner
 from .summary import render_summary, run_line
 
 MAIN_EPILOG = """\
 examples:
   reviewer                                start the interactive prompt (run it inside the project you want to review)
   reviewer review <PR URL> --passes 1     one cheap pass over a pull request
+  reviewer review <PR URL> --dry-run      show what the reviewer would be given, without calling the model
   reviewer review <PR URL>                a full review (several passes)
   reviewer doctor --live                  check the environment with one small real call
 
@@ -64,7 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "review" and args.dry_run and args.post:
+        parser.error("--dry-run cannot be combined with --post")
     try:
         cfg = load_config(args.config)
     except ConfigError as exc:
@@ -79,13 +83,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             ref = git_ops.parse_pr_ref(args.pr)
             cfg = apply_run_options(cfg, args)
-            engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=args.verbose))
+            if sys.stdout.isatty():  # a reminder for people at a terminal; scripts and CI logs stay clean
+                print(review_banner(str(ref), cfg))
             local = Path(args.local_path) if args.local_path else Path.cwd()
-            ctx = engine.prepare(ref, local)
-            result = engine.review(ctx, keep_checkout=args.keep_checkout)
-        except (git_ops.GitError, ConfigError, ReviewRefused, ClaudeError) as exc:
+            outcome = run_review(cfg, runner, ref, args, local)
+        except REVIEW_ERRORS as exc:
             print("error: %s" % exc, file=sys.stderr)
             return 1
+        if outcome.dry_run:
+            print(render_dry_run(outcome.dry_run))
+            return 0
+        result = outcome.result
         print("\n" + render_summary(result, cfg.post_tiers, []))
         print(run_line(result))
         print("full report: %s" % result.report_path)

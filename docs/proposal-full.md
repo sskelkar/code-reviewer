@@ -1,5 +1,7 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
+> **Archived original draft.** [proposal.md](proposal.md) is the current design. Several decisions changed after this was written (for example: a shareable review summary is printed at the end, single-pass findings are unrated, the token budget excludes cache reads, reviewers are asked to be thorough with identical prompts in every pass, and the examples and defaults here predate the implementation).
+
 **Status:** Draft for discussion
 **Owner:** Sojjwal Kelkar
 **Scope of v0:** Local interactive CLI (REPL) experiment for learning, run in a controlled environment. The human reads the output. A summary PR comment can be posted only after an explicit human confirmation.
