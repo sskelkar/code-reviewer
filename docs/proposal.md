@@ -125,14 +125,14 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 
 **Proposed success bar (adjust after first runs):** High-tier precision clearly above Low-tier; the loop finds at least one real issue a single pass missed on roughly 1 in 3 PRs; cost within a small multiple of a single pass.
 
-**Verify against the real CLI before building** (only `claude --help` inspected so far; nothing executed):
-1. The Reviewer flag set is accepted together and works with your enterprise login (`--safe-mode`, `--restricted`).
-2. Isolation canary: a planted `CLAUDE.md` is ignored, a planted `.claude/settings.json` hook doesn't run, tools are exactly Read/Grep/Glob.
-3. Reads work in the checkout and the `--add-dir` input dir; reads outside are refused.
-4. JSON envelope fields: result, token usage, estimated cost, duration; how `--json-schema` failures surface.
-5. `--max-budget-usd` behavior when exceeded; timeout kills cleanly.
-6. `stream-json` shape for `--verbose`; `--model haiku` resolves to the intended model (record it).
-7. Run one tiny prompt 3× to eyeball pass-to-pass variation.
+**Verify against the real CLI** (checked with `reviewer doctor --live` on Claude Code 2.1.301 and Haiku):
+1. ✅ The Reviewer flag set is accepted together and works with an enterprise login (`--safe-mode`, `--restricted`).
+2. ✅ Isolation canary: a planted `CLAUDE.md` is ignored and a planted `.claude/settings.json` hook doesn't run. Tools are Read, Grep and Glob plus Claude Code's internal `StructuredOutput` tool, which `--json-schema` adds to return the answer.
+3. ⬜ Reads work in the checkout (✅ verified for a file in the working directory); the `--add-dir` input dir is not used because diff and criteria are inline in the prompt; reads outside the checkout are refused (not verified).
+4. ✅ JSON envelope: the schema-conforming answer is in `structured_output` (also as JSON text in `result`), with `usage` (input, output, cache write/read tokens), `total_cost_usd`, `modelUsage`, `num_turns`, `duration_ms`. A real reply is kept as a test fixture. How `--json-schema` failures surface is not yet seen.
+5. ⬜ `--max-budget-usd` behavior when exceeded; timeout kills cleanly (the timeout path is covered by a fake-binary test only).
+6. ✅ `--model haiku` resolves to `claude-haiku-5-5` (recorded from `modelUsage`). ⬜ `stream-json` for a live `--verbose` mode is not implemented.
+7. ⬜ Run one tiny prompt 3× to eyeball pass-to-pass variation.
 
 ## 10. Roadmap
 

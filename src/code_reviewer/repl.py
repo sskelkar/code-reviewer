@@ -1,12 +1,10 @@
 """Interactive REPL: review a PR, inspect and label findings, and optionally post a summary comment."""
 from __future__ import annotations
 
-import argparse
 import json
 import shlex
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -18,16 +16,25 @@ from .master import confidence, tier
 from .post import format_comment, post_comment
 from .progress import ProgressPrinter
 from .report import TIERS, render_finding, tiered
+from .review_options import OptionError, ReplArgumentParser, add_run_options, apply_run_options
 
 try:  # command history and line editing where available
     import readline  # noqa: F401
 except ImportError:  # pragma: no cover
     pass
 
+REVIEW_USAGE = "review PR [--passes N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose]"
+
 HELP = """\
 Commands:
-  review <PR URL | owner/repo#n> [--passes N] [--no-self-check] [--model NAME] [--keep-checkout] [--verbose]
-      Review a pull request (several independent passes, then a merged report).
+  review <PR URL | owner/repo#n> [options]
+      Review a pull request (several independent passes, then a merged report). Options:
+        --passes N        maximum number of passes; use 1 for a single, cheap pass
+        --model NAME      model for all roles, for example haiku or sonnet
+        --no-self-check   skip the reviewer's self-refutation phase (cheaper, findings are not double-checked)
+        --keep-checkout   keep the temporary checkout in the run directory, for debugging
+        --verbose         print extra progress detail
+      `review --help` shows the options in full.
   show <F-id>                 Show one finding in full.
   drop <F-id> / undrop <F-id> Exclude a finding from the posted comment (or restore it).
   mark <F-id> real|nit|wrong  Record your judgment of a finding (saved with the run).
@@ -121,29 +128,20 @@ class Session:
     # ------------------------------------------------------------------ commands
 
     def cmd_review(self, args: List[str]) -> None:
-        parser = argparse.ArgumentParser(prog="review", add_help=False)
-        parser.add_argument("pr")
-        parser.add_argument("--passes", type=int)
-        parser.add_argument("--no-self-check", action="store_true")
-        parser.add_argument("--model")
-        parser.add_argument("--keep-checkout", action="store_true")
-        parser.add_argument("--verbose", action="store_true")
+        parser = ReplArgumentParser(prog="review", add_help=False, usage=REVIEW_USAGE)
+        parser.add_argument("pr", metavar="PR", help="pull request URL, or owner/repo#number")
+        add_run_options(parser)
+        if "-h" in args or "--help" in args:
+            self.out(parser.format_help())
+            return
         try:
             options = parser.parse_args(args)
-        except SystemExit:
-            self.out("usage: review <PR URL | owner/repo#n> [--passes N] [--no-self-check] [--model NAME] [--keep-checkout] [--verbose]")
+        except OptionError as exc:
+            self.out("error: %s\n%s\n(type `review --help` for the options)" % (exc, parser.format_usage().strip()))
             return
         try:
             ref = git_ops.parse_pr_ref(options.pr)
-            cfg = replace(self.cfg)
-            if options.passes:
-                cfg.max_passes = options.passes
-                cfg.min_passes = min(cfg.min_passes, options.passes)
-            if options.no_self_check:
-                cfg.self_check = False
-            if options.model:
-                cfg.model_reviewer = cfg.model_comparator = cfg.model_resolver = options.model
-            cfg.validate()
+            cfg = apply_run_options(self.cfg, options)
         except (git_ops.GitError, ConfigError) as exc:
             self.out("error: %s" % exc)
             return

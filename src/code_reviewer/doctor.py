@@ -21,6 +21,10 @@ REQUIRED_FLAGS = [
 
 CANARY = "CANARY-PWNED"
 
+# With --json-schema, Claude Code adds an internal StructuredOutput tool through which the model returns its
+# answer (it appears as `structured_output` in the result envelope). It cannot read, write or run anything.
+ALLOWED_LIVE_TOOLS = {"Read", "Grep", "Glob", "StructuredOutput"}
+
 LIVE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -107,7 +111,12 @@ def run_doctor(cfg: Config, runner: ClaudeRunner, live: bool, out: Callable[[str
         check("cost is reported", result.cost_usd is not None)
         if result.ok and result.parsed:
             tools = result.parsed.get("tool_names", [])
-            check("only Read, Grep, Glob are available", set(tools) <= {"Read", "Grep", "Glob"} and bool(tools), ", ".join(tools))
+            unexpected = sorted(set(tools) - ALLOWED_LIVE_TOOLS)
+            check(
+                "only the read tools (plus Claude Code's internal StructuredOutput tool) are available",
+                bool(tools) and not unexpected,
+                ("unexpected: %s" % ", ".join(unexpected)) if unexpected else ", ".join(tools),
+            )
             check("the repo file is readable", "hello from the repo" in str(result.parsed.get("hello_contents", "")))
             check("planted CLAUDE.md is ignored", not result.parsed.get("canary_followed") and CANARY not in result.text)
             check("planted project hook did not run", not hook_marker.exists())

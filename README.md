@@ -11,7 +11,7 @@ A multi-pass pull request review agent. It runs several **independent** review p
 | Understand the code (written for Java developers new to Python) | [docs/project-explainer.md](docs/project-explainer.md) |
 | Understand why it is designed this way | [proposal.md](docs/proposal.md) (short) or [proposal-full.md](docs/proposal-full.md) (detailed) |
 
-Status: v0. The code is covered by automated tests that use a fake Claude, but it has not yet been exercised against the real Claude CLI or GitHub. Section [Your first run](#your-first-run) is the way to find out whether it works in your environment.
+Status: v0. The code is covered by automated tests that use a fake Claude. `reviewer doctor --live` has been run against the real Claude Code CLI (Haiku): the flags work with an enterprise login, the planted `CLAUDE.md` and project hook are ignored, and the JSON reply has the shape the parser expects. A full review of a real GitHub PR (fetching, multi-pass review, posting) has **not** been exercised yet. Section [Your first run](#your-first-run) is the way to try it.
 
 ---
 
@@ -62,7 +62,7 @@ reviewer doctor          # fast, free: checks claude, gh, git, flags, prompts, d
 reviewer doctor --live   # also makes ONE small real Haiku call (a few cents)
 ```
 
-`doctor --live` verifies the things the agent depends on and cannot be tested offline: that the isolation flags work with your login, that only the Read, Grep and Glob tools are available, that a `CLAUDE.md` and a hook planted in the checked-out project are ignored, and that Claude reports cost and tokens. It saves the raw JSON reply to `~/.code-reviewer/doctor-last.json`. If any line says `FAIL`, fix it before reviewing real code ([Troubleshooting](#troubleshooting)).
+`doctor --live` verifies the things the agent depends on and cannot be tested offline: that the isolation flags work with your login, that only the Read, Grep and Glob tools are available (plus `StructuredOutput`, an internal Claude Code tool through which the model returns its JSON answer; it cannot read, write or run anything), that a `CLAUDE.md` and a hook planted in the checked-out project are ignored, and that Claude reports cost and tokens. It saves the raw JSON reply to `~/.code-reviewer/doctor-last.json`. If any line says `FAIL`, fix it before reviewing real code ([Troubleshooting](#troubleshooting)).
 
 ## Your first run
 
@@ -100,7 +100,7 @@ You can also write `owner/repo#123`. While it works it prints one line per stage
 [07:12] converged after 4 passes
 ```
 
-Run options: `review <url> --passes N --no-self-check --model sonnet --keep-checkout --verbose`.
+The `review` command takes the [review options](#review-options) below, for example `review <url> --passes 1`. Type `review --help` in the prompt to see them.
 
 If the PR belongs to a different repository than your current directory, it asks first and then uses a cached clone under `~/.code-reviewer/cache/`. Outside any git repository it does the same.
 
@@ -125,7 +125,24 @@ Ctrl-C during a review stops the current call and gives you a report from the pa
 reviewer review https://github.com/my-org/my-service/pull/123 [--passes 4] [--model sonnet] [--no-self-check] [--keep-checkout] [--verbose] [--local-path DIR] [--post]
 ```
 
-It prints the report path and exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization.
+It prints the report path and exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
+
+### Review options
+
+These work the same in the interactive prompt (`review <url> ...`) and the one-shot command (`reviewer review <url> ...`). The same text is shown by `reviewer review --help` and the prompt's `review --help`.
+
+| Option | Meaning |
+|---|---|
+| `--passes N` | Maximum number of review passes (a whole number, 1 or more). Default is `max_passes` from your settings (6). The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` runs exactly one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
+| `--model NAME` | Model for all three roles, an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
+| `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
+| `--keep-checkout` | Keep the temporary read-only checkout in the run directory so you can inspect exactly what the reviewer saw (otherwise it is deleted) |
+| `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
+| `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. In the interactive prompt use the `post` command instead |
+| `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
+| `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (or `reviewer --config PATH` to start the prompt). Settings file to use instead of `./review.toml` or `~/.code-reviewer/review.toml` |
+
+Options override the settings file for that run only. Everything else (budgets, thresholds, criteria mode, ...) is set in [Configuration](#configuration).
 
 ### Posting a comment
 
@@ -253,7 +270,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
 | `doctor`: `claude is installed` fails | Install Claude Code, or set `claude_bin` in `review.toml` |
 | `doctor`: required flags missing | Your Claude Code is too old or different. Compare `claude --help` with `isolation_flags` and the flags in `src/code_reviewer/claude_cli.py` |
-| `doctor --live`: more than Read, Grep, Glob available, or canary or hook not ignored | Isolation is not working. Do not review untrusted PRs until this is fixed |
+| `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, or the canary or hook was not ignored | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
 | `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` |
@@ -398,7 +415,7 @@ The offline tests cannot prove how Claude Code behaves. After upgrading Claude C
 
 ## Known limitations and roadmap
 
-- Not yet exercised against real Claude and GitHub (see the status at the top).
+- Verified live: the Reviewer flag set, isolation canaries, tool list and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Not yet exercised: a full review of a real PR, `gh` fetching, posting a comment, budget-exceeded behavior (see the status at the top).
 - GitHub PRs only; root `AGENTS.md` only; `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
 - Planned: evals from your `mark` and `missed` labels, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).

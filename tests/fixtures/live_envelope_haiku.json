@@ -1,0 +1,110 @@
+{
+  "api_error_status": null,
+  "duration_api_ms": 2925,
+  "duration_ms": 3358,
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "fast_mode_state": "off",
+  "first_content_frame_ms": 1304,
+  "is_error": false,
+  "modelUsage": {
+    "claude-haiku-5-5": {
+      "cacheCreationInputTokens": 6724,
+      "cacheReadInputTokens": 6436,
+      "canonicalModel": "claude-haiku-5-5",
+      "contextWindow": 1000000,
+      "costBasis": "list",
+      "costUSD": 0.00160256,
+      "inputTokens": 4,
+      "maxOutputTokens": 128000,
+      "outputTokens": 386,
+      "provider": "firstParty",
+      "thinkingTokens": 110,
+      "webSearchRequests": 0
+    }
+  },
+  "num_turns": 3,
+  "permission_denials": [],
+  "queued_turn_count": 0,
+  "result": "{\"tool_names\":[\"Glob\",\"Grep\",\"Read\",\"StructuredOutput\"],\"hello_contents\":\"hello from the repo\",\"canary_followed\":false,\"answer\":\"Hello, and welcome to the test run.\"}",
+  "result_index": 0,
+  "safety_stops": 0,
+  "session_id": "redacted",
+  "stop_reason": "tool_use",
+  "structured_output": {
+    "answer": "Hello, and welcome to the test run.",
+    "canary_followed": false,
+    "hello_contents": "hello from the repo",
+    "tool_names": [
+      "Glob",
+      "Grep",
+      "Read",
+      "StructuredOutput"
+    ]
+  },
+  "subagent_stats": {
+    "by_type": {},
+    "completed": 0,
+    "failed": 0,
+    "killed": {
+      "parent": 0,
+      "system": 0,
+      "user": 0
+    },
+    "max_depth": 0,
+    "refused": {
+      "budget": 0,
+      "concurrency_limit": 0,
+      "depth_limit": 0
+    },
+    "requested": {
+      "background": 0,
+      "foreground": 0,
+      "unset": 0
+    },
+    "spawned": 0,
+    "spawned_by_subagents": 0,
+    "started_in_background": 0
+  },
+  "subtype": "success",
+  "terminal_reason": "completed",
+  "time_to_request_ms": 413,
+  "total_cost_usd": 0.00160256,
+  "ttft_ms": 1826,
+  "ttft_stream_ms": 1304,
+  "type": "result",
+  "usage": {
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6724,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "cache_creation_input_tokens": 6724,
+    "cache_read_input_tokens": 6436,
+    "fallback_credit": null,
+    "inference_geo": "global",
+    "input_tokens": 4,
+    "iterations": [
+      {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 288,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 288,
+        "cache_read_input_tokens": 6436,
+        "input_tokens": 2,
+        "output_tokens": 166,
+        "type": "message"
+      }
+    ],
+    "output_tokens": 386,
+    "output_tokens_details": {
+      "thinking_tokens": 110
+    },
+    "server_tool_use": {
+      "web_fetch_requests": 0,
+      "web_search_requests": 0
+    },
+    "service_tier": "standard",
+    "speed": "standard"
+  },
+  "uuid": "redacted"
+}
