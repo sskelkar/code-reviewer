@@ -107,7 +107,8 @@ reviewer review <url>
       │      ├─ FindingsPreparer.prepare   validate + check evidence
       │      ├─ Comparator.compare     -> another `claude` call (sometimes skipped)
       │      └─ MasterList.apply       merge into the master findings
-      └─ report.render_report          -> report.md
+      ├─ report.render_report          -> report.md (the detailed report)
+      └─ summary.render_summary        -> summary.md (the shareable summary, also printed)
 ```
 
 ---
@@ -785,7 +786,7 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 6. [`llm.py`](../src/code_reviewer/llm.py) and [`claude_cli.py`](../src/code_reviewer/claude_cli.py): how a model call is made and its output parsed.
 7. [`findings.py`](../src/code_reviewer/findings.py), [`master.py`](../src/code_reviewer/master.py): validation, evidence checks and merging (the densest logic).
 8. [`criteria.py`](../src/code_reviewer/criteria.py), [`diffview.py`](../src/code_reviewer/diffview.py), [`git_ops.py`](../src/code_reviewer/git_ops.py): the input side (criteria discovery, diff parsing, git/gh).
-9. [`report.py`](../src/code_reviewer/report.py), [`repl.py`](../src/code_reviewer/repl.py): the output side.
+9. [`summary.py`](../src/code_reviewer/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py): the output side.
 10. `tests/`: executable documentation, starting with `test_engine.py`.
 
 The prompt files in [`../prompts/`](../prompts/README.md) are plain Markdown and JSON, not code, but they are half of what the agent does.

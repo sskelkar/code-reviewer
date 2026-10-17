@@ -30,6 +30,7 @@ from .roles import Comparator, CriteriaResolver, Reviewer
 from .run_store import RunStore
 from .stats import Stats
 from .stop_policy import CANCELLED, CONVERGED, StopPolicy
+from .summary import render_summary
 from .templates import ROLES, load_prompt, prompt_hashes
 
 __all__ = ["Engine", "PRContext", "ReviewRefused", "RunResult"]
@@ -94,6 +95,7 @@ class Engine:
         )
         store.save_outputs(master.to_dict(), {**stats.to_dict(), "passes": [p.to_dict() for p in passes], "stop_reason": stop_reason})
         store.report_path.write_text(render_report(result), encoding="utf-8")
+        store.summary_path.write_text(render_summary(result, cfg.post_tiers, []), encoding="utf-8")
         if not keep_checkout:
             store.cleanup_checkout()
         self.emit("report_ready", path=str(store.report_path), stop_reason=stop_reason)
@@ -199,4 +201,4 @@ class Engine:
         return passes, policy.completed, stop_reason
 
     def _over_budget(self, stats: Stats) -> bool:
-        return stats.total_cost() >= self.cfg.run_budget_usd or stats.total_tokens() >= self.cfg.run_budget_tokens
+        return stats.total_cost() >= self.cfg.run_budget_usd or stats.budget_tokens() >= self.cfg.run_budget_tokens

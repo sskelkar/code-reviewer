@@ -61,4 +61,4 @@ class ProgressPrinter:
         elif kind == "converged":
             self._say("converged after %d passes" % d["passes"])
         elif kind == "report_ready":
-            self._say("done (%s). Report: %s" % (d["stop_reason"], d["path"]))
+            self._say("done (%s)" % d["stop_reason"])

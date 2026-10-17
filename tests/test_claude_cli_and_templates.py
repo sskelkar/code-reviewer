@@ -107,7 +107,7 @@ class ConfigTests(unittest.TestCase):
         Config().validate()
 
     def test_validation_errors(self):
-        for kwargs in ({"criteria_mode": "nope"}, {"min_passes": 5, "max_passes": 3}, {"tier_medium": 0.9}, {"post_tiers": ["Huge"]}):
+        for kwargs in ({"criteria_mode": "nope"}, {"min_passes": 5, "max_passes": 3}, {"tier_medium": 0.9}, {"post_tiers": ["Huge"]}, {"post_tiers": []}):
             with self.assertRaises(ConfigError):
                 Config(**kwargs).validate()
 

@@ -268,7 +268,8 @@ class ReplTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn("no finding F-999", text)
         self.assertIn("usage: mark", text)
         self.assertIn("unknown command", text)
-        self.assertIn("findings: High 1", text)
+        self.assertIn("1 finding: 1 high confidence", text)
+        self.assertIn("full report:", text)
 
     def test_post_requires_confirmation(self):
         self.answers = ["n"]
@@ -283,11 +284,68 @@ class ReplTests(TempDirTestMixin, unittest.TestCase):
         self.session.dispatch("drop F-001")
         self.answers = ["n"]
         self.session.dispatch("post")
-        self.assertIn("No findings at the selected confidence levels", self.text())
+        self.assertIn("No findings to show", self.text())
 
     def test_quit(self):
         self.assertFalse(self.session.dispatch("quit"))
         self.assertTrue(self.session.dispatch("help"))
+
+
+
+class BudgetAndSinglePassTests(TempDirTestMixin, unittest.TestCase):
+    """Regressions from the first real runs: cache reads must not exhaust the token budget, and one pass is not 'High confidence'."""
+
+    def setUp(self):
+        self.tmp = self.make_tmp()
+        self.ctx = make_repo(self.tmp)
+
+    def engine(self, runner, **cfg):
+        return Engine(Config(runs_dir=str(self.tmp / "runs"), **cfg), runner)
+
+    def test_cache_reads_do_not_count_against_the_token_budget(self):
+        # About 700k cache-read tokens per call (as in a 16-turn review) but only a few cents of cost.
+        heavy = {"input": 10, "output": 400, "cache_creation": 100, "cache_read": 700000}
+        runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], comparator=[match("p2-f1"), match("p3-f1")],
+                            resolver=RESOLVER_OK, cost=0.01, tokens=heavy)
+        result = self.engine(runner).review(self.ctx)
+        self.assertEqual(result.stop_reason, "converged")
+        self.assertEqual(result.passes_completed, 3)
+        self.assertGreater(result.stats.total_tokens(), 600000)
+        self.assertLess(result.stats.budget_tokens(), 5000)
+        self.assertIn("counted tokens", result.report_path.read_text())
+
+    def test_new_input_and_output_tokens_still_stop_the_run(self):
+        big = {"input": 400000, "output": 1000, "cache_creation": 0, "cache_read": 0}
+        runner = FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER_OK, cost=0.01, tokens=big)
+        result = self.engine(runner, run_budget_tokens=500000).review(self.ctx)
+        self.assertEqual(result.stop_reason, "budget_exceeded")
+        self.assertEqual(result.passes_completed, 1)
+
+    def test_single_pass_findings_are_unrated_not_high(self):
+        runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], resolver=RESOLVER_OK)
+        result = self.engine(runner, max_passes=1, min_passes=1).review(self.ctx)
+        report = result.report_path.read_text()
+        self.assertIn("## Findings, unrated (1)", report)
+        self.assertNotIn("High confidence", report)
+        self.assertIn("| Confidence | Unrated | Total |", report)
+        self.assertIn("reached the pass limit (1)", report)
+
+    def test_single_pass_comment_includes_findings_labeled_unrated(self):
+        from code_reviewer.post import format_comment
+        runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], resolver=RESOLVER_OK)
+        result = self.engine(runner, max_passes=1, min_passes=1).review(self.ctx)
+        body = format_comment(result, ["High", "Medium"], [])  # a tier filter that would hide rated findings
+        self.assertIn("SQL built by concatenation", body)
+        self.assertIn("unrated", body)
+        self.assertNotIn("High confidence", body)
+        self.assertIn("Only one pass completed", body)
+
+    def test_two_passes_get_real_tiers(self):
+        runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], comparator=[match("p2-f1")], resolver=RESOLVER_OK)
+        result = self.engine(runner, max_passes=2, min_passes=2).review(self.ctx)
+        report = result.report_path.read_text()
+        self.assertIn("## High confidence (1)", report)
+        self.assertNotIn("unrated", report)
 
 
 if __name__ == "__main__":

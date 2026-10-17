@@ -33,7 +33,17 @@ class Stats:
         return all(c["cost_usd"] is not None for c in self.calls if c["ok"] or c["tokens"]["input"] or c["tokens"]["output"])
 
     def total_tokens(self) -> int:
+        """Every token Claude Code reported, including cache reads."""
         return sum(sum(c["tokens"].values()) for c in self.calls)
+
+    def budget_tokens(self) -> int:
+        """Tokens counted against the run's token budget: new input, output and cache writes.
+
+        Cache reads are excluded. A model that takes many turns re-reads the same cached context every turn, which
+        inflates the raw total (hundreds of thousands of tokens) while costing a small fraction of normal input.
+        """
+        return sum(c["tokens"].get("input", 0) + c["tokens"].get("output", 0) + c["tokens"].get("cache_creation", 0)
+                   for c in self.calls)
 
     def token_totals(self) -> Dict[str, int]:
         return {key: sum(c["tokens"].get(key, 0) for c in self.calls) for key in TOKEN_KEYS}
@@ -70,6 +80,7 @@ class Stats:
             "total_cost_usd_estimated": self.total_cost(),
             "cost_known_for_all_calls": self.cost_known(),
             "total_tokens": self.total_tokens(),
+            "budget_tokens": self.budget_tokens(),
             "token_totals": self.token_totals(),
             "duration_s": self.duration_s(),
             **self.retries_and_failures(),

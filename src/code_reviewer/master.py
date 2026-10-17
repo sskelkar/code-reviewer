@@ -189,6 +189,21 @@ def tier(value: float, high: float, medium: float) -> str:
     return "Low"
 
 
+UNRATED = "Unrated"
+MIN_PASSES_FOR_CONFIDENCE = 2
+
+
+def rate(item: Dict[str, Any], passes_completed: int, high: float, medium: float) -> str:
+    """The confidence tier of a finding, or UNRATED when fewer than two passes completed.
+
+    Confidence is agreement between independent passes. With a single pass every finding found "1 of 1" would score 100%,
+    which says nothing, so those findings are left unrated instead of being called High.
+    """
+    if passes_completed < MIN_PASSES_FOR_CONFIDENCE:
+        return UNRATED
+    return tier(confidence(item, passes_completed), high, medium)
+
+
 def pass_overlap(master: MasterList, passes: Sequence[int]) -> Dict[str, Any]:
     """Pairwise Jaccard overlap of the finding sets seen by each pair of passes."""
     sets = {p: {i for i, item in master.items.items() if p in item["seen_in_passes"]} for p in passes}

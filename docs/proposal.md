@@ -92,7 +92,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 **REPL (`reviewer`)**: run in the project directory; `review <PR URL>` (asks if the URL's repo differs from the local remote; github.com assumed).
 - Live status, one line per stage/pass: `pass 2: 1 new, 6 matched, 0 ungrounded · $0.21 · quiet streak 0/2`. `--verbose` streams tool activity (`stream-json`, to verify). Ctrl-C stops and offers a partial report.
 - At the end: summary (tiers, counts, tokens, cost), then `show F-007`, `drop F-007`, `mark F-007 real|nit|wrong`, `missed "<description>"`, `post`, `open`, `quit`.
-- **`post` is gated in code:** preview (High+Medium by default, dropped findings removed, "AI-generated" label, model/pass metadata) → `Post to repo#n? [y/N]` → one summary comment via `gh`, with a hidden run marker so re-runs update it. Org policy on AI comments to be checked.
+- **`post` is gated in code:** preview (the same text as the review summary the tool printed: all confidence tiers by default for now, dropped findings removed, "AI-generated" label, model/pass metadata) → `Post to repo#n? [y/N]` → one summary comment via `gh`, with a hidden run marker so re-runs update it. Org policy on AI comments to be checked.
 - **One-shot CLI** `reviewer review <url>` for scripts; posts **only** with `--post`.
 
 **MCP / Claude Code (later):** thin wrapper over the same engine (events + `start_review`). Tools must be async (reviews take 10–30 min): `start_review → run_id`, `get_review_status`, `get_review_report` (summary + path), `post_review` (separate tool, never auto-approved). Treat findings as data (they quote PR text). A `/review-pr` skill that shells out to the CLI is the simpler alternative.
@@ -100,7 +100,8 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 ## 7. Report, confidence, cost
 
 - **Confidence = `seen_in_passes / passes_completed`.** Tiers (configurable): **High ≥ 75%**, **Medium 40–74%**, **Low < 40%** (still reported).
-- **Report (rendered by code):** header (PR, head/base SHA, models, passes, stop reason, criteria applied/ignored) · counts by tier and severity · findings by tier then severity, each with `file:line`, evidence, suggestion, "seen in x/N passes", rejected-in notes · "rejected by self-check (not scored)" · appendix (discovery curve, pairwise pass overlap, ungrounded/invalid-rule/failed counts, links to artifacts).
+- **Review summary (rendered by code, the main output):** at the end of every review the terminal prints a shareable summary: a headline count by confidence, then each finding with severity, `file:line`, description, evidence and suggestion. It is saved as `summary.md` and is exactly the text `post` sends as the PR comment (plus a hidden marker). With fewer than two completed passes there is no agreement to measure, so findings are shown as **unrated** instead of High. A one-line run summary and the path of the full report follow.
+- **Full report (rendered by code, for deep dives):** header (PR, head/base SHA, models, passes, stop reason, criteria applied/ignored) · counts by tier and severity · findings by tier then severity, each with `file:line`, evidence, suggestion, "seen in x/N passes", rejected-in notes · "rejected by self-check (not scored)" · appendix (discovery curve, pairwise pass overlap, ungrounded/invalid-rule/failed counts, links to artifacts).
 - **Usage and cost (required):** run totals (input/output/cache tokens, estimated USD, wall time, calls), per-pass and per-role (Resolver/Reviewer/Comparator) breakdown with each pass's new/matched counts, retries and failures included, spend vs cap. Summed from each call's JSON envelope; labeled *estimated* (enterprise login may show list-price figures; runs may also count against seat limits).
 - **Artifacts:** `~/.code-reviewer/runs/<timestamp>_<repo>_<pr>/` with config (incl. CLI version), inputs, per-pass raw outputs/findings/mapping, `master.json`, `stats.json`, `labels.json`, `report.md`, `run.log`. Every merge decision is replayable. No resume in v0.
 
@@ -113,7 +114,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 | Diff size (after exclusions) | ~1,500 changed lines, else refuse |
 | Criteria size | ~30k tokens |
 | Per call: spend / timeout | $0.50 / 10 min |
-| Per review: tokens / estimated cost | ~600k / ~$3 |
+| Per review: counted tokens / estimated cost | ~2M / ~$3 (tokens = input + output + cache writes; cache reads are excluded because multi-turn reviews re-read cached context and it is billed at a small fraction) |
 
 Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (independent; Sonnet later), `self_check` (flag, default on), `criteria_mode`, `criteria_manifest`, `disabled_default_rules`, pass/threshold/budget settings.
 

@@ -42,7 +42,7 @@ grounding_line_window = 30     # tolerated distance between a stated line and th
 call_budget_usd = 0.50         # --max-budget-usd for every claude call
 call_timeout_s = 600
 run_budget_usd = 3.00
-run_budget_tokens = 600000
+run_budget_tokens = 2000000    # counts input, output and cache-write tokens; cache reads are not counted
 
 # Claude Code binary (name on PATH or full path)
 claude_bin = "claude"
@@ -50,8 +50,8 @@ claude_bin = "claude"
 # Flags that isolate the reviewer from local Claude Code configuration. Do not remove unless you know why.
 isolation_flags = ["--safe-mode", "--restricted"]
 
-# Tiers included when posting a PR comment
-post_tiers = ["High", "Medium"]
+# Confidence tiers shown in the review summary and included in a posted comment (single-pass findings are always included)
+post_tiers = ["High", "Medium", "Low"]
 
 # Where runs are stored (default: ~/.code-reviewer/runs)
 runs_dir = ""

@@ -21,6 +21,7 @@ class RunStore:
         self.input_dir = root / "input"
         self.checkout = root / "checkout"
         self.report_path = root / "report.md"
+        self.summary_path = root / "summary.md"
         self.input_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod

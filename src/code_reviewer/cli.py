@@ -15,6 +15,7 @@ from .post import format_comment, post_comment
 from .progress import ProgressPrinter
 from .repl import Session
 from .review_options import add_run_options, apply_run_options
+from .summary import render_summary, run_line
 
 MAIN_EPILOG = """\
 examples:
@@ -85,7 +86,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         except (git_ops.GitError, ConfigError, ReviewRefused, ClaudeError) as exc:
             print("error: %s" % exc, file=sys.stderr)
             return 1
-        print("report: %s" % result.report_path)
+        print("\n" + render_summary(result, cfg.post_tiers, []))
+        print(run_line(result))
+        print("full report: %s" % result.report_path)
         if args.post:
             body = format_comment(result, cfg.post_tiers, [])
             try:

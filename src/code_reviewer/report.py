@@ -5,18 +5,23 @@ import re
 from typing import Any, Dict, List
 
 from .findings import SEVERITY_RANK
-from .master import MasterList, confidence, pass_overlap, tier
+from .master import MIN_PASSES_FOR_CONFIDENCE, UNRATED, MasterList, pass_overlap, rate
 from .models import RunResult
 
 TIERS = ("High", "Medium", "Low")
 SEVERITIES = ("high", "medium", "low", "nit")
 STOP_TEXT = {
     "converged": "converged (no new findings for consecutive passes)",
-    "max_passes": "reached the maximum number of passes",
     "budget_exceeded": "stopped: run budget exceeded",
     "failures": "stopped: repeated pass failures",
     "cancelled": "cancelled by the user",
 }
+
+
+def stop_text(result: RunResult) -> str:
+    if result.stop_reason == "max_passes":
+        return "reached the pass limit (%d)" % result.cfg.max_passes
+    return STOP_TEXT.get(result.stop_reason, result.stop_reason)
 
 
 def fence(text: str, lang: str = "") -> str:
@@ -39,10 +44,14 @@ def _location(canonical: Dict[str, Any]) -> str:
 
 
 def tiered(master: MasterList, passes_completed: int, high: float, medium: float) -> Dict[str, List[Dict[str, Any]]]:
-    """Scored findings grouped by confidence tier, most severe first."""
-    groups: Dict[str, List[Dict[str, Any]]] = {t: [] for t in TIERS}
+    """Scored findings grouped by confidence tier, most severe first.
+
+    With fewer than two completed passes there is no agreement to measure, so there is a single "Unrated" group.
+    """
+    names = TIERS if passes_completed >= MIN_PASSES_FOR_CONFIDENCE else (UNRATED,)
+    groups: Dict[str, List[Dict[str, Any]]] = {name: [] for name in names}
     for item in master.scored():
-        groups[tier(confidence(item, passes_completed), high, medium)].append(item)
+        groups[rate(item, passes_completed, high, medium)].append(item)
     for items in groups.values():
         items.sort(key=lambda i: (-SEVERITY_RANK.get(i["canonical"]["severity"], 0), i["id"]))
     return groups
@@ -94,7 +103,7 @@ def _header(result: RunResult) -> List[str]:
         "| Models | reviewer `%s`, comparator `%s`, resolver `%s` |" % (cfg.model_reviewer, cfg.model_comparator, cfg.model_resolver),
         "| Self-check | %s |" % ("on" if cfg.self_check else "off"),
         "| Passes completed | %d of %d max (%d failed) |" % (result.passes_completed, cfg.max_passes, failed),
-        "| Stop reason | %s |" % STOP_TEXT.get(result.stop_reason, result.stop_reason),
+        "| Stop reason | %s |" % stop_text(result),
         "| Diff | %(files)d files, %(changed_lines)d changed lines, %(excluded)d excluded |" % result.diff_summary,
         "| Estimated cost | %s, %s tokens |" % (money(stats.total_cost(), stats.cost_known()), count(stats.total_tokens())),
         "",
@@ -119,14 +128,17 @@ def _summary_section(result: RunResult, groups: Dict[str, List[Dict[str, Any]]])
     scored = result.master.scored()
     out = [
         "## Summary", "",
-        "| Confidence | High | Medium | Low | Total |", "|---|---|---|---|---|",
-        "| Findings | %s | %d |" % (" | ".join(str(len(groups[t])) for t in TIERS), len(scored)),
+        "| Confidence | %s | Total |" % " | ".join(groups), "|---" * (len(groups) + 2) + "|",
+        "| Findings | %s | %d |" % (" | ".join(str(len(items)) for items in groups.values()), len(scored)),
         "",
         "By severity: " + ", ".join("%s %d" % (s, sum(1 for i in scored if i["canonical"]["severity"] == s)) for s in SEVERITIES),
         "",
     ]
     if result.passes_completed == 0:
         out += ["_No pass completed, so there are no findings. See the appendix for the failure details._", ""]
+    elif result.passes_completed < MIN_PASSES_FOR_CONFIDENCE:
+        out += ["_Only one pass completed, so findings are **unrated**: confidence is the share of passes that found an issue, "
+                "and it cannot be measured from a single pass._", ""]
     return out
 
 
@@ -138,11 +150,14 @@ def _tier_sections(result: RunResult, groups: Dict[str, List[Dict[str, Any]]]) -
         "Low": "under %d%%" % round(cfg.tier_medium * 100),
     }
     out: List[str] = []
-    for name in TIERS:
-        if not groups[name]:
+    for name, items in groups.items():
+        if not items:
             continue
-        out += ["## %s confidence (%d)" % (name, len(groups[name])), "_Found in %s of passes._" % bounds[name], ""]
-        for item in groups[name]:
+        if name == UNRATED:
+            out += ["## Findings, unrated (%d)" % len(items), "_Single pass: no agreement data. Run at least two passes to get confidence._", ""]
+        else:
+            out += ["## %s confidence (%d)" % (name, len(items)), "_Found in %s of passes._" % bounds[name], ""]
+        for item in items:
             out += [render_finding(item, result.passes_completed, rules), ""]
     return out
 
@@ -199,8 +214,8 @@ def _usage_section(result: RunResult) -> List[str]:
             count(totals["cache_creation"]), count(totals["cache_read"])),
         "- Claude invocations: %d (%d retries, %d failed); model time %.0fs" % (
             counts["calls"], counts["retries"], counts["failed_calls"], stats.duration_s()),
-        "- Budget: %s of %s; %s of %s tokens" % (
-            money(stats.total_cost(), known), money(cfg.run_budget_usd), count(stats.total_tokens()), count(cfg.run_budget_tokens)),
+        "- Budget: %s of %s; %s of %s counted tokens (input, output and cache writes; cache reads are not counted)" % (
+            money(stats.total_cost(), known), money(cfg.run_budget_usd), count(stats.budget_tokens()), count(cfg.run_budget_tokens)),
         "- Costs are estimates reported by Claude Code and may not match billing." + note,
         "",
     ]

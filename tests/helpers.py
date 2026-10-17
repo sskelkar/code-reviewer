@@ -69,7 +69,8 @@ class FakeRunner:
     """Scripted stand-in for ClaudeRunner. Roles are told apart by their system prompts."""
 
     def __init__(self, reviewer: List[Any], comparator: Optional[List[Any]] = None,
-                 resolver: Optional[Dict[str, Any]] = None, cost: float = 0.01):
+                 resolver: Optional[Dict[str, Any]] = None, cost: float = 0.01, tokens: Optional[Dict[str, int]] = None):
+        self.tokens = tokens or {"input": 1000, "output": 200, "cache_creation": 0, "cache_read": 500}
         self.reviewer = reviewer
         self.comparator = comparator or []
         self.resolver = resolver or {"criteria_files": [], "inline_sections": [], "organization_notes": "none stated", "ignored_references": []}
@@ -98,7 +99,7 @@ class FakeRunner:
             return payload
         return ClaudeResult(
             ok=True, parsed=payload, text=json.dumps(payload), cost_usd=self.cost,
-            tokens={"input": 1000, "output": 200, "cache_creation": 0, "cache_read": 500},
+            tokens=dict(self.tokens),
             raw={"fake": True, "role": role}, duration_ms=1200, num_turns=3, model="fake-haiku",
         )
 

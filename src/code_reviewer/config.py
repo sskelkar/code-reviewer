@@ -81,14 +81,15 @@ class Config:
     call_budget_usd: float = 0.50
     call_timeout_s: int = 600
     run_budget_usd: float = 3.00
-    run_budget_tokens: int = 600000
+    run_budget_tokens: int = 2000000
 
     # Claude Code invocation
     claude_bin: str = "claude"
     isolation_flags: List[str] = field(default_factory=lambda: ["--safe-mode", "--restricted"])
 
     # Posting
-    post_tiers: List[str] = field(default_factory=lambda: ["High", "Medium"])
+    # Confidence tiers shown in the summary and included in a posted comment (single-pass findings are always included)
+    post_tiers: List[str] = field(default_factory=lambda: ["High", "Medium", "Low"])
 
     # Storage
     runs_dir: str = ""
@@ -104,6 +105,8 @@ class Config:
             raise ConfigError("need 0 < tier_medium < tier_high <= 1")
         if self.call_budget_usd <= 0 or self.run_budget_usd <= 0:
             raise ConfigError("budgets must be positive")
+        if not self.post_tiers:
+            raise ConfigError("post_tiers must list at least one of High, Medium, Low")
         for tier in self.post_tiers:
             if tier not in ("High", "Medium", "Low"):
                 raise ConfigError("post_tiers entries must be High, Medium or Low")

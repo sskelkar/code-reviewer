@@ -12,11 +12,11 @@ from . import git_ops
 from .claude_cli import ClaudeError
 from .config import Config, ConfigError
 from .engine import Engine, ReviewRefused, RunResult
-from .master import confidence, tier
 from .post import format_comment, post_comment
 from .progress import ProgressPrinter
-from .report import TIERS, render_finding, tiered
+from .report import TIERS, render_finding
 from .review_options import OptionError, ReplArgumentParser, add_run_options, apply_run_options
+from .summary import render_summary, run_line
 
 try:  # command history and line editing where available
     import readline  # noqa: F401
@@ -35,16 +35,49 @@ Commands:
         --keep-checkout   keep the temporary checkout in the run directory, for debugging
         --verbose         print extra progress detail
       `review --help` shows the options in full.
-  show <F-id>                 Show one finding in full.
-  drop <F-id> / undrop <F-id> Exclude a finding from the posted comment (or restore it).
-  mark <F-id> real|nit|wrong  Record your judgment of a finding (saved with the run).
-  missed "<description>"      Record an issue you found that the agent missed (saved with the run).
-  summary                     Reprint the summary of the last review.
-  post [--tiers High,Medium]  Preview the PR comment and post it after you confirm.
-  open                        Open the report file.
-  help                        Show this help.
-  quit                        Leave.
+  show <F-id>                        Show one finding in full.
+  drop <F-id> / undrop <F-id>        Leave a finding out of the posted comment (or put it back).
+  mark <F-id> real|nit|wrong         Record your judgment of a finding (saved with the run).
+  missed "<description>"             Record an issue you found that the agent missed (saved with the run).
+  summary [--tiers High,Medium,Low]  Show the review summary again: the text `post` would send, with your drops applied.
+  post [--tiers High,Medium,Low]     Preview the PR comment and post it after you confirm.
+  open                               Open the full report file.
+  help                               Show this help.
+  quit                               Leave.
 """
+
+
+# The commands, grouped by when you would use them. This drives the welcome banner; a test checks that every command is listed.
+COMMAND_GROUPS = [
+    ("Start a review", [
+        ("review <PR URL>", "review a pull request, for example review https://github.com/OWNER/REPO/pull/123"),
+        ("review <PR URL> --passes 1", "one cheap pass to try it out (more options: review --help)"),
+    ]),
+    ("After a review", [
+        ("show F-001", "read one finding in full"),
+        ("mark F-001 real|nit|wrong", "record whether a finding was right (saved with the run, used later for evals)"),
+        ('missed "<text>"', "record a real issue the agent did not find"),
+        ("drop F-001", "leave a finding out of the PR comment (undrop F-001 puts it back)"),
+        ("post", "preview the PR comment; it is posted only after you confirm"),
+        ("summary", "show the review summary again (the text post would send)"),
+        ("open", "open the full report"),
+    ]),
+    ("Anytime", [
+        ("help", "all commands and review options"),
+        ("quit", "leave"),
+    ]),
+]
+
+
+def welcome_text(repo: Optional[str]) -> str:
+    """The banner shown when the REPL starts. `repo` is "owner/repo (host)" when the current directory is a clone."""
+    width = max(len(command) for _, entries in COMMAND_GROUPS for command, _ in entries) + 2
+    lines = ["code-reviewer: multi-pass pull request review", ""]
+    lines.append("Repository here: %s" % repo if repo else "Not inside a clone: use a full PR URL (a cached clone is used).")
+    for title, entries in COMMAND_GROUPS:
+        lines += ["", "%s:" % title]
+        lines += ["  %s%s" % (command.ljust(width), description) for command, description in entries]
+    return "\n".join(lines) + "\n"
 
 
 def load_labels(run_dir: Path) -> Dict[str, Any]:
@@ -63,6 +96,13 @@ def save_labels(run_dir: Path, labels: Dict[str, Any]) -> None:
 
 
 class Session:
+    # Command word -> the method that handles it. `quit` is handled separately (QUIT_WORDS).
+    COMMANDS = {
+        "review": "cmd_review", "show": "cmd_show", "drop": "cmd_drop", "undrop": "cmd_undrop", "mark": "cmd_mark",
+        "missed": "cmd_missed", "summary": "cmd_summary", "post": "cmd_post", "open": "cmd_open", "help": "cmd_help",
+    }
+    QUIT_WORDS = ("quit", "exit", "q")
+
     def __init__(
         self,
         cfg: Config,
@@ -83,10 +123,8 @@ class Session:
     # ------------------------------------------------------------------ main loop
 
     def loop(self) -> None:
-        self.out("code-reviewer REPL. Type 'review <PR URL>' to start, 'help' for commands.")
         local = git_ops.local_repo_info(self.local_path)
-        if local is not None:
-            self.out("Detected repository: %s/%s (%s)" % (local.owner, local.repo, local.host))
+        self.out(welcome_text("%s/%s (%s)" % (local.owner, local.repo, local.host) if local else None))
         while True:
             try:
                 line = self.ask("reviewer> ")
@@ -111,19 +149,17 @@ class Session:
             self.out("could not parse the command: %s" % exc)
             return True
         command, args = tokens[0].lower(), tokens[1:]
-        handlers = {
-            "review": self.cmd_review, "show": self.cmd_show, "drop": self.cmd_drop, "undrop": self.cmd_undrop,
-            "mark": self.cmd_mark, "missed": self.cmd_missed, "summary": self.cmd_summary, "post": self.cmd_post,
-            "open": self.cmd_open, "help": lambda a: self.out(HELP),
-        }
-        if command in ("quit", "exit", "q"):
+        if command in self.QUIT_WORDS:
             return False
-        handler = handlers.get(command)
-        if handler is None:
-            self.out("unknown command '%s'. Type 'help'." % command)
+        method = self.COMMANDS.get(command)
+        if method is None:
+            self.out("unknown command '%s'. Type 'help' to see the commands." % command)
         else:
-            handler(args)
+            getattr(self, method)(args)
         return True
+
+    def cmd_help(self, args: List[str]) -> None:
+        self.out(HELP)
 
     # ------------------------------------------------------------------ commands
 
@@ -232,8 +268,11 @@ class Session:
         self.out("recorded (%d missed issue(s) so far)" % len(self.labels["missed"]))
 
     def cmd_summary(self, args: List[str]) -> None:
-        if self._need_result() is not None:
-            self.print_summary()
+        if self._need_result() is None:
+            return
+        tiers = self._tiers_option(args)
+        if tiers is not None:
+            self.print_summary(tiers)
 
     def cmd_open(self, args: List[str]) -> None:
         result = self._need_result()
@@ -249,12 +288,9 @@ class Session:
         result = self._need_result()
         if result is None or self.ref is None:
             return
-        tiers = list(self.cfg.post_tiers)
-        if args[:1] == ["--tiers"] and len(args) > 1:
-            tiers = [t.strip().capitalize() for t in args[1].split(",") if t.strip()]
-            if any(t not in TIERS for t in tiers):
-                self.out("tiers must be from: %s" % ", ".join(TIERS))
-                return
+        tiers = self._tiers_option(args)
+        if tiers is None:
+            return
         body = format_comment(result, tiers, self.labels["dropped"])
         self.out("----- comment preview -----")
         self.out(body)
@@ -276,26 +312,24 @@ class Session:
         if self.result is not None:
             save_labels(self.result.run_dir, self.labels)
 
-    def print_summary(self) -> None:
+    def _tiers_option(self, args: List[str]) -> Optional[List[str]]:
+        """The confidence tiers to show: `--tiers High,Medium` if given, otherwise the `post_tiers` setting. None if invalid."""
+        if args[:1] == ["--tiers"] and len(args) > 1:
+            tiers = [t.strip().capitalize() for t in args[1].split(",") if t.strip()]
+            if not tiers or any(t not in TIERS for t in tiers):
+                self.out("tiers must be from: %s" % ", ".join(TIERS))
+                return None
+            return tiers
+        return list(self.cfg.post_tiers)
+
+    def print_summary(self, tiers: Optional[List[str]] = None) -> None:
+        """The shareable summary (exactly what `post` would send), then a line about the run and where the full report is."""
         result = self.result
         if result is None:
             return
-        cfg = result.cfg
-        groups = tiered(result.master, result.passes_completed, cfg.tier_high, cfg.tier_medium)
-        stats = result.stats
         self.out("")
-        self.out("== %s: %s ==" % (result.ctx.label, result.ctx.title))
-        self.out("passes completed: %d, stop reason: %s, estimated cost: $%.3f, tokens: %s" % (
-            result.passes_completed, result.stop_reason, stats.total_cost(), "{:,}".format(stats.total_tokens())))
-        self.out("findings: " + ", ".join("%s %d" % (t, len(groups[t])) for t in TIERS))
-        for name in TIERS:
-            for item in groups[name]:
-                canon = item["canonical"]
-                self.out("  %-6s %s  %-6s  %s:%s  %s  (%d/%d)" % (
-                    name, item["id"], canon["severity"], canon["file"], canon["line"] or "-", canon["title"],
-                    len(item["seen_in_passes"]), result.passes_completed))
-        if result.master.rejected_only():
-            self.out("  (%d finding(s) were rejected by self-check and are not scored)" % len(result.master.rejected_only()))
-        self.out("report: %s" % result.report_path)
-        self.out("next: show <id> | mark <id> real|nit|wrong | missed \"...\" | drop <id> | post | open")
+        self.out(render_summary(result, tiers or list(self.cfg.post_tiers), self.labels["dropped"]))
+        self.out(run_line(result))
+        self.out("full report: %s" % result.report_path)
+        self.out('next: show <id> | mark <id> real|nit|wrong | missed "..." | drop <id> | post | open')
         self.out("")

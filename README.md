@@ -25,7 +25,7 @@ For a pull request you point it at:
 2. It loads review criteria: generic defaults plus the reviewed project's own criteria, if the project describes them in its `AGENTS.md`.
 3. It runs several review passes. Each pass is a fresh Claude session that has never seen the other passes. It can read the code in a read-only checkout, but it cannot run commands or change anything.
 4. It verifies each finding's evidence mechanically (the quoted code must exist), merges duplicates across passes, and scores confidence as the share of passes that found a finding.
-5. It stops when extra passes stop finding anything new, or at a pass or budget limit, and writes the report.
+5. It stops when extra passes stop finding anything new, or at a pass or budget limit, then prints a shareable review summary and saves a detailed report next to it.
 
 Findings are advisory. Treat the confidence score as a hint, not a verdict, and use `mark` (below) to record which findings were right so you can judge how much to trust the tool.
 
@@ -74,7 +74,7 @@ Do these in order. Together they cost a few dollars at most.
    ```bash
    reviewer review https://github.com/OWNER/REPO/pull/123 --passes 1
    ```
-4. Open the report it prints (`report: ...`) and the files next to it, especially `pass-01/reviewer.raw.json` and `pass-01/findings.json`. Check that findings have real quotes, that the cost line is filled in, and that the criteria section lists what you expect.
+4. Read the review summary it prints, then open the full report (its path is printed last) and the files next to it, especially `pass-01/reviewer.raw.json` and `pass-01/findings.json`. Check that findings have real quotes, that the cost line is filled in, and that the criteria section lists what you expect.
 5. Only then run a full review (default up to 6 passes).
 
 ## Reviewing a pull request
@@ -90,7 +90,7 @@ reviewer
 reviewer> review https://github.com/my-org/my-service/pull/123
 ```
 
-You can also write `owner/repo#123`. While it works it prints one line per stage and pass:
+On start the prompt shows a welcome banner that lists every command, grouped by when you use them. You can also write `owner/repo#123`. While a review runs it prints one line per stage and pass:
 
 ```
 [00:04] diff: 12 files, 340 changed lines (2 excluded)
@@ -104,7 +104,7 @@ The `review` command takes the [review options](#review-options) below, for exam
 
 If the PR belongs to a different repository than your current directory, it asks first and then uses a cached clone under `~/.code-reviewer/cache/`. Outside any git repository it does the same.
 
-When the review ends you get a summary and these commands:
+When the review ends it prints the **review summary**: the findings, in exactly the text that `post` would send as a PR comment, so you can read it, copy it, or post it. Below it come one line about the run (passes, why it stopped, cost) and the path of the **full report**, which is there for digging into what the agent did. Then you can use these commands:
 
 | Command | What it does |
 |---|---|
@@ -112,9 +112,9 @@ When the review ends you get a summary and these commands:
 | `mark F-007 real\|nit\|wrong` | Record your judgment. Saved in the run directory; later used to build evals |
 | `missed "no length check in create()"` | Record a real issue the agent did not find |
 | `drop F-007` / `undrop F-007` | Exclude a finding from the comment you may post |
-| `post [--tiers High,Medium]` | Preview the PR comment, then post it **only if you answer `y`** |
-| `summary` | Show the summary again |
-| `open` | Open the report file |
+| `post [--tiers High,Medium,Low]` | Preview the PR comment (the review summary), then post it **only if you answer `y`** |
+| `summary [--tiers High,Medium]` | Show the review summary again, with your `drop`s applied. `--tiers` filters by confidence; by default all tiers are shown |
+| `open` | Open the full report file |
 | `help`, `quit` | |
 
 Ctrl-C during a review stops the current call and gives you a report from the passes that finished.
@@ -125,7 +125,7 @@ Ctrl-C during a review stops the current call and gives you a report from the pa
 reviewer review https://github.com/my-org/my-service/pull/123 [--passes 4] [--model sonnet] [--no-self-check] [--keep-checkout] [--verbose] [--local-path DIR] [--post]
 ```
 
-It prints the report path and exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
+It prints the review summary, one line about the run and the path of the full report, then exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
 
 ### Review options
 
@@ -146,24 +146,25 @@ Options override the settings file for that run only. Everything else (budgets, 
 
 ### Posting a comment
 
-`post` (REPL) or `--post` (one-shot) writes a single summary comment containing the findings at the chosen confidence levels (default High and Medium), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
+`post` (REPL) or `--post` (one-shot) writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting or `post --tiers`), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
 
 ## Reading the report
 
-`report.md` in the run directory (the path is printed at the end) contains:
+The review summary printed at the end is also saved as `summary.md` in the run directory. It is short and meant to be shared. `report.md` is the long version for digging in: what the agent was given, what it ignored, cost, and the details of every pass. It contains:
 
 | Section | What it tells you |
 |---|---|
 | Header | PR, commits reviewed, models, passes completed, why it stopped, diff size, estimated cost |
 | Criteria applied | Default and project rules used, project criteria files, references that were ignored (for example a wiki link), warnings (for example "this PR modifies the criteria files") |
 | Summary | Finding counts by confidence tier and severity |
-| High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it: **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the rule, the evidence, a suggestion and "seen in x/N passes" |
+| High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the rule, the evidence, a suggestion and "seen in x/N passes" |
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
 | Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified |
 
 How to read it:
 
 - A finding that every pass found is much more likely to be real than one found once, but it is still not guaranteed. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
+- **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: an exact quote that exists in the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
 - Cost figures are Claude Code's estimates and may not match your billing.
 
@@ -221,10 +222,10 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff |
 | `criteria_max_chars` | `120000` | Cap on project criteria text |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |
-| `run_budget_usd`, `run_budget_tokens` | `3.00`, `600000` | Caps for a whole review; it stops between calls once exceeded |
+| `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Caps for a whole review; it stops between passes once either is exceeded. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. The dollar cap is the real spending limit |
 | `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Do not remove unless you know why |
 | `claude_bin` | `claude` | Path or name of the Claude Code binary |
-| `post_tiers` | `["High","Medium"]` | Confidence tiers included in a posted comment |
+| `post_tiers` | `["High","Medium","Low"]` | Confidence tiers shown in the review summary and included in a posted comment. Single-pass (unrated) findings are always included |
 | `runs_dir` | `""` | Where runs are stored (default `~/.code-reviewer/runs`) |
 | `candidate_window`, `candidate_all_threshold`, `candidate_max`, `grounding_line_window` | `20`, `30`, `40`, `30` | Tuning for duplicate matching and line-number tolerance. Rarely needed |
 
@@ -234,7 +235,7 @@ Environment variables: `CODE_REVIEWER_HOME` (location of the checkout containing
 
 | Path | Contents |
 |---|---|
-| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | One review: `report.md`, `master.json`, `stats.json`, `labels.json` (your marks), `config.json` (settings, prompt hashes, versions), `input/` (diff, criteria used), `pass-NN/` (raw Claude output, findings, merge decisions) |
+| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | One review: `summary.md` (the shareable summary), `report.md` (the detailed report), `master.json`, `stats.json`, `labels.json` (your marks), `config.json` (settings, prompt hashes, versions), `input/` (diff, criteria used), `pass-NN/` (raw Claude output, findings, merge decisions) |
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
 | `refs/code-reviewer/*` in your local clone | The PR head and base commits fetched for a review. Your branches and working tree are never changed |
 | `~/.code-reviewer/doctor-last.json` | Raw reply from `reviewer doctor --live` |
@@ -247,7 +248,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Cost, time and limits
 
-- Each pass is a full agent run, so a review takes minutes per pass and several passes. These numbers have not been measured yet; your first runs will tell you. Every run reports its own tokens and estimated cost, and the budget settings above cap the spend.
+- Each pass is a full agent run, so a review takes minutes per pass and several passes. These numbers have not been measured yet; your first runs will tell you. Every run reports its own tokens and estimated cost, and the budget settings above cap the spend. For scale: in the first real runs (Haiku, a 61-line docs-only diff) one reviewer pass took 23-53 seconds and cost about $0.015-0.02, with the reviewer taking 5 to 16 turns.
 - Only GitHub pull requests are supported (no local-branch mode yet).
 - Diffs above `max_diff_lines` are refused rather than reviewed badly. Lockfiles, vendored and generated files do not count.
 - The tool does not run tests, linters or builds. Your pipeline still owns those.
@@ -345,7 +346,9 @@ Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whol
 | `findings.py` | Validates findings and checks their evidence exists (quote in the code, or anchor over a changed hunk) |
 | `master.py` | The merged finding list, comparator decision validation, confidence tiers, pass overlap |
 | `stop_policy.py` | When the loop stops: convergence, failures, budget. Pure logic |
-| `stats.py`, `report.py` | Usage and cost accounting; the Markdown report |
+| `stats.py`, `report.py` | Usage and cost accounting; the detailed Markdown report |
+| `summary.py` | The shareable review summary. The terminal output, `summary.md` and the PR comment all come from one function |
+| `review_options.py` | The `review` options (`--passes`, `--model`, ...) shared by the CLI and the REPL |
 | `run_store.py` | The on-disk layout of a run. The only module that knows file names |
 | `repl.py`, `cli.py`, `progress.py`, `post.py`, `doctor.py` | Frontends, progress lines, PR comment posting, environment checks |
 | `models.py`, `config.py`, `templates.py`, `events.py`, `git_ops.py` | Shared types, settings, prompt rendering, events, git and gh helpers |
@@ -363,6 +366,8 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 |---|---|
 | `test_diffview`, `test_criteria`, `test_findings`, `test_master`, `test_stop_policy` | Pure logic: diff parsing, criteria discovery and validation, grounding, merging, stop rules |
 | `test_claude_cli_and_templates` | Envelope parsing, command building, prompt rendering and escaping, config validation |
+| `test_summary`, `test_welcome`, `test_options`, `test_stats` | The shareable summary and the comment built from it, the welcome banner (a test fails if a REPL command is missing from it), option parsing and help text, token budget accounting |
+| `test_doctor_and_live_envelope` | The doctor's tool check and parsing of a real Claude result (`tests/fixtures/live_envelope_haiku.json`) |
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, REPL commands, git helpers |
 
@@ -382,7 +387,7 @@ Things to know when writing tests:
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the settings table in this README |
 | Add a progress message | Emit an event with `engine.emit(...)`, handle it in `progress.py` |
 | Add an LLM role | Add `prompts/<role>.system.md`, `.user.md` and a schema, register the name in `templates.ROLES`, add a class in `roles.py` that builds a `CallSpec` and calls `ClaudeCaller.call`, and wire it in `engine.py` |
-| Add a REPL command | Add a `cmd_*` method and an entry in `Session.dispatch` in `repl.py`, and the help text |
+| Add a REPL command | In `repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
 | Change the stop rules | `stop_policy.py` and `tests/test_stop_policy.py` |
 
 ## Code conventions
