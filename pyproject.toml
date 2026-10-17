@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code-reviewer"
+version = "0.1.0"
+description = "Multi-pass pull request review agent built on Claude Code headless mode"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.scripts]
+reviewer = "code_reviewer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,57 @@
+# Copy to ./review.toml (project directory) or ~/.code-reviewer/review.toml and edit.
+# Every key is optional; the values below are the defaults.
+
+# Models: any alias or full name accepted by `claude --model`.
+model_reviewer = "haiku"
+model_comparator = "haiku"
+model_resolver = "haiku"
+
+# Reviewer refutes its own findings in a second phase.
+self_check = true
+
+# merge | project_only | defaults_only
+criteria_mode = "merge"
+# Path to a JSON manifest that replaces the criteria resolver's output (reproducible experiments).
+criteria_manifest = ""
+# Default rule IDs to switch off, for example ["GEN-012"].
+disabled_default_rules = []
+
+# Loop control
+min_passes = 3
+max_passes = 6
+quiet_k = 2                    # stop after this many consecutive passes with no new finding
+max_consecutive_failures = 2
+
+# Confidence tiers: share of completed passes that found an issue
+tier_high = 0.75
+tier_medium = 0.40
+
+# Limits
+max_diff_lines = 1500          # changed lines after exclusions
+criteria_max_chars = 120000    # about 30k tokens
+# Files left out of the diff (a trailing slash matches a directory). This list replaces the built-in one.
+# exclude_patterns = ["package-lock.json", "yarn.lock", "*.min.js", "vendor/", "node_modules/"]
+
+# Matching tuning (rarely needed)
+candidate_window = 20          # same-file line distance for duplicate candidates
+candidate_all_threshold = 30   # below this many findings the Comparator sees all of them
+candidate_max = 40
+grounding_line_window = 30     # tolerated distance between a stated line and the quote's real line
+
+# Budgets and timeouts
+call_budget_usd = 0.50         # --max-budget-usd for every claude call
+call_timeout_s = 600
+run_budget_usd = 3.00
+run_budget_tokens = 600000
+
+# Claude Code binary (name on PATH or full path)
+claude_bin = "claude"
+
+# Flags that isolate the reviewer from local Claude Code configuration. Do not remove unless you know why.
+isolation_flags = ["--safe-mode", "--restricted"]
+
+# Tiers included when posting a PR comment
+post_tiers = ["High", "Medium"]
+
+# Where runs are stored (default: ~/.code-reviewer/runs)
+runs_dir = ""

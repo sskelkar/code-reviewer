@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decisions"],
+  "properties": {
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["local_id", "match", "same_as"],
+        "properties": {
+          "local_id": { "type": "string" },
+          "match": { "type": "string" },
+          "same_as": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

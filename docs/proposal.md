@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** Draft · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** v0 implemented, pending review and first live run (see [README.md](../README.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
 (Full detailed version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -22,7 +22,7 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 | Comparator | LLM, findings only | Maps each new finding to an existing master ID or `new`. Mapping only. |
 | Harness | Python | Checkout, validation, grounding check, applies mappings, counters, convergence, budget, renders report. |
 
-Each LLM call is a separate `claude -p` subprocess. Its final message is JSON on stdout (`--output-format json` envelope plus `--json-schema`). The harness validates it (one retry), writes all files itself, and agents have no write tools.
+Each LLM call is a separate `claude -p` subprocess. Its final message is JSON on stdout (`--output-format json` envelope plus `--json-schema`). The harness validates it (one retry), writes all files itself, and agents have no write tools. Prompt templates and JSON schemas live in [prompts/](../prompts/README.md); the harness renders them and records their hashes in each run's config.
 
 ### Loop
 
@@ -79,7 +79,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
   --max-budget-usd 0.5 --add-dir <input-dir>
 ```
 
-- **Read-only tools, no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
+- **Read-only tools for the Reviewer (Resolver and Comparator get none: `--tools ""`), no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
 - Fresh session per call; never `--resume`. Review runs in a separate temp checkout, not your working tree.
 - No `--max-turns` flag exists in CLI 2.1.301: bound each call with `--max-budget-usd` plus a wall-clock timeout.
 - Structured output validated by the harness; model output is never executed.

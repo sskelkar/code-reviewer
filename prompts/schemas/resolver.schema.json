@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["criteria_files", "inline_sections", "organization_notes", "ignored_references"],
+  "properties": {
+    "criteria_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "inline_sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["heading", "reason"],
+        "properties": {
+          "heading": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "organization_notes": { "type": "string" },
+    "ignored_references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "reason"],
+        "properties": {
+          "reference": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}
