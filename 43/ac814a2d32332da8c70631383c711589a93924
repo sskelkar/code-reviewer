@@ -1,0 +1,157 @@
+docs/proposal.md
+  s_0aa18f51442760::t_e28487dfa982f3 85-86
+  s_0aa18f51442760::t_a02000647c567c 21,57-58,131,152
+  s_0aa18f51442760::t_8f3c558892ec1e 133
+  s_0aa18f51442760::t_4c3dee326fb520 97-98
+  s_0aa18f51442760::t_5dd7185b33c194 140
+  s_0aa18f51442760::t_d05660e68b0a8e 100
+  s_0aa18f51442760::t_c42d0ba6669307 87,132
+  s_0aa18f51442760::t_a14b7ffe46218e 134
+prompts/comparator.user.md
+  s_0aa18f51442760::t_e977d91d503df3 11
+src/code_reviewer/master.py
+  s_0aa18f51442760::t_17517653da25f8 20,131
+  s_0aa18f51442760::t_be07441e663b09 7
+src/code_reviewer/config.py
+  s_0aa18f51442760::t_8fb923ed2872ad 79-80
+docs/proposal-full.md
+  s_0aa18f51442760::t_4c3dee326fb520 3-4
+src/code_reviewer/review_inputs.py
+  s_0aa18f51442760::t_6898786b99ce24 1-111
+tests/test_replay.py
+  s_0aa18f51442760::t_3eb73d910ff06e 1-70
+tests/test_isolation_and_dry_run.py
+  s_0aa18f51442760::t_cd68ed5ea3a8e0 56-57,61-63,75,109-127,130-131,157,160
+  s_0aa18f51442760::t_015d723d90e701 1-55,58-60,64-74,76-108,128-129,132-156,158-159,161-199
+src/code_reviewer/claude_cli.py
+  s_0aa18f51442760::t_be09d28d3fe2bd 9
+  s_0aa18f51442760::t_fdc9d202a491f5 65-66,69,73-74,77,80-81,83-84,86,92-99,110,113-114
+src/code_reviewer/diffview.py
+  s_0aa18f51442760::t_dee889170dab95 54-101,104-110,112,114,116-117,119,121,124-125,129-131,133,135-153
+tests/helpers.py
+  s_0aa18f51442760::t_4c3dee326fb520 59
+  s_0aa18f51442760::t_13119a6d8810ca 12
+README.md
+  s_0aa18f51442760::t_e3cce4c7f18f8f 346
+  s_0aa18f51442760::t_e28487dfa982f3 65,73-78,82-83,144-145,246,248,252,269-270,285,369,389,431-432,437
+  s_0aa18f51442760::t_efcaf2d54ce005 337-340,350-351,366,368
+  s_0aa18f51442760::t_4c3dee326fb520 165
+  s_0aa18f51442760::t_a02000647c567c 26,173,260,293
+  s_0aa18f51442760::t_5dd7185b33c194 14,445
+  s_0aa18f51442760::t_d05660e68b0a8e 133,367,387
+  s_0aa18f51442760::t_c42d0ba6669307 219,236,271,370-371,388,406,430
+  s_0aa18f51442760::t_40fb7129a4673c 392
+src/code_reviewer/run_store.py
+  s_0aa18f51442760::t_441aa6fef67146 6,9,20-23,30,33,35,43-53,65,67-76,93-95
+  s_0aa18f51442760::t_8fb923ed2872ad 63-64,66
+  s_0aa18f51442760::t_a5d0de1ec4e8ce 54
+src/code_reviewer/replay.py
+  s_0aa18f51442760::t_d023462a05af45 64-67,69,133-134,136
+  s_0aa18f51442760::t_4a288c2863e2e3 16,18,21,29-30,38,42-43,45-46,48-57,59,61,63,70-71,74-75,77,80-81,83-91,93-105,107-132,135,137-142
+  s_0aa18f51442760::t_17517653da25f8 1-15,17,19-20,22-28,31-37,39-41,44,47,58,60,62,68,72-73,76,78-79,82,92,106
+prompts/reviewer.user.md
+  s_0aa18f51442760::t_e977d91d503df3 33
+  s_0aa18f51442760::t_73d4b68a2cde03 1
+prompts/reviewer.system.md
+  s_0aa18f51442760::t_f961ca18888be9 1,5-8,20,28,38,62,64-66,68,73
+  s_0aa18f51442760::t_73d4b68a2cde03 18,22-27,36
+src/code_reviewer/report.py
+  s_0aa18f51442760::t_4c3dee326fb520 130
+src/code_reviewer/review_options.py
+  s_0aa18f51442760::t_017e9a4b996bd2 68-105
+  s_0aa18f51442760::t_8e41953e2091b2 46,50-53
+src/code_reviewer/roles.py
+  s_0aa18f51442760::t_441aa6fef67146 6,53-55,65-68,71-76,78-79,81
+tests/test_doctor_and_live_envelope.py
+  s_0aa18f51442760::t_015d723d90e701 46-48,69-89
+  s_0aa18f51442760::t_858c5fc9fc85f8 90
+review.example.toml
+  s_0aa18f51442760::t_c42d0ba6669307 6,56-57
+  s_0aa18f51442760::t_64d5902e2260b0 58
+docs/project-explainer.md
+  s_0aa18f51442760::t_bffa779cb5575b 95-97,99,101-114,808,816
+  s_0aa18f51442760::t_efcaf2d54ce005 98,100,710,717,809
+  s_0aa18f51442760::t_e28487dfa982f3 673,711-712
+  s_0aa18f51442760::t_e3cce4c7f18f8f 698,713-714,716,718-724
+  s_0aa18f51442760::t_c042886e89132d 61-63,80-81,84,207,209,420,427,438,516,533,542,563,590-601,638-640,646,802,819
+  s_0aa18f51442760::t_c42d0ba6669307 204,214
+  s_0aa18f51442760::t_8346b005699f5b 703,708,727
+  s_0aa18f51442760::t_3787bb0167d480 820
+src/code_reviewer/redact.py
+  s_0aa18f51442760::t_8fb923ed2872ad 1-28
+src/code_reviewer/review_flow.py
+  s_0aa18f51442760::t_5b78cb574ca026 1-39
+tests/test_engine.py
+  s_0aa18f51442760::t_4c3dee326fb520 382,386
+  s_0aa18f51442760::t_13119a6d8810ca 9-10
+  s_0aa18f51442760::t_1c39af3c650390 353-381,383-385,387-388
+  s_0aa18f51442760::t_015d723d90e701 72-73,75
+tests/test_claude_cli_and_templates.py
+  s_0aa18f51442760::t_dfdd589c0b8504 99-104
+src/code_reviewer/progress.py
+  s_0aa18f51442760::t_8e41953e2091b2 41-42
+  s_0aa18f51442760::t_be07441e663b09 6
+  s_0aa18f51442760::t_8fb923ed2872ad 36-37
+src/code_reviewer/repl.py
+  s_0aa18f51442760::t_5b78cb574ca026 137-138,144-148
+  s_0aa18f51442760::t_6c6c676cc33ce5 13-14,17-18
+tests/test_options.py
+  s_0aa18f51442760::t_6c6c676cc33ce5 9-10
+  s_0aa18f51442760::t_015d723d90e701 15,56-57
+src/code_reviewer/repl_help.py
+  s_0aa18f51442760::t_6c6c676cc33ce5 1-65
+tests/test_welcome.py
+  s_0aa18f51442760::t_6c6c676cc33ce5 6-7
+src/code_reviewer/engine.py
+  s_0aa18f51442760::t_f1950bbf2b7e8d 72-77,80-108,110-111,113,118-121
+  s_0aa18f51442760::t_6898786b99ce24 51,64,71,78-79,109,112,115-117,122
+  s_0aa18f51442760::t_8fb923ed2872ad 69,114,123
+  s_0aa18f51442760::t_b846dfc20c08ac 15-16,25-26
+  s_0aa18f51442760::t_6c6c676cc33ce5 21,33
+src/code_reviewer/dry_run.py
+  s_0aa18f51442760::t_f1950bbf2b7e8d 1-7,10,12-26,38-59,62-81
+  s_0aa18f51442760::t_6898786b99ce24 8-9,11,29-37
+  s_0aa18f51442760::t_8fb923ed2872ad 27-28,60-61
+src/code_reviewer/doctor.py
+  s_0aa18f51442760::t_be07441e663b09 9,11,65-70,72,74-83,85-97,99,102-103,105,107,111,113,115,117-142,146-147,151-154,156,158-160,162-193
+  s_0aa18f51442760::t_12bae7fc4e97b0 23,32,37-38,43-54
+tests/test_redact.py
+  s_0aa18f51442760::t_596f94a10c26da 1-82,84-100
+  s_0aa18f51442760::t_dfdd589c0b8504 83
+prompts/README.md
+  s_0aa18f51442760::t_c42d0ba6669307 42
+  s_0aa18f51442760::t_a02000647c567c 25
+  s_0aa18f51442760::t_4c3dee326fb520 39
+prompts/schemas/reviewer.schema.json
+  s_0aa18f51442760::t_4c3dee326fb520 11
+prompts/comparator.system.md
+  s_0aa18f51442760::t_e977d91d503df3 13,18
+  s_0aa18f51442760::t_606a3a914202f9 7-8,10
+src/code_reviewer/cli.py
+  s_0aa18f51442760::t_017e9a4b996bd2 17,86-87
+  s_0aa18f51442760::t_8e41953e2091b2 13,24,68-71
+  s_0aa18f51442760::t_5b78cb574ca026 10,16,89-90,93-96
+tests/test_review_banner.py
+  s_0aa18f51442760::t_017e9a4b996bd2 1-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "43ac814a2d32332da8c70631383c711589a93924",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
