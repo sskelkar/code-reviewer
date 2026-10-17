@@ -1,0 +1,21 @@
+proposal-full.md
+  s_0aa18f51442760::t_17974b0f648355 1-396
+proposal.md
+  s_0aa18f51442760::t_26640f5a735c6f 1-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "fc2f90d18ad9b0c75acac0b0c08500d3c3313e7e",
+  "prompts": {},
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
