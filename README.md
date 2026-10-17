@@ -8,6 +8,7 @@ A multi-pass pull request review agent. It runs several **independent** review p
 |---|---|
 | Review a pull request with this tool | [Part 1: Using the agent](#part-1-using-the-agent) |
 | Change or extend this tool | [Part 2: Contributing](#part-2-contributing) |
+| Understand the code (written for Java developers new to Python) | [docs/project-explainer.md](docs/project-explainer.md) |
 | Understand why it is designed this way | [proposal.md](docs/proposal.md) (short) or [proposal-full.md](docs/proposal-full.md) (detailed) |
 
 Status: v0. The code is covered by automated tests that use a fake Claude, but it has not yet been exercised against the real Claude CLI or GitHub. Section [Your first run](#your-first-run) is the way to find out whether it works in your environment.
@@ -266,6 +267,8 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 ---
 
 # Part 2: Contributing
+
+New to Python? Read [docs/project-explainer.md](docs/project-explainer.md) first. It explains where the program starts, which libraries are used, and every Python construct in this code (decorators, dataclasses, duck typing, the little inheritance there is) with Java equivalents.
 
 ## Development setup
 
