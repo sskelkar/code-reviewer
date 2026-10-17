@@ -1,0 +1,84 @@
+tests/test_claude_cli_and_templates.py
+  s_0aa18f51442760::t_55611a2a201acd 110
+src/code_reviewer/run_store.py
+  s_0aa18f51442760::t_fdf6c7b2638e90 24
+docs/project-explainer.md
+  s_0aa18f51442760::t_d2dfb8c6a88ff9 110-111,789
+src/code_reviewer/config.py
+  s_0aa18f51442760::t_fdf6c7b2638e90 84,91-92
+  s_0aa18f51442760::t_55611a2a201acd 108-109
+review.example.toml
+  s_0aa18f51442760::t_1caa5408658fde 45,53-54
+src/code_reviewer/cli.py
+  s_0aa18f51442760::t_fdf6c7b2638e90 18,89-91
+tests/test_master.py
+  s_0aa18f51442760::t_d5a3efb3dbc6d8 101-114
+  s_0aa18f51442760::t_97270d35e24ed0 115-116
+tests/helpers.py
+  s_0aa18f51442760::t_d5a3efb3dbc6d8 72-73,102
+docs/proposal.md
+  s_0aa18f51442760::t_d2dfb8c6a88ff9 95,103-104,117
+src/code_reviewer/engine.py
+  s_0aa18f51442760::t_d20685a65763f8 204
+  s_0aa18f51442760::t_fdf6c7b2638e90 33,98
+src/code_reviewer/master.py
+  s_0aa18f51442760::t_6dea4f70f7db7a 192-206
+src/code_reviewer/report.py
+  s_0aa18f51442760::t_03675c8267457a 8,21-26,47-52,54,106,131-132,139-141,153-154,156-160,217-218
+tests/test_stats.py
+  s_0aa18f51442760::t_97270d35e24ed0 1-18
+tests/test_summary.py
+  s_0aa18f51442760::t_3bf16df8fc3382 1-34,36-119
+  s_0aa18f51442760::t_43faae8eb7f236 35
+README.md
+  s_0aa18f51442760::t_1caa5408658fde 28,77,93,107,115-117,128,149,153,225,228,238,349-351,369-370,390
+  s_0aa18f51442760::t_e8506baeabac8d 160,167,251
+src/code_reviewer/stats.py
+  s_0aa18f51442760::t_bd353b2affa1ac 83
+  s_0aa18f51442760::t_d5d0922a83464e 36,39-46
+  s_0aa18f51442760::t_f4e388114b45e7 47
+src/code_reviewer/repl.py
+  s_0aa18f51442760::t_09639d43c64769 42,62
+  s_0aa18f51442760::t_4316373fde21aa 50-61,63-82,99-105,127,152,154-156,158,161-162
+  s_0aa18f51442760::t_1caa5408658fde 19
+  s_0aa18f51442760::t_fdf6c7b2638e90 17,271-275,291-293,315-326,331-334
+  s_0aa18f51442760::t_55611a2a201acd 38-41,43-46
+  s_0aa18f51442760::t_4e63da97ed1be3 163
+tests/test_engine.py
+  s_0aa18f51442760::t_97270d35e24ed0 349-350
+  s_0aa18f51442760::t_d5a3efb3dbc6d8 294-336,338-348
+  s_0aa18f51442760::t_3bf16df8fc3382 271-272,287
+  s_0aa18f51442760::t_1caa5408658fde 337
+src/code_reviewer/summary.py
+  s_0aa18f51442760::t_3bf16df8fc3382 13,99-107,111-113
+  s_0aa18f51442760::t_d630939359947d 1-12,14-98,108-110
+src/code_reviewer/progress.py
+  s_0aa18f51442760::t_1caa5408658fde 64
+src/code_reviewer/post.py
+  s_0aa18f51442760::t_09639d43c64769 6,8
+  s_0aa18f51442760::t_fdf6c7b2638e90 9,16-17
+tests/test_welcome.py
+  s_0aa18f51442760::t_b47e003def8bfe 1,3-16,20-58
+  s_0aa18f51442760::t_9f581aaa9fb4f1 2,17-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "beae089349b0aeb5ee13231315fe39053002ec09",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
