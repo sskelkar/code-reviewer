@@ -1,0 +1,28 @@
+docs/project-explainer.md
+  s_0aa18f51442760::t_da350d87652e99 1-862
+README.md
+  s_0aa18f51442760::t_abe22380e2f1a7 271
+  s_0aa18f51442760::t_949f851ede3be5 272
+  s_0aa18f51442760::t_45245680ceb9d3 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "db95c5b1d08d60f726af8bc86d9e92769e973c5e",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
