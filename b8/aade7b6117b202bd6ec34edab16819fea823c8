@@ -1,0 +1,70 @@
+src/code_reviewer/report.py
+  s_0aa18f51442760::t_67576e39b871d9 120
+  s_0aa18f51442760::t_45ee924ac59da7 182,189,234-235
+src/code_reviewer/engine.py
+  s_0aa18f51442760::t_45ee924ac59da7 163
+src/code_reviewer/passes.py
+  s_0aa18f51442760::t_45ee924ac59da7 39,61-62
+README.md
+  s_0aa18f51442760::t_a2c5248bb98d82 168
+  s_0aa18f51442760::t_f49cf5e0457794 205-210,233,342,357,449
+src/code_reviewer/run_store.py
+  s_0aa18f51442760::t_67576e39b871d9 84
+src/code_reviewer/models.py
+  s_0aa18f51442760::t_45ee924ac59da7 69-70
+src/code_reviewer/progress.py
+  s_0aa18f51442760::t_45ee924ac59da7 55-57
+prompts/comparator.system.md
+  s_0aa18f51442760::t_1330b7d3729e19 7
+tests/test_findings.py
+  s_0aa18f51442760::t_1330b7d3729e19 5,79,81-92,117-143
+  s_0aa18f51442760::t_c74c5177909e15 144-145
+prompts/README.md
+  s_0aa18f51442760::t_ce8024007a22f2 40
+review.example.toml
+  s_0aa18f51442760::t_f49cf5e0457794 31
+src/code_reviewer/config.py
+  s_0aa18f51442760::t_67576e39b871d9 76
+prompts/reviewer.system.md
+  s_0aa18f51442760::t_1330b7d3729e19 56
+src/code_reviewer/criteria.py
+  s_0aa18f51442760::t_67576e39b871d9 14-15,21,46,49,182-247,309,311-313,315,317-321,337-338,347,354-363
+  s_0aa18f51442760::t_e8ba6a36230667 364-365
+tests/test_replay.py
+  s_0aa18f51442760::t_1330b7d3729e19 35-44
+src/code_reviewer/review_inputs.py
+  s_0aa18f51442760::t_67576e39b871d9 78,91,100
+docs/proposal.md
+  s_0aa18f51442760::t_ce8024007a22f2 33,51
+  s_0aa18f51442760::t_a2c5248bb98d82 134-135
+  s_0aa18f51442760::t_d05c009ddc9f34 120
+  s_0aa18f51442760::t_f49cf5e0457794 47,49-50,52
+src/code_reviewer/findings.py
+  s_0aa18f51442760::t_45ee924ac59da7 28-29,32,50-75,178-181,274-280
+tests/test_criteria.py
+  s_0aa18f51442760::t_f9b85d632dd833 148-235
+src/code_reviewer/replay.py
+  s_0aa18f51442760::t_45ee924ac59da7 34-35,39
+  s_0aa18f51442760::t_27d034a86124de 58-59,61-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b8aade7b6117b202bd6ec34edab16819fea823c8",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
