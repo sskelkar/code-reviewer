@@ -165,7 +165,7 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 | Overview | Finding counts by confidence tier and severity |
 | High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the rule, the evidence, a suggestion and "seen in x/N passes" |
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
-| Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified |
+| Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified, and for rule citations that were repaired or unknown |
 
 How to read it:
 
@@ -202,9 +202,12 @@ Rules of the road:
 - **Only files inside the repository count.** Links to a wiki, Confluence or any URL, absolute paths and paths outside the repo are ignored, and the report lists what was ignored.
 - **Criteria are read from the PR's target (base) branch,** not the PR itself. A PR that edits the rules is still judged by the old ones, and the report flags that the PR touches them.
 - **Write rules as Markdown headings.** Each heading becomes a citable rule ID such as `P:docs/review/errors.md#retry-policy`. A file with no headings becomes one rule.
-- **Keep it small.** About 120,000 characters (roughly 30,000 tokens) of project criteria are used; the rest is dropped with a warning.
-- Without an `AGENTS.md`, or if nothing in it resolves, only the defaults are used and the report says so.
-- Only the root `AGENTS.md` is read, not ones in subdirectories.
+- **Keep it small.** About 200,000 characters (roughly 50,000 tokens) of project criteria are used; the rest is dropped with a warning.
+- **Some files are added automatically,** because where they apply is clear from their location. You do not need to link them from the root `AGENTS.md`:
+  - an `AGENTS.md` in a directory that contains a changed file, or in one of its parent directories (for a change under `spec/controllers/`, both `spec/AGENTS.md` and `spec/controllers/AGENTS.md`);
+  - every `.claude/rules/*.md` file, except those with a `paths:` list in their front matter that matches none of the changed files (such a file is scoped to those paths on purpose).
+  The report lists them with the reason each was added.
+- Without a root `AGENTS.md`, or if nothing in it resolves, the files above and the defaults are still used, and the report says so.
 
 ### Customizing the default rules
 
@@ -227,7 +230,7 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
 | `max_diff_lines` | `1500` | Refuse PRs with more changed lines (after exclusions) |
 | `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff |
-| `criteria_max_chars` | `120000` | Cap on project criteria text |
+| `criteria_max_chars` | `200000` | Cap on project criteria text |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |
 | `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Caps for a whole review; it stops between passes once either is exceeded. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. The dollar cap is the real spending limit |
 | `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Do not remove unless you know why |
@@ -336,7 +339,7 @@ A deterministic Python harness runs everything. Large language models only **pro
 1. `pr_source` fetches the PR head and base into `refs/code-reviewer/` and pins SHAs.
 2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, drops excluded files and refuses empty or oversized PRs.
 3. `git_ops.export_tree` exports the PR head to a checkout in its own temporary directory (symlinks skipped).
-4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), and rule IDs are assigned.
+4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), adds the nested `AGENTS.md` and `.claude/rules` files that cover the changed paths (`criteria.scoped_files`, no model call), and rule IDs are assigned.
 5. `Engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`.
 6. `StopPolicy` decides after every pass whether to stop.
 7. `report.render_report` writes the report; `RunStore` writes all artifacts.
@@ -351,7 +354,7 @@ Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whol
 | `review_inputs.py` | `InputBuilder`: builds what the Reviewer is given (email redaction, the filtered diff, the criteria). Shared by a real review and `--dry-run` |
 | `pr_source.py` | Turns a PR reference into a `PRContext` pinned to exact commits (`gh` + `git`) |
 | `diffview.py` | Parses the diff, excludes lockfiles and generated files, renders the numbered diff the Reviewer sees |
-| `criteria.py` | Default rules, project rules found via `AGENTS.md` (in-repo only, from the base branch), rule IDs |
+| `criteria.py` | Default rules, project rules found via `AGENTS.md` and by location (nested `AGENTS.md`, `.claude/rules`), in-repo only, from the base branch, rule IDs |
 | `roles.py` | The three LLM roles: `CriteriaResolver`, `Reviewer`, `Comparator`. Each owns its prompt variables and output validation |
 | `llm.py` | Every `claude` call goes through `ClaudeCaller`: one retry, usage accounting, raw-output log |
 | `claude_cli.py` | The subprocess wrapper around `claude -p` and the JSON envelope parser |
@@ -443,6 +446,6 @@ The offline tests cannot prove how Claude Code behaves. After upgrading Claude C
 ## Known limitations and roadmap
 
 - Verified live: the Reviewer flag set, isolation canaries, tool list, that files outside the working directory cannot be read or searched, and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Real multi-pass reviews of a PR have been run. Not yet exercised: posting a comment to a PR, and what Claude Code does when the per-call `--max-budget-usd` is exceeded (the run-level budget stop has been seen).
-- GitHub PRs only; root `AGENTS.md` only; `--verbose` shows stages, not live tool activity.
+- GitHub PRs only; `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
 - Planned: evals from your `mark` and `missed` labels, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).

@@ -28,7 +28,7 @@ tier_medium = 0.40
 
 # Limits
 max_diff_lines = 1500          # changed lines after exclusions
-criteria_max_chars = 120000    # about 30k tokens
+criteria_max_chars = 200000    # about 50k tokens
 # Files left out of the diff (a trailing slash matches a directory). This list replaces the built-in one.
 # exclude_patterns = ["package-lock.json", "yarn.lock", "*.min.js", "vendor/", "node_modules/"]
 

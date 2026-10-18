@@ -22,13 +22,14 @@ class PreparedFindings:
 
     ok: List[Dict[str, Any]] = field(default_factory=list)
     ungrounded: List[Dict[str, Any]] = field(default_factory=list)
-    invalid_rule: List[Dict[str, Any]] = field(default_factory=list)
     malformed: List[Dict[str, Any]] = field(default_factory=list)
     self_check_missing: int = 0
     line_corrected: int = 0
+    rule_repaired: int = 0  # rule citations that only needed reformatting, e.g. "[GEN-010]" -> "GEN-010"
+    rule_unknown: int = 0   # rule citations that matched no rule: the finding is kept with rule "none"
 
     def all_records(self) -> List[Dict[str, Any]]:
-        return self.ok + self.ungrounded + self.invalid_rule + self.malformed
+        return self.ok + self.ungrounded + self.malformed
 
 
 # --- small helpers ---------------------------------------------------------------
@@ -44,6 +45,32 @@ def _text(value: Any) -> str:
 def _rel(value: Any) -> str:
     path = _text(value)
     return path[2:] if path.startswith("./") else path
+
+
+_CITATION_WRAPPERS = "[]()`'\" \t"
+
+
+def resolve_rule_id(raw: str, rule_index: Dict[str, Any]) -> Tuple[str, str]:
+    """Match a rule citation from the model to the criteria index.
+
+    Returns (rule_id, outcome). The outcome is "none" (no rule cited), "exact", "repaired" (only the formatting was off: surrounding
+    brackets or backticks, a missing `P:` prefix, different case, trailing text) or "unknown" (no rule matches; the rule is "none").
+    """
+    text = (raw or "").strip()
+    if not text or text.lower() == "none":
+        return "none", "none"
+    if text in rule_index:
+        return text, "exact"
+    by_lower = {rule_id.lower(): rule_id for rule_id in rule_index}
+    cleaned = text.strip(_CITATION_WRAPPERS)
+    for candidate in (cleaned, cleaned.split()[0] if cleaned.split() else cleaned):
+        candidate = candidate.strip(_CITATION_WRAPPERS).rstrip(".,;:")
+        for variant in (candidate, "P:" + candidate):
+            if variant in rule_index:
+                return variant, "repaired"
+            if variant.lower() in by_lower:
+                return by_lower[variant.lower()], "repaired"
+    return "none", "unknown"
 
 
 def _int(value: Any) -> Optional[int]:
@@ -148,7 +175,10 @@ def ground(finding: Dict[str, Any], cache: FileCache, diff: DiffIndex) -> Tuple[
 # --- preparing a pass's findings ---------------------------------------------------
 
 class FindingsPreparer:
-    """Normalizes Reviewer output and sorts each finding into ok / ungrounded / invalid_rule / malformed."""
+    """Normalizes Reviewer output and sorts each finding into ok / ungrounded / malformed.
+
+    A finding is only set aside when its evidence is missing or cannot be found. A badly written rule citation is repaired or
+    reset to "none", never a reason to drop an otherwise grounded finding."""
 
     def __init__(self, rule_index: Dict[str, Any], self_check_on: bool, cache: FileCache, diff: DiffIndex, line_window: int):
         self.rule_index = rule_index
@@ -241,10 +271,13 @@ class FindingsPreparer:
             finding.update(status="ungrounded", reason=problem)
             prepared.ungrounded.append(finding)
             return
-        if finding["rule_id"] != "none" and finding["rule_id"] not in self.rule_index:
-            finding.update(status="invalid_rule", reason="rule_id not in the criteria index: %s" % finding["rule_id"])
-            prepared.invalid_rule.append(finding)
-            return
+        rule_id, outcome = resolve_rule_id(finding["rule_id"], self.rule_index)
+        if outcome == "repaired":
+            prepared.rule_repaired += 1
+        elif outcome == "unknown":
+            finding["rule_citation"] = finding["rule_id"]  # keep what the model wrote, for auditing
+            prepared.rule_unknown += 1
+        finding["rule_id"] = rule_id
         if finding["kind"] == "absent" and not finding["line"]:
             finding["line"] = _int(finding["anchor"].get("line_start")) or 0
 

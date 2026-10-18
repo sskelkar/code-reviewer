@@ -73,7 +73,7 @@ class Config:
 
     # Input limits
     max_diff_lines: int = 1500
-    criteria_max_chars: int = 120000
+    criteria_max_chars: int = 200000
     exclude_patterns: List[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
     grounding_line_window: int = 30
     # Replace email addresses in the PR title, description and commit messages before they are sent to the model

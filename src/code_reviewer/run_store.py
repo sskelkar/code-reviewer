@@ -81,7 +81,7 @@ class RunStore:
         project = criteria.project
         dump_json(self.input_dir / "criteria_manifest.json", {
             "manifest": project.manifest, "source": project.source, "files_used": project.files_used,
-            "ignored": project.ignored, "notes": project.notes, "warnings": criteria.warnings,
+            "auto_included": project.auto_included, "ignored": project.ignored, "notes": project.notes, "warnings": criteria.warnings,
         })
 
     def save_outputs(self, master: Dict[str, Any], stats: Dict[str, Any]) -> None:

@@ -117,6 +117,7 @@ def _criteria_section(result: RunResult) -> List[str]:
            "- Mode: `%s`; %d default rule(s), %d project rule(s)" % (criteria.mode, defaults, len(criteria.rules) - defaults)]
     if project.files_used:
         out.append("- Project criteria files (read from the base branch): %s" % ", ".join("`%s`" % f for f in project.files_used))
+    out += ["- Added because they cover the changed files: `%s` (%s)" % (e["path"], e["reason"]) for e in project.auto_included]
     if project.notes:
         out.append("- How the project organizes its criteria: %s" % project.notes)
     out += ["- Ignored reference: `%s` (%s)" % (e["reference"], e["reason"]) for e in project.ignored]
@@ -178,14 +179,14 @@ def _rejected_section(result: RunResult) -> List[str]:
 
 def _pass_table(result: RunResult) -> List[str]:
     out = ["### Discovery curve and per-pass usage", "",
-           "| Pass | Status | New | Matched | Usable | Self-rejected | Ungrounded | Invalid rule | Reviewer cost | Comparator cost | Tokens |",
+           "| Pass | Status | New | Matched | Usable | Self-rejected | Ungrounded | Unknown rule | Reviewer cost | Comparator cost | Tokens |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for p in result.passes:
         if not p.ok:
             out.append("| %d | failed: %s | | | | | | | | | |" % (p.pass_no, p.error.replace("|", "/")[:80]))
             continue
         out.append("| %d | ok | %d | %d | %d | %d | %d | %d | %s | %s | %s |" % (
-            p.pass_no, p.new_scored, p.matched, p.usable, p.rejected_by_self_check, p.ungrounded, p.invalid_rule,
+            p.pass_no, p.new_scored, p.matched, p.usable, p.rejected_by_self_check, p.ungrounded, p.rule_unknown,
             money(p.reviewer_cost_usd), money(p.comparator_cost_usd), count(p.reviewer_tokens + p.comparator_tokens)))
     return out + [""]
 
@@ -230,7 +231,8 @@ def _counters_section(result: RunResult) -> List[str]:
     return [
         "### Other counters", "",
         "- Ungrounded findings (evidence not found): %d" % total("ungrounded"),
-        "- Findings citing an unknown rule ID: %d" % total("invalid_rule"),
+        "- Rule citations that only needed reformatting (for example brackets), repaired: %d" % total("rule_repaired"),
+        "- Findings citing a rule that does not exist (kept, rule set to none): %d" % total("rule_unknown"),
         "- Malformed findings: %d" % total("malformed"),
         "- Findings where self-check output was missing (treated as confirmed): %d" % total("self_check_missing"),
         "- Findings whose line number was corrected to the quote location: %d" % total("line_corrected"),

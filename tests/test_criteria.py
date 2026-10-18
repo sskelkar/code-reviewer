@@ -145,5 +145,93 @@ class ResolveTests(unittest.TestCase):
         self.assertIn("no criteria available", criteria.render_criteria_block([]))
 
 
+class ScopedFileTests(unittest.TestCase):
+    TREE = {
+        "AGENTS.md": "100644",
+        "spec/AGENTS.md": "100644",
+        "spec/controllers/AGENTS.md": "100644",
+        "spec/workers/AGENTS.md": "100644",
+        "app/AGENTS.md": "120000",
+        ".claude/rules/always.md": "100644",
+        ".claude/rules/controllers.md": "100644",
+        ".claude/rules/specs.md": "100644",
+        ".claude/rules/listed.md": "100644",
+        ".claude/rules/notes.txt": "100644",
+    }
+    FILES = {
+        "spec/AGENTS.md": "## Specs\nMirror app/.\n",
+        "spec/controllers/AGENTS.md": "## Controller specs\nShare examples.\n",
+        "spec/workers/AGENTS.md": "## Worker specs\nTest retries.\n",
+        ".claude/rules/always.md": "## Always\nApplies everywhere.\n",
+        ".claude/rules/controllers.md": "---\npaths: app/controllers/**/*.rb\n---\n\n## Controllers\nValidate input.\n",
+        ".claude/rules/specs.md": "---\npaths:\n  - \"spec/controllers/**/*\"\n  - 'spec/models/**/*'\n---\n## Specs\nUse shared examples.\n",
+        ".claude/rules/listed.md": "## Listed\nAlso chosen by the resolver.\n",
+    }
+
+    def show(self, path):
+        return self.FILES.get(path)
+
+    def scoped(self, changed):
+        return {path: why for path, why, _ in criteria.scoped_files(self.TREE, changed, self.show)}
+
+    def test_front_matter_globs_are_read_and_removed(self):
+        self.assertEqual(criteria.split_front_matter(self.FILES[".claude/rules/controllers.md"])[0], ["app/controllers/**/*.rb"])
+        globs, body = criteria.split_front_matter(self.FILES[".claude/rules/specs.md"])
+        self.assertEqual(globs, ["spec/controllers/**/*", "spec/models/**/*"])
+        self.assertTrue(body.startswith("## Specs"))
+        self.assertEqual(criteria.split_front_matter("## No front matter\n"), ([], "## No front matter\n"))
+        self.assertEqual(criteria.split_front_matter("---\ntitle: x\n---\nbody\n"), ([], "body\n"))
+        self.assertEqual(criteria.split_front_matter("---\npaths: [\"a/**\", b/*.rb]\n---\nx")[0], ["a/**", "b/*.rb"])
+
+    def test_nested_agents_files_are_those_in_or_above_the_changed_directories(self):
+        found = self.scoped(["spec/controllers/v1/orders_spec.rb", "app/models/order.rb"])
+        self.assertIn("spec/AGENTS.md", found)
+        self.assertIn("spec/controllers/AGENTS.md", found)
+        self.assertNotIn("spec/workers/AGENTS.md", found)
+        self.assertNotIn("app/AGENTS.md", found)  # a symlink is never read
+        self.assertNotIn("AGENTS.md", found)  # the root file is handled by the resolver
+
+    def test_rule_files_apply_when_unscoped_or_when_their_paths_match(self):
+        found = self.scoped(["spec/controllers/v1/orders_spec.rb"])
+        self.assertIn(".claude/rules/always.md", found)
+        self.assertIn(".claude/rules/specs.md", found)
+        self.assertNotIn(".claude/rules/controllers.md", found)
+        self.assertNotIn(".claude/rules/notes.txt", found)
+        self.assertIn(".claude/rules/controllers.md", self.scoped(["app/controllers/orders_controller.rb"]))
+
+    def test_front_matter_is_not_part_of_the_rule_text(self):
+        rules = {r.rule_id: r for _, _, rs in criteria.scoped_files(self.TREE, ["spec/models/a.rb"], self.show) for r in rs}
+        self.assertIn("P:.claude/rules/specs.md#specs", rules)
+        self.assertNotIn("paths", rules["P:.claude/rules/specs.md#specs"].text)
+
+    def test_resolve_adds_them_without_the_resolver_and_without_duplicates(self):
+        changed = ["spec/controllers/a_spec.rb"]
+        agents = "# P\n\nSee .claude/rules/listed.md\n"
+        manifest = {"criteria_files": [{"path": ".claude/rules/listed.md", "reason": "x"}], "inline_sections": []}
+        pc = criteria.resolve_project(agents, dict(self.TREE), self.show, lambda c, t: manifest, None, 100000, changed)
+        ids = [r.rule_id for r in pc.rules]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertIn("P:.claude/rules/listed.md#listed", ids)
+        self.assertIn("P:spec/controllers/AGENTS.md#controller-specs", ids)
+        self.assertEqual(sorted(e["path"] for e in pc.auto_included),
+                         [".claude/rules/always.md", ".claude/rules/specs.md", "spec/AGENTS.md", "spec/controllers/AGENTS.md"])
+        self.assertTrue(all(e["reason"] for e in pc.auto_included))
+
+    def test_they_survive_a_resolver_failure_and_a_missing_root_agents_file(self):
+        def boom(cands, text):
+            raise RuntimeError("model unavailable")
+        failed = criteria.resolve_project("# P\n", dict(self.TREE), self.show, boom, None, 100000, ["spec/a.rb"])
+        self.assertIn("P:spec/AGENTS.md#specs", [r.rule_id for r in failed.rules])
+        self.assertTrue(any("resolver failed" in w for w in failed.warnings))
+        no_root = criteria.resolve_project(None, dict(self.TREE), self.show, lambda c, t: {}, None, 100000, ["spec/a.rb"])
+        self.assertEqual(no_root.source, "auto")
+        self.assertIn("P:spec/AGENTS.md#specs", [r.rule_id for r in no_root.rules])
+
+    def test_nothing_changes_when_no_file_covers_the_change(self):
+        pc = criteria.resolve_project(None, {"src/a.py": "100644"}, self.show, lambda c, t: {}, None, 1000, ["src/a.py"])
+        self.assertEqual((pc.rules, pc.auto_included), ([], []))
+        self.assertTrue(any("no AGENTS.md" in w for w in pc.warnings))
+
+
 if __name__ == "__main__":
     unittest.main()

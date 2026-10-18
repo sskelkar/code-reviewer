@@ -53,7 +53,7 @@ Each finding has these fields:
   - `absent`: something that should exist is missing (validation, error handling, a test, a null check, cleanup). Set `anchor` to the changed code that lacks it (`file`, `line_start`, `line_end`, and `symbol`, the function or class name, when there is one) and set `expected` to a one-sentence description of what should be there. Do not set `quote`.
   - `cross_file`: the problem spans files (duplication, an inconsistency between a caller and a callee, a contract mismatch, an architectural problem). Set `file` and `line` to the primary location and provide `quote` for it. Mention the other files in the description.
 - `file`: path relative to the repository root. `line`: see above (for `absent`, use `anchor.line_start`).
-- `rule_id`: the ID in square brackets of the most specific listed rule the finding violates, copied exactly. Use `none` for a general correctness or security concern that no listed rule covers. Never invent an ID.
+- `rule_id`: the ID of the most specific listed rule the finding violates, written exactly as it appears between the square brackets but **without the brackets** (for example `GEN-004` or `P:docs/review/errors.md#retry-policy`). Use `none` for a general correctness or security concern that no listed rule covers. Never invent an ID.
 - `suggestion`: a concrete fix, one to three sentences. Code is optional and must be short.
 
 {{#if self_check}}

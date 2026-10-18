@@ -11,11 +11,14 @@ from .templates import escape_untrusted
 REGULAR_MODES = ("100644", "100755")
 DOC_EXTENSIONS = (".md", ".mdx", ".rst", ".txt", ".adoc")
 MAX_CANDIDATES = 200
+RULES_DIR = ".claude/rules/"
+NESTED_AGENTS = "AGENTS.md"
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _DEFAULT_ID = re.compile(r"^\[([A-Za-z][A-Za-z0-9]*-\d+)\]\s*(.*)$")
 _URL = re.compile(r"https?://[^\s)>\]\"'`]+")
 _TOKEN_SPLIT = re.compile(r"[\s()\[\]{}<>,;\"'`]+")
+_FRONT_MATTER = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
 
 
 @dataclass
@@ -40,9 +43,10 @@ class ProjectCriteria:
     manifest: Dict[str, Any] = field(default_factory=dict)
     files_used: List[str] = field(default_factory=list)
     ignored: List[Dict[str, str]] = field(default_factory=list)
+    auto_included: List[Dict[str, str]] = field(default_factory=list)  # files added because they cover the changed paths
     notes: str = ""
     warnings: List[str] = field(default_factory=list)
-    source: str = "none"  # "resolver", "override" or "none"
+    source: str = "none"  # "resolver", "override", "auto" (no resolver call was needed) or "none"
 
 
 @dataclass
@@ -175,6 +179,72 @@ def glob_to_regex(pattern: str) -> "re.Pattern[str]":
     return re.compile("^" + "".join(out) + "$")
 
 
+def split_front_matter(text: str) -> Tuple[List[str], str]:
+    """Split a leading `---` block off a markdown file. Returns (the globs of its `paths:` key, the text without the block).
+    A file without front matter, or without a `paths:` key, has no globs (it applies to every file)."""
+    match = _FRONT_MATTER.match(text)
+    if not match:
+        return [], text
+    globs: List[str] = []
+    collecting = False
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if collecting and stripped.startswith("-"):
+            globs.append(stripped[1:].strip().strip("\"'"))
+            continue
+        collecting = False
+        if stripped.startswith("paths:"):
+            value = stripped[len("paths:"):].strip()
+            if value:
+                globs += [g.strip().strip("\"'") for g in value.strip("[]").split(",")]
+            else:
+                collecting = True
+    return [g for g in globs if g], text[match.end():]
+
+
+def _directories_of(paths: Sequence[str]) -> List[str]:
+    """Every directory (not the root) that contains one of the paths, itself or as an ancestor."""
+    found: Set[str] = set()
+    for path in paths:
+        parts = path.split("/")[:-1]
+        for depth in range(1, len(parts) + 1):
+            found.add("/".join(parts[:depth]))
+    return sorted(found)
+
+
+def scoped_files(tree: Dict[str, str], changed_paths: Sequence[str],
+                 show: Callable[[str], Optional[str]]) -> List[Tuple[str, str, List[Rule]]]:
+    """Criteria files that cover the changed paths, found by location instead of by the AGENTS.md links:
+    an AGENTS.md in a directory that contains changed files (or one of its ancestors), and every `.claude/rules/*.md`
+    file that is not scoped by a `paths:` key or whose `paths:` globs match a changed file. Returns (path, why, rules)."""
+    regular = {p for p, mode in tree.items() if mode in REGULAR_MODES}
+    found: List[Tuple[str, str, List[Rule]]] = []
+    candidates: List[Tuple[str, str]] = []
+    for directory in _directories_of(changed_paths):
+        path = "%s/%s" % (directory, NESTED_AGENTS)
+        if path in regular:
+            candidates.append((path, "AGENTS.md in a directory that contains changed files (%s/)" % directory))
+    for path in sorted(p for p in regular if p.startswith(RULES_DIR) and p.lower().endswith(".md")):
+        candidates.append((path, ""))
+    for path, why in candidates:
+        text = show(path)
+        if text is None:
+            continue
+        globs, body = split_front_matter(text)
+        if path.startswith(RULES_DIR):
+            if globs:
+                regexes = [glob_to_regex(g) for g in globs]
+                if not any(r.match(c) for r in regexes for c in changed_paths):
+                    continue
+                why = "rule file scoped to %s, which matches changed files" % ", ".join(globs)
+            else:
+                why = "rule file that applies to all files"
+        rules = rules_from_markdown(path, body)
+        if rules:
+            found.append((path, why, rules))
+    return found
+
+
 def extract_candidates(agents_text: str, tree: Dict[str, str]) -> Tuple[List[str], List[str]]:
     """Find in-repo files referenced from AGENTS.md. Returns (candidate paths, external references)."""
     external: List[str] = []
@@ -236,11 +306,19 @@ def resolve_project(
     call_resolver: Callable[[List[str], str], Dict[str, Any]],
     manifest_override: Optional[Dict[str, Any]],
     max_chars: int,
+    changed_paths: Sequence[str] = (),
 ) -> ProjectCriteria:
-    """Resolve project criteria from the base commit. The LLM only proposes; this function validates."""
+    """Resolve project criteria from the base commit. The LLM only proposes; this function validates.
+
+    Files that cover the changed paths (nested AGENTS.md files, `.claude/rules`) are added without asking the model."""
     pc = ProjectCriteria()
+    scoped = scoped_files(tree, changed_paths, show)
     if manifest_override is None and not agents_text:
-        pc.warnings.append("no AGENTS.md at the base commit; using default criteria only")
+        if not scoped:
+            pc.warnings.append("no AGENTS.md at the base commit; using default criteria only")
+            return pc
+        pc.source = "auto"
+        pc.rules = _apply_size_cap(_add_scoped(scoped, set(), pc), max_chars, pc)
         return pc
 
     candidates: List[str] = []
@@ -256,7 +334,8 @@ def resolve_project(
         try:
             manifest = call_resolver(candidates, agents_text or "")
         except Exception as exc:  # the review continues with defaults only
-            pc.warnings.append("criteria resolver failed (%s); using default criteria only" % exc)
+            pc.warnings.append("criteria resolver failed (%s); using %s" % (exc, "only the files that cover the changed paths" if scoped else "default criteria only"))
+            pc.rules = _apply_size_cap(_add_scoped(scoped, set(), pc), max_chars, pc)
             return pc
         pc.source = "resolver"
         allowed = set(candidates)
@@ -265,10 +344,23 @@ def resolve_project(
     pc.ignored.extend(_clean_ignored(manifest.get("ignored_references")))
 
     rules = _rules_from_files(manifest, allowed, tree, show, pc) + _rules_from_inline_sections(manifest, agents_text, pc)
+    rules = _add_scoped(scoped, set(pc.files_used), pc) + rules
     pc.rules = _apply_size_cap(rules, max_chars, pc)
     if not pc.rules:
         pc.warnings.append("the project's criteria resolved to nothing; using default criteria only")
     return pc
+
+
+def _add_scoped(scoped: List[Tuple[str, str, List[Rule]]], already: Set[str], pc: ProjectCriteria) -> List[Rule]:
+    """Rules of the files that cover the changed paths, except those the resolver already chose. Records why each was added."""
+    rules: List[Rule] = []
+    for path, why, file_rules in scoped:
+        if path in already:
+            continue
+        rules.extend(file_rules)
+        pc.files_used.append(path)
+        pc.auto_included.append({"path": path, "reason": why})
+    return rules
 
 
 def _rules_from_files(manifest: Dict[str, Any], allowed: Set[str], tree: Dict[str, str],

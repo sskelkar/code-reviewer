@@ -160,7 +160,7 @@ class Engine:
                     reason = policy.after_success(record.new_scored)
                     self.emit(
                         "pass_finished", pass_no=pass_no, new=record.new_scored, matched=record.matched,
-                        ungrounded=record.ungrounded + record.invalid_rule, cost=stats.total_cost(),
+                        ungrounded=record.ungrounded, cost=stats.total_cost(),
                         quiet_streak=policy.quiet_streak, quiet_k=cfg.quiet_k,
                     )
                 if reason:

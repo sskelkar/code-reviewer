@@ -36,7 +36,7 @@ class PassRunner:
         self.store.dump("%s/findings.json" % pass_dir.name, {"notes": parsed.get("notes", ""), "findings": prepared.all_records()})
         self.emit(
             "reviewer_done", pass_no=pass_no, raised=len(prepared.all_records()), usable=len(prepared.ok),
-            ungrounded=len(prepared.ungrounded), invalid_rule=len(prepared.invalid_rule),
+            ungrounded=len(prepared.ungrounded), rule_fixed=prepared.rule_repaired + prepared.rule_unknown,
             malformed=len(prepared.malformed), rejected=_rejected(prepared.ok),
         )
         return prepared
@@ -58,7 +58,8 @@ class PassRunner:
             usable=len(prepared.ok),
             rejected_by_self_check=_rejected(prepared.ok),
             ungrounded=len(prepared.ungrounded),
-            invalid_rule=len(prepared.invalid_rule),
+            rule_repaired=prepared.rule_repaired,
+            rule_unknown=prepared.rule_unknown,
             malformed=len(prepared.malformed),
             self_check_missing=prepared.self_check_missing,
             line_corrected=prepared.line_corrected,

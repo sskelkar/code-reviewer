@@ -75,7 +75,7 @@ class InputBuilder:
         cfg = self.cfg
         project = criteria_mod.ProjectCriteria()
         if cfg.criteria_mode != "defaults_only":
-            project = self._resolve_project_criteria(ctx, caller, work_dir)
+            project = self._resolve_project_criteria(ctx, files, caller, work_dir)
         criteria = criteria_mod.assemble(self.default_rules(), project, cfg.criteria_mode, [f.path for f in files])
         for warning in criteria.warnings:
             self.emit("warning", message=warning)
@@ -88,7 +88,7 @@ class InputBuilder:
         )
         return criteria
 
-    def _resolve_project_criteria(self, ctx: PRContext, caller: ClaudeCaller, work_dir: Path) -> criteria_mod.ProjectCriteria:
+    def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ClaudeCaller, work_dir: Path) -> criteria_mod.ProjectCriteria:
         tree = git_ops.ls_tree(ctx.git_dir, ctx.base_sha)
         agents_text = git_ops.git_show(ctx.git_dir, ctx.base_sha, "AGENTS.md") if "AGENTS.md" in tree else None
         override: Optional[Dict[str, Any]] = None
@@ -97,7 +97,7 @@ class InputBuilder:
         resolver = CriteriaResolver(caller, self.prompts["resolver"], self.cfg, ctx, work_dir, self.emit)
         return criteria_mod.resolve_project(
             agents_text, tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
-            resolver, override, self.cfg.criteria_max_chars,
+            resolver, override, self.cfg.criteria_max_chars, [f.path for f in files],
         )
 
     # ------------------------------------------------------------------ what the Reviewer sees

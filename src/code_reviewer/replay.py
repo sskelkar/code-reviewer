@@ -31,11 +31,12 @@ Decide = Callable[[MasterList, int, List[Dict[str, Any]]], Dict[str, Dict[str, A
 
 
 def load_pass_findings(run_dir: Path) -> PassFindings:
-    """The usable findings of each completed pass, as saved by the run (grounded, valid rule, not malformed)."""
+    """The usable findings of each completed pass, as saved by the run. Findings that older runs set aside only because their
+    rule citation was malformed (status `invalid_rule`) are included, since today they would be kept."""
     passes: PassFindings = []
     for path in sorted(run_dir.glob("pass-*/findings.json")):
         records = json.loads(path.read_text(encoding="utf-8")).get("findings", [])
-        passes.append((int(path.parent.name.split("-")[1]), [r for r in records if r.get("status") == "ok"]))
+        passes.append((int(path.parent.name.split("-")[1]), [r for r in records if r.get("status") in ("ok", "invalid_rule")]))
     return passes
 
 
@@ -54,11 +55,14 @@ def _group(passes: PassFindings, decide: Decide) -> Tuple[Groups, Dict[str, str]
 
 def recorded_grouping(run_dir: Path, passes: PassFindings) -> Tuple[Groups, Dict[str, str]]:
     """Group findings the way the original run did, by re-applying the comparator decisions it recorded."""
-    def decide(master: MasterList, pass_no: int, findings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        mapping = json.loads((run_dir / ("pass-%02d" % pass_no) / "mapping.json").read_text(encoding="utf-8"))
-        return mapping["decisions"]
+    def decisions_of(pass_no: int) -> Dict[str, Dict[str, Any]]:
+        return json.loads((run_dir / ("pass-%02d" % pass_no) / "mapping.json").read_text(encoding="utf-8"))["decisions"]
 
-    return _group(passes, decide)
+    # Findings the original run set aside (for example for a malformed rule citation) have no recorded decision:
+    # leave them out of the "recorded" grouping so it shows what that run actually reported.
+    processed = [(n, [f for f in findings if f["local_id"] in decisions_of(n)]) for n, findings in passes]
+    groups, _ = _group(processed, lambda master, pass_no, findings: decisions_of(pass_no))
+    return groups, {f["local_id"]: f["title"] for _, findings in passes for f in findings}
 
 
 def replay_grouping(passes: PassFindings, cfg: Config, runner: Any, stats: Optional[Stats] = None) -> Tuple[Groups, Dict[str, str]]:

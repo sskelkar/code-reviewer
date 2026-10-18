@@ -66,7 +66,8 @@ class PassRecord:
     usable: int = 0
     rejected_by_self_check: int = 0
     ungrounded: int = 0
-    invalid_rule: int = 0
+    rule_repaired: int = 0   # rule citations that only needed reformatting
+    rule_unknown: int = 0    # rule citations that matched no rule (finding kept, rule set to none)
     malformed: int = 0
     self_check_missing: int = 0
     line_corrected: int = 0

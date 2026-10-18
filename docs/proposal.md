@@ -30,7 +30,7 @@ Each LLM call is a separate `claude -p` subprocess. Its final message is JSON on
 prepare: checkout PR head, diff, PR metadata; resolve criteria once from the base branch
 for pass in 1..max_passes:
     findings = Reviewer(input)                    # confirmed + self-check-rejected
-    findings = grounding_check(findings)          # drop ungrounded / invalid rule IDs (counted)
+    findings = grounding_check(findings)          # drop ungrounded findings; repair or neutralize rule IDs (counted)
     mapping  = Comparator(findings, candidates)   # candidates: same file ±20 lines or same rule, all if ≤30
     master   = harness applies mapping            # counters updated; rejected sightings recorded separately
     stop if converged, budget hit, or 2 consecutive failed passes
@@ -44,11 +44,12 @@ render report
 ## 2. Criteria (layered)
 
 - **Defaults:** generic, language-agnostic rules in this repo, IDs `GEN-001`…
-- **Project criteria:** discovered via the project's root `AGENTS.md`, **in-repo only**, any format. **Project rules win** on conflict (stated in the prompt); defaults fill gaps. `criteria_mode = merge | project_only | defaults_only`.
+- **Project criteria:** discovered via the project's root `AGENTS.md` (and, by location, the files in the next bullet), **in-repo only**, any format. **Project rules win** on conflict (stated in the prompt); defaults fill gaps. `criteria_mode = merge | project_only | defaults_only`.
 - **Read from the base branch tip** (pinned SHA), never the PR head, so a PR can't edit its own rules. The report flags a PR that touches criteria files.
-- **Resolution:** harness extracts paths/links/globs from `AGENTS.md` that exist in the base tree → Resolver picks the criteria files/sections → harness validates (regular files inside the repo only; URLs, wiki links, absolute/`..` paths, submodules dropped; ~30k-token cap). Dropped references are listed in the report. No `AGENTS.md` or nothing resolved → defaults only, with a note. The manifest is saved and reused by every pass (override with `criteria_manifest`).
-- **Rule IDs for project docs** are assigned by the harness: `P:<path>#<heading-slug>` (whole file if no headings). Reviewers must cite an ID from the index or `none`; unknown IDs are marked `invalid_rule` and excluded.
-- Not in v0: nested per-directory `AGENTS.md`, language-specific rule packs.
+- **Resolution:** harness extracts paths/links/globs from `AGENTS.md` that exist in the base tree → Resolver picks the criteria files/sections → harness validates (regular files inside the repo only; URLs, wiki links, absolute/`..` paths, submodules dropped; ~50k-token cap). Dropped references are listed in the report. No `AGENTS.md` or nothing resolved → defaults only, with a note.
+- **Files that cover the changed paths are added without the Resolver** (the project says where its rules apply, so no model judgment is needed): an `AGENTS.md` in any directory that contains a changed file or is an ancestor of one, and every `.claude/rules/*.md` file that has no `paths:` front matter or whose `paths:` globs match a changed file. Found by the first PR where a rule about the project's partitioned tables lived only in a subdirectory file and an unlinked rule file. The report lists each with the reason it was added. The manifest is saved and reused by every pass (override with `criteria_manifest`).
+- **Rule IDs for project docs** are assigned by the harness: `P:<path>#<heading-slug>` (whole file if no headings). Reviewers must cite an ID from the index or `none`; a citation that only needs reformatting (brackets, case, missing `P:`) is repaired, and one that matches no rule is set to `none` with the original text kept. A bad citation never drops a finding: an early version did, and it silently discarded about a third of the findings on one PR.
+- Not in v0: language-specific rule packs.
 
 ## 3. What the Reviewer receives
 
@@ -116,7 +117,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 | Passes: min / max / stop after quiet streak | 3 / 6 / 2 |
 | Consecutive failed passes before abort | 2 |
 | Diff size (after exclusions) | ~1,500 changed lines, else refuse |
-| Criteria size | ~30k tokens |
+| Criteria size | ~50k tokens |
 | Per call: spend / timeout | $0.50 / 10 min |
 | Per review: counted tokens / estimated cost | ~2M / ~$3 (tokens = input + output + cache writes; cache reads are excluded because multi-turn reviews re-read cached context and it is billed at a small fraction) |
 
@@ -129,6 +130,8 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 **Metrics (manual in v0):** discovery curve · **pass-to-pass overlap** (near-identical passes make every finding "High" and the signal meaningless) · precision per tier (`mark`) · approximate recall from `missed` (real found ÷ (real found + missed)) · cost per pass · spot-check of Comparator merges/splits.
 
 **Early results (a documentation-only PR in a real repository, Haiku, first prompt version).** Three runs: a single pass found 1 issue; a second run found 2; a six-pass run found 4 distinct issues in total, but each pass raised exactly one finding (the sixth none) and each picked a different one, so every finding scored Low. A real issue found in two earlier runs was never raised in the six-pass run: two passes noted that they had not opened the relevant controller. Nothing was lost by grounding, rule checks or self-check (0 dropped); the model simply stopped after one finding. Lessons: (1) agreement-based confidence only works if each pass reports everything it believes, so the Reviewer prompt now asks for thorough, complete reviews (and no longer suggests a tool-call count); (2) whether an issue appears depends on which code paths a pass happened to open, so coverage varies; (3) independent passes behave as complementary finders, which makes **verification** (roadmap P2: fresh sessions that check each candidate finding against the code) a better confidence signal than frequency. Re-run the same PR after prompt changes and compare findings per pass and the size of the union.
+
+**Second finding: two defects that hid agreement.** After the prompt change, a six-pass run on a larger PR raised 30 findings, but 11 (about 37%) were dropped because the model wrote rule IDs with brackets (`[GEN-010]`), and the reported list fragmented one legacy-test gap into three findings. Both lowered confidence artificially: an issue seen in 5 of 6 passes showed up as scattered Low entries. Fixes: rule citations are repaired or set to `none` instead of dropping the finding, and the Comparator prompt treats a broader and a narrower statement of the same gap as one finding. Replaying the recorded findings (`python -m code_reviewer.replay`) with Haiku twice gave identical groupings, with the merged test gap and a stale-requirements finding both at 6/6 passes. Lesson: audit dropped-finding counters on every new kind of PR, not just on the one used to tune the prompts.
 
 **Comparator experiment (replaying saved runs with `python -m code_reviewer.replay`).** The comparator decides which findings of different passes are the same issue. In the six-pass run with thorough reviewers, three findings about one block (an API example that omits one of two exception types handled by the same code path) were left as separate or partly merged findings. Replaying that run: the clear duplicates (three issues found in 5-6 passes) grouped identically every time; the three borderline findings did not. With Haiku, the same prompt merged them in one replay and not in another, and a rewritten rule ("same finding = one change would resolve both; do not choose `new` merely because wording differs") did not measurably change that (2 of 4 replays identical to the original, 2 partial merges). With Sonnet all 4 replays merged the cluster into one finding found in 3 passes and kept the genuinely different finding separate. On an older run Sonnet also merged three findings about one example block into one, including one whose claim was about the actual status code, which a careful reader might keep separate, so it merges more aggressively. Sonnet costs about 15 times more for this step (about $0.0095 versus $0.0006 per call). Decision: keep the clearer rule, keep Haiku as the default comparator, and leave `model_comparator` as a setting. Borderline merges are a judgment call; the recorded `assigned` mapping and the replay tool make them auditable.
 

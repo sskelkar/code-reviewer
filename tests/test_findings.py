@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from code_reviewer import diffview
-from code_reviewer.findings import FileCache, FindingsPreparer, find_quote
+from code_reviewer.findings import FileCache, FindingsPreparer, find_quote, resolve_rule_id
 
 from .helpers import TempDirTestMixin, finding
 
@@ -76,10 +76,20 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
         prepared = self.prepare([finding(quote="")])
         self.assertEqual(prepared.ungrounded[0]["reason"], "kind present requires a quote")
 
-    def test_unknown_rule_id_is_invalid_but_none_is_fine(self):
+    def test_a_rule_citation_never_causes_a_grounded_finding_to_be_dropped(self):
         prepared = self.prepare([finding(rule_id="GEN-999"), finding(rule_id="none"), finding(rule_id="P:docs/review.md#logging")])
-        self.assertEqual(len(prepared.invalid_rule), 1)
-        self.assertEqual(len(prepared.ok), 2)
+        self.assertEqual(len(prepared.ok), 3)
+        self.assertEqual([f["rule_id"] for f in prepared.ok], ["none", "none", "P:docs/review.md#logging"])
+        self.assertEqual(prepared.ok[0]["rule_citation"], "GEN-999")  # what the model wrote is kept for auditing
+        self.assertEqual((prepared.rule_unknown, prepared.rule_repaired), (1, 0))
+
+    def test_badly_formatted_citations_of_real_rules_are_repaired(self):
+        rules = {"GEN-004": {}, "P:docs/review.md#logging": {}}
+        preparer = FindingsPreparer(rules, True, self.cache, self.diff, 30)
+        prepared = preparer.prepare([finding(rule_id=c) for c in ("[GEN-004]", "`gen-004`", "docs/review.md#logging", "[P:docs/review.md#logging]")], 1)
+        self.assertEqual([f["rule_id"] for f in prepared.ok], ["GEN-004", "GEN-004", "P:docs/review.md#logging", "P:docs/review.md#logging"])
+        self.assertEqual((prepared.rule_repaired, prepared.rule_unknown), (4, 0))
+        self.assertTrue(all("rule_citation" not in f for f in prepared.ok))
 
     def test_self_check_verdicts(self):
         prepared = self.prepare([
@@ -102,6 +112,35 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
     def test_find_quote_returns_all_starts(self):
         lines = [(1, "a b"), (2, "x"), (3, "a b")]
         self.assertEqual(find_quote(lines, "a b"), [1, 3])
+
+
+
+class ResolveRuleIdTests(unittest.TestCase):
+    RULES = {"GEN-010": {}, "P:.gemini/styleguide.md#43-pull-request-pr-checks": {}, "P:docs/ddd.md#aggregate": {}}
+
+    def resolve(self, raw):
+        return resolve_rule_id(raw, self.RULES)
+
+    def test_exact_and_none(self):
+        self.assertEqual(self.resolve("GEN-010"), ("GEN-010", "exact"))
+        for nothing in ("none", "None", "", "  ", None):
+            self.assertEqual(self.resolve(nothing), ("none", "none"))
+
+    def test_the_formats_seen_in_a_real_run_are_repaired(self):
+        self.assertEqual(self.resolve("[GEN-010]"), ("GEN-010", "repaired"))
+        self.assertEqual(self.resolve("[P:.gemini/styleguide.md#43-pull-request-pr-checks]"),
+                         ("P:.gemini/styleguide.md#43-pull-request-pr-checks", "repaired"))
+        self.assertEqual(self.resolve(".gemini/styleguide.md#43-pull-request-pr-checks"),
+                         ("P:.gemini/styleguide.md#43-pull-request-pr-checks", "repaired"))
+
+    def test_other_cosmetic_variants(self):
+        for raw in ("`GEN-010`", "gen-010", "(GEN-010)", "GEN-010 (default)", "GEN-010.", "'GEN-010'"):
+            self.assertEqual(self.resolve(raw), ("GEN-010", "repaired"), raw)
+        self.assertEqual(self.resolve("p:docs/ddd.md#Aggregate"), ("P:docs/ddd.md#aggregate", "repaired"))
+
+    def test_text_that_names_no_rule_is_unknown(self):
+        for raw in ("Gemini Styleguide 4.3 (PRD/ADR-Implementation Match)", "GEN-999", "P:docs/ddd.md#missing", "see the style guide"):
+            self.assertEqual(self.resolve(raw), ("none", "unknown"), raw)
 
 
 if __name__ == "__main__":

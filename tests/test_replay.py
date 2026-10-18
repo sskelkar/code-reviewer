@@ -32,6 +32,16 @@ class ReplayTests(TempDirTestMixin, unittest.TestCase):
         self.cfg = cfg
         self.passes = replay.load_pass_findings(self.run_dir)
 
+    def test_older_runs_that_set_findings_aside_for_a_malformed_rule_citation_are_included(self):
+        import json
+        path = self.run_dir / "pass-01" / "findings.json"
+        data = json.loads(path.read_text())
+        data["findings"].append({**data["findings"][0], "local_id": "p1-f9", "status": "invalid_rule"})
+        data["findings"].append({**data["findings"][0], "local_id": "p1-f8", "status": "ungrounded"})
+        path.write_text(json.dumps(data))
+        loaded = dict(replay.load_pass_findings(self.run_dir))
+        self.assertEqual([f["local_id"] for f in loaded[1]], ["p1-f1", "p1-f9"])  # ungrounded stays out
+
     def test_loads_the_usable_findings_of_each_pass(self):
         self.assertEqual([(n, len(fs)) for n, fs in self.passes], [(1, 1), (2, 2)])
 
