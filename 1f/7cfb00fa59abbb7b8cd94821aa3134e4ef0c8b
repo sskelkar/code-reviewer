@@ -1,0 +1,38 @@
+evals/CASES.md
+  s_0aa18f51442760::t_44dd5b2c0fcf88 34
+README.md
+  s_0aa18f51442760::t_44dd5b2c0fcf88 236
+docs/proposal.md
+  s_0aa18f51442760::t_44dd5b2c0fcf88 163
+evals/public.example.toml
+  s_0aa18f51442760::t_44dd5b2c0fcf88 1-3
+evals/README.md
+  s_0aa18f51442760::t_44dd5b2c0fcf88 140
+review.example.toml
+  s_0aa18f51442760::t_44dd5b2c0fcf88 30
+src/code_reviewer/config.py
+  s_0aa18f51442760::t_44dd5b2c0fcf88 75
+docs/HANDOVER.md
+  s_0aa18f51442760::t_44dd5b2c0fcf88 96,144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "1f7cfb00fa59abbb7b8cd94821aa3134e4ef0c8b",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
