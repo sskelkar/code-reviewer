@@ -171,6 +171,7 @@ How to read it:
 
 - A finding that every pass found is much more likely to be real than one found once, but it is still not guaranteed. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
 - **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them yourself with `mark`; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. Scoring by an independent verification step is planned (see the roadmap in [docs/proposal.md](docs/proposal.md)).
+- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. A separate step that tests each finding against the code is planned (the Verifier, see the roadmap).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: an exact quote that exists in the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
 - Cost figures are Claude Code's estimates and may not match your billing.
@@ -340,7 +341,40 @@ A deterministic Python harness runs everything. Large language models only **pro
 
 ## How a review runs
 
-The flow below follows one `reviewer review <pr>` (or `review` inside the interactive session). **Blue boxes are model calls** (a separate `claude -p` process each); every other box is plain Python that validates, decides and writes files. A model never passes anything to another model: its answer returns to the harness, which checks it first.
+### The big picture
+
+The **harness** is plain Python and runs everything. **Blue boxes are the only model calls** (each a separate `claude -p` process). A model never passes anything to another model: its answer returns to the harness, which checks it before using it.
+
+```mermaid
+flowchart TD
+    REQ(["Review request<br/>reviewer review PR"]) --> PREP["<b>Harness</b>: prepares<br/>pin the PR, load the diff,<br/>make a read-only checkout"]
+    PREP --> RES["<b>Model call, once</b><br/>Criteria Resolver<br/>which repo files hold review rules?"]
+    RES --> CRIT["<b>Harness</b>: builds the criteria<br/>10 defaults + the project's rules"]
+    CRIT --> LOOP
+
+    subgraph LOOP["Repeat for each pass (3 to 6 passes)"]
+        direction TB
+        REV["<b>Model call</b><br/>Reviewer<br/>reads the code, reports findings"]
+        CHK["<b>Harness</b>: checks the findings<br/>is the quoted code really there?"]
+        CMP["<b>Model call</b><br/>Comparator<br/>is each finding already on the list?"]
+        MRG["<b>Harness</b>: updates the master list<br/>applies the Comparator's answer"]
+        STOP{"<b>Harness</b>: stop?<br/>quiet passes, limit, budget"}
+        REV --> CHK --> CMP --> MRG --> STOP
+        STOP -->|"no: next pass"| REV
+    end
+
+    STOP -->|yes| REP["<b>Harness</b>: report<br/>confidence = share of passes that found each finding;<br/>writes the report and the summary"]
+    REP --> YOU(["You read it; post to the PR only after you confirm"])
+
+    classDef model fill:#dbeafe,stroke:#2563eb,color:#111827
+    class RES,REV,CMP model
+```
+
+Per pass there are two model calls, the Reviewer and the Comparator (the Comparator is skipped when there is nothing to compare, for example a single finding in the first pass). The Criteria Resolver runs once per review. The consolidation is **not** a separate step at the end: the master list is updated by the harness after every pass, and when the loop stops the harness only turns it into confidence levels and a report.
+
+### Detailed flow
+
+The flow below follows one `reviewer review <pr>` (or `review` inside the interactive session) step by step, with the module that does each.
 
 ```mermaid
 flowchart TD
@@ -415,9 +449,21 @@ What is checked, and by whom, today:
 | The finding's quote exists in the code (or its anchor covers a changed hunk) | Harness, deterministic | `findings.FindingsPreparer` |
 | The cited rule is a real one (formatting is repaired; unknown becomes "none") | Harness | `findings.resolve_rule_id` |
 | The Reviewer tries to refute its own finding after writing it (**self-check**) | The Reviewer model, in the same session | second phase of `prompts/reviewer.system.md` |
-| Are two findings the same issue? | Comparator model, answer validated by the harness | `roles.Comparator` |
+| Are two findings the same issue? (finding vs. earlier findings; text only, no code access) | Comparator model, answer validated by the harness | `roles.Comparator` |
 | Confidence, severity ordering, what is posted | Harness arithmetic | `master.rate`, `summary.py` |
 | A separate **Verifier** that tests each finding with fresh evidence | **Not built yet** (roadmap P2) | |
+
+**Comparator vs. Verifier.** They answer different questions and do not replace each other.
+
+| | Comparator (exists) | Verifier (planned) |
+|---|---|---|
+| Question | Are these two findings the same issue? | Is this finding true? |
+| Compares | A finding against other findings | A finding against the code and the repository's docs |
+| Sees | Finding text only, no tools | One finding, with read access to the checkout |
+| Output | Which master finding each new finding belongs to | Confirmed or refuted, with evidence |
+| Removes | Duplicates | False positives (including ones every pass repeated) |
+
+The Verifier would run after the Comparator, once per distinct finding.
 
 Numbered steps, with the module that does each:
 

@@ -190,6 +190,8 @@ The REPL has `mark` and `missed`, which write `labels.json` in the run directory
 
 ### D. Verifier pass prototype (roadmap P2)
 
+Not a second Comparator: the Comparator decides whether two findings are the *same issue* (text only, removes duplicates); the Verifier decides whether one finding is *true* (reads the code, removes false positives) and runs after it, once per distinct finding.
+
 A new role: for each Low or Medium finding (not only the unrated ones), a fresh session receives only that one finding, the relevant code reference and the criteria, and is asked to refute it with evidence from the repository. The harness validates the verdict like any other model output and uses it in confidence instead of, or alongside, pass frequency. Prototype it as a replay-like tool on a saved run first (as `replay.py` does for the Comparator) and compare against labels from C.
 
 ### E. Broader eval coverage (roadmap P1)
