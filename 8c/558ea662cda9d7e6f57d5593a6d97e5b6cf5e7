@@ -1,0 +1,30 @@
+docs/HANDOVER.md
+  s_0aa18f51442760::t_83acaa90e4f271 193-194
+README.md
+  s_0aa18f51442760::t_83acaa90e4f271 174,452,456-466
+  s_0aa18f51442760::t_4c49ef6be3ad43 344-377
+  s_0aa18f51442760::t_91a388012e7383 467
+docs/proposal.md
+  s_0aa18f51442760::t_83acaa90e4f271 85,232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8c558ea662cda9d7e6f57d5593a6d97e5b6cf5e7",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
