@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Sequence
 from .findings import SEVERITY_RANK
 from .master import MIN_PASSES_FOR_CONFIDENCE, UNRATED, rate
 from .models import RunResult
-from .report import TIERS, fence, money
+from .report import TIERS, fence, humanize, money, rule_label
 
 
 def _plural(count: int) -> str:
@@ -53,24 +53,26 @@ def _headline(result: RunResult, tiers: Sequence[str], dropped: Sequence[str], s
     return text
 
 
-def _finding_block(item: Dict[str, Any], level: str, passes_completed: int) -> List[str]:
+def _finding_block(item: Dict[str, Any], level: str, passes_completed: int, rules: Dict[str, Any]) -> List[str]:
     canon = item["canonical"]
+    label = rule_label(canon["rule_id"], rules)
     location = "%s:%d" % (canon["file"], canon["line"]) if canon.get("line") else canon["file"]
     confidence_label = "unrated" if level == UNRATED else "%s confidence" % level
     lines = [
         "### %s · %s severity · %s" % (item["id"], canon["severity"], confidence_label),
-        "**%s**" % canon["title"],
+        "**%s**" % humanize(canon["title"], rules),
         "`%s` · seen in %d/%d pass%s" % (
             location, len(item["seen_in_passes"]), passes_completed, "" if passes_completed == 1 else "es"),
-        "",
-        canon["description"],
     ]
+    if label:
+        lines.append("Criterion: %s" % label)
+    lines += ["", humanize(canon["description"], rules)]
     if canon.get("quote"):
         lines += ["", fence(canon["quote"])]
     elif canon.get("expected"):
-        lines += ["", "**Expected:** %s" % canon["expected"]]
+        lines += ["", "**Expected:** %s" % humanize(canon["expected"], rules)]
     if canon.get("suggestion"):
-        lines += ["", "**Suggestion:** %s" % canon["suggestion"]]
+        lines += ["", "**Suggestion:** %s" % humanize(canon["suggestion"], rules)]
     lines.append("")
     return lines
 
@@ -91,8 +93,9 @@ def render_summary(result: RunResult, tiers: Sequence[str], dropped: Sequence[st
         _headline(result, tiers, dropped, shown),
         "",
     ]
+    rules = result.criteria.index()
     for item in shown:
-        lines += _finding_block(item, _level(result, item), result.passes_completed)
+        lines += _finding_block(item, _level(result, item), result.passes_completed, rules)
     return "\n".join(lines).rstrip() + "\n"
 
 

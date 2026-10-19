@@ -8,6 +8,7 @@ from code_reviewer import cli
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
 from code_reviewer.post import MARKER, format_comment
+from code_reviewer.report import humanize, render_finding, rule_label
 from code_reviewer.summary import render_summary, run_line, select_findings
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
@@ -113,6 +114,42 @@ class SummaryTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn("Run: 1 pass, pass limit reached", text)
         self.assertLess(text.index("AI-generated code review"), text.index("full report:"))
         self.assertTrue(text.strip().splitlines()[-1].startswith("full report: "))
+
+
+class CriterionWordingTests(TempDirTestMixin, unittest.TestCase):
+    """People read criterion names, not internal IDs."""
+
+    RULES = {
+        "GEN-004": {"source": "default", "path": "general.md", "heading": "Protect security and privacy", "text": "x"},
+        "P:docs/ddd.md#controllers": {"source": "project", "path": "docs/ddd.md", "heading": "Controllers", "text": "x"},
+    }
+
+    def test_labels_name_the_criterion_and_its_source(self):
+        self.assertEqual(rule_label("GEN-004", self.RULES), "Protect security and privacy (default criteria)")
+        self.assertEqual(rule_label("P:docs/ddd.md#controllers", self.RULES), "Controllers (`docs/ddd.md`)")
+        self.assertEqual(rule_label("none", self.RULES), "")
+        self.assertEqual(rule_label("GEN-999", self.RULES), "")
+
+    def test_rule_ids_in_the_models_own_words_are_replaced(self):
+        text = "Violates GEN-004 and [GEN-004]; see `P:docs/ddd.md#controllers`. Not GEN-0040 or GEN-999."
+        self.assertEqual(
+            humanize(text, self.RULES),
+            'Violates "Protect security and privacy" and "Protect security and privacy"; see "Controllers". '
+            "Not GEN-0040 or GEN-999.")
+        self.assertEqual(humanize("no ids here", self.RULES), "no ids here")
+
+    def test_summary_and_report_show_the_name_and_never_the_id(self):
+        both = {"findings": [finding(rule_id="GEN-001", title="Breaks GEN-001 on empty input")]}
+        config = Config(runs_dir=str(self.make_tmp() / "runs"))
+        ctx = make_repo(self.make_tmp())
+        result = Engine(config, FakeRunner(
+            reviewer=[both, both, both],
+            comparator=[decisions(("p2-f1", "F-001")), decisions(("p3-f1", "F-001"))], resolver=RESOLVER)).review(ctx)
+        summary = render_summary(result, config.post_tiers, [])
+        report = render_finding(result.master.scored()[0], result.passes_completed, result.criteria.index())
+        for text in (summary, report):
+            self.assertIn("Criterion: Implement behavior correctly (default criteria)", text)
+            self.assertNotIn("GEN-001", text)
 
 
 if __name__ == "__main__":

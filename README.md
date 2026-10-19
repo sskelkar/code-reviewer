@@ -340,13 +340,94 @@ A deterministic Python harness runs everything. Large language models only **pro
 
 ## How a review runs
 
+The flow below follows one `reviewer review <pr>` (or `review` inside the interactive session). **Blue boxes are model calls** (a separate `claude -p` process each); every other box is plain Python that validates, decides and writes files. A model never passes anything to another model: its answer returns to the harness, which checks it first.
+
+```mermaid
+flowchart TD
+    U["<b>You</b><br/>reviewer review PR<br/><i>cli.py or repl.py</i>"] --> RF["<b>review_flow.run_review</b><br/>shared by CLI and REPL"]
+    RF --> PREP["<b>Engine.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
+    PREP --> RED["<b>InputBuilder.redact</b><br/>replace email addresses in PR text"]
+    RED --> DIFF["<b>InputBuilder.load_diff</b> (diffview)<br/>merge-base diff, drop lockfiles and generated files,<br/>refuse empty or oversized PRs"]
+    DIFF --> CO["<b>RunStore + git_ops.export_tree</b><br/>read-only copy of the PR head<br/>in a temporary directory"]
+    CO --> CRIT
+
+    subgraph CRIT["Criteria: InputBuilder.resolve_criteria (criteria.py)"]
+        direction TB
+        C1["Load the 10 default criteria<br/>criteria/defaults/general.md"]
+        C2["Read root AGENTS.md from the BASE commit<br/>extract in-repo paths and links it mentions"]
+        C3["<b>Criteria Resolver</b> (model, no tools)<br/>which of those files hold review rules?"]
+        C4["Validate: regular in-repo files only<br/>split into one rule per heading, assign rule IDs"]
+        C5["Add by location, no model:<br/>nested AGENTS.md near changed files,<br/>.claude/rules files that apply"]
+        C6["Merge: project rules win over defaults<br/>size cap"]
+        C1 --> C6
+        C2 --> C3 --> C4 --> C6
+        C5 --> C6
+    end
+
+    CRIT --> SAVE["<b>RunStore.save_inputs / save_prompts</b><br/>saves exactly what the Reviewer will see"]
+    SAVE --> LOOP
+
+    subgraph LOOP["Pass loop: Engine._run_passes"]
+        direction TB
+        SP1["<b>StopPolicy.before_pass</b><br/>budget, max passes, failures?"]
+        PASS["<b>PassRunner.run</b><br/>one pass, see next diagram"]
+        SP2["<b>StopPolicy.after_success</b><br/>stop after K quiet passes<br/>(min 3, max 6)"]
+        SP1 -->|continue| PASS --> SP2 -->|more passes| SP1
+    end
+
+    SP1 -->|stop| OUT
+    SP2 -->|converged or limit| OUT
+    OUT["<b>report.render_report + summary.render_summary</b><br/>confidence = share of passes that found each finding<br/>RunStore writes report.md, summary.md, master.json, stats.json"]
+    OUT --> SHOW["Terminal: shareable summary<br/>and cost line"]
+    SHOW --> REPL["REPL only: show / drop / mark / missed"]
+    REPL --> POST["<b>post</b>: preview the comment, ask y/N,<br/>then gh posts it to the PR"]
+
+    classDef model fill:#dbeafe,stroke:#2563eb,color:#111827
+    class C3 model
+```
+
+### Inside one pass
+
+```mermaid
+flowchart TD
+    A["<b>Reviewer</b> (model, fresh session)<br/>tools: Read, Grep, Glob in the checkout only<br/>input: PR text, diff, criteria. Returns findings as JSON<br/>(each marked confirmed or rejected by its own self-check)"]
+    B["<b>FindingsPreparer</b> (findings.py)<br/>shape check; quote must exist in the code<br/>(or anchor over a changed hunk); fix rule ID;<br/>bad findings are counted, not scored"]
+    C["<b>MasterList.candidates</b><br/>earlier findings that might be the same issue"]
+    D{"Anything to compare<br/>with?"}
+    E["<b>Comparator</b> (model, no tools)<br/>for each new finding: same as F-nnn, or new"]
+    F["All findings are new<br/>(no model call)"]
+    G["<b>Validate decisions</b> (roles.py)<br/>unknown IDs or missing answers are rejected"]
+    H["<b>MasterList.apply</b> (master.py)<br/>merge sightings, record which passes saw each finding;<br/>self-rejected sightings are kept apart and not scored"]
+    I["<b>PassRecord</b> + saved pass files<br/>findings.json, mapping.json, raw model replies"]
+    A --> B --> C --> D
+    D -->|yes| E --> G --> H
+    D -->|no| F --> H
+    H --> I
+
+    classDef model fill:#dbeafe,stroke:#2563eb,color:#111827
+    class A,E model
+```
+
+What is checked, and by whom, today:
+
+| Check | Done by | Where |
+|---|---|---|
+| The finding's quote exists in the code (or its anchor covers a changed hunk) | Harness, deterministic | `findings.FindingsPreparer` |
+| The cited rule is a real one (formatting is repaired; unknown becomes "none") | Harness | `findings.resolve_rule_id` |
+| The Reviewer tries to refute its own finding after writing it (**self-check**) | The Reviewer model, in the same session | second phase of `prompts/reviewer.system.md` |
+| Are two findings the same issue? | Comparator model, answer validated by the harness | `roles.Comparator` |
+| Confidence, severity ordering, what is posted | Harness arithmetic | `master.rate`, `summary.py` |
+| A separate **Verifier** that tests each finding with fresh evidence | **Not built yet** (roadmap P2) | |
+
+Numbered steps, with the module that does each:
+
 1. `pr_source` fetches the PR head and base into `refs/code-reviewer/` and pins SHAs.
 2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, drops excluded files and refuses empty or oversized PRs.
 3. `git_ops.export_tree` exports the PR head to a checkout in its own temporary directory (symlinks skipped).
 4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), adds the nested `AGENTS.md` and `.claude/rules` files that cover the changed paths (`criteria.scoped_files`, no model call), and rule IDs are assigned.
-5. `Engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`.
+5. `Engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`. The Comparator is skipped when there is nothing to compare (for example a single finding in the first pass).
 6. `StopPolicy` decides after every pass whether to stop.
-7. `report.render_report` writes the report; `RunStore` writes all artifacts.
+7. `report.render_report` writes the report; `RunStore` writes all artifacts. Criteria appear in the report by name and source, never by their internal IDs.
 
 ## Code map
 

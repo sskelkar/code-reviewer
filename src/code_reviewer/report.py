@@ -57,17 +57,35 @@ def tiered(master: MasterList, passes_completed: int, high: float, medium: float
     return groups
 
 
+def rule_label(rule_id: str, rules: Dict[str, Any]) -> str:
+    """The criterion in words, for people: its name and where it comes from, never its internal ID. None for no rule."""
+    rule = rules.get(rule_id)
+    if not rule:
+        return ""
+    if rule["source"] == "default":
+        return "%s (default criteria)" % rule["heading"]
+    return "%s (`%s`)" % (rule["heading"], rule["path"])
+
+
+def humanize(text: str, rules: Dict[str, Any]) -> str:
+    """Replace rule IDs the model wrote into free text (for example "violates GEN-004") with the rule's name."""
+    for rule_id in sorted(rules, key=len, reverse=True):
+        pattern = r"(?<![\w:/#.-])\[?`?%s`?\]?(?![\w-])" % re.escape(rule_id)
+        text = re.sub(pattern, lambda _m, name=rules[rule_id]["heading"]: '"%s"' % name, text)
+    return text
+
+
 def render_finding(item: Dict[str, Any], passes_completed: int, rules: Dict[str, Any], heading_level: str = "###") -> str:
     canon, seen = item["canonical"], item["seen_in_passes"]
-    rule = rules.get(canon["rule_id"])
+    label = rule_label(canon["rule_id"], rules)
     lines = [
         "%s %s · %s · %s · `%s`" % (heading_level, item["id"], canon["severity"], canon["kind"], _location(canon)),
-        "**%s**" % canon["title"],
+        "**%s**" % humanize(canon["title"], rules),
         "",
         "Seen in **%d/%d** passes (%s)" % (len(seen), passes_completed, ", ".join(str(p) for p in seen)),
-        "Rule: `%s` (%s) %s" % (canon["rule_id"], rule["source"], rule["heading"]) if rule else "Rule: none (general concern)",
+        "Criterion: %s" % label if label else "Criterion: none (general concern)",
         "",
-        canon["description"],
+        humanize(canon["description"], rules),
         "",
     ]
     if canon.get("quote"):
@@ -77,10 +95,10 @@ def render_finding(item: Dict[str, Any], passes_completed: int, rules: Dict[str,
         symbol = " (%s)" % anchor["symbol"] if anchor.get("symbol") else ""
         lines.append("Anchor: `%s` lines %s-%s%s" % (anchor.get("file", canon["file"]), anchor.get("line_start"), anchor.get("line_end"), symbol))
         if canon.get("expected"):
-            lines.append("Expected: %s" % canon["expected"])
+            lines.append("Expected: %s" % humanize(canon["expected"], rules))
         lines.append("")
     if canon.get("suggestion"):
-        lines += ["Suggestion: %s" % canon["suggestion"], ""]
+        lines += ["Suggestion: %s" % humanize(canon["suggestion"], rules), ""]
     if item["rejected_in_passes"]:
         reasons = "; ".join("pass %s: %s" % (p, r or "no reason given")
                             for p, r in sorted(item["rejected_reasons"].items(), key=lambda kv: int(kv[0])))
