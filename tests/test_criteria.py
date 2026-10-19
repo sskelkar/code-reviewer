@@ -25,9 +25,12 @@ class SectionTests(unittest.TestCase):
     def test_default_rules_load_with_ids(self):
         rules = criteria.load_default_rules(DEFAULT_CRITERIA_DIR)
         ids = [r.rule_id for r in rules]
-        self.assertEqual(ids[0], "GEN-001")
+        self.assertEqual(ids, ["GEN-%03d" % n for n in range(1, 11)])
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(all(r.source == "default" and r.text for r in rules))
+        for rule in rules:
+            for label in ("**Inspect:**", "**Report:**", "**Do not report:**"):
+                self.assertIn(label, rule.text, rule.rule_id)
         disabled = criteria.load_default_rules(DEFAULT_CRITERIA_DIR, ["GEN-001"])
         self.assertNotIn("GEN-001", [r.rule_id for r in disabled])
 

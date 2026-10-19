@@ -59,6 +59,10 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn('L2 +     query = "SELECT * FROM t WHERE id=" + user_id', user)
         self.assertIn("[P:docs/review.md#retry-policy] (project)", user)
         self.assertIn("[GEN-004] (default)", user)
+        defaults = [r for r in result.criteria.rules if r.source == "default"]
+        self.assertEqual(len(defaults), 10)
+        for rule in defaults:
+            self.assertIn(rule.text, user)  # complete rule bodies reach the actual Reviewer call
         self.assertIn("package-lock.json", user)  # listed as excluded
         self.assertNotIn('"changed": true', user)  # but its contents are not in the diff
         self.assertIn("Self-check (second phase)", reviewer_call["system_prompt"])

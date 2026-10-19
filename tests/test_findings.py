@@ -116,7 +116,7 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
 
 
 class ResolveRuleIdTests(unittest.TestCase):
-    RULES = {"GEN-010": {}, "P:.gemini/styleguide.md#43-pull-request-pr-checks": {}, "P:docs/ddd.md#aggregate": {}}
+    RULES = {"GEN-010": {}, "P:docs/style.md#43-pull-request-checks": {}, "P:docs/ddd.md#aggregate": {}}
 
     def resolve(self, raw):
         return resolve_rule_id(raw, self.RULES)
@@ -128,10 +128,10 @@ class ResolveRuleIdTests(unittest.TestCase):
 
     def test_the_formats_seen_in_a_real_run_are_repaired(self):
         self.assertEqual(self.resolve("[GEN-010]"), ("GEN-010", "repaired"))
-        self.assertEqual(self.resolve("[P:.gemini/styleguide.md#43-pull-request-pr-checks]"),
-                         ("P:.gemini/styleguide.md#43-pull-request-pr-checks", "repaired"))
-        self.assertEqual(self.resolve(".gemini/styleguide.md#43-pull-request-pr-checks"),
-                         ("P:.gemini/styleguide.md#43-pull-request-pr-checks", "repaired"))
+        self.assertEqual(self.resolve("[P:docs/style.md#43-pull-request-checks]"),
+                         ("P:docs/style.md#43-pull-request-checks", "repaired"))
+        self.assertEqual(self.resolve("docs/style.md#43-pull-request-checks"),
+                         ("P:docs/style.md#43-pull-request-checks", "repaired"))
 
     def test_other_cosmetic_variants(self):
         for raw in ("`GEN-010`", "gen-010", "(GEN-010)", "GEN-010 (default)", "GEN-010.", "'GEN-010'"):
@@ -139,7 +139,7 @@ class ResolveRuleIdTests(unittest.TestCase):
         self.assertEqual(self.resolve("p:docs/ddd.md#Aggregate"), ("P:docs/ddd.md#aggregate", "repaired"))
 
     def test_text_that_names_no_rule_is_unknown(self):
-        for raw in ("Gemini Styleguide 4.3 (PRD/ADR-Implementation Match)", "GEN-999", "P:docs/ddd.md#missing", "see the style guide"):
+        for raw in ("Style Guide 4.3 (Requirements Match)", "GEN-999", "P:docs/ddd.md#missing", "see the style guide"):
             self.assertEqual(self.resolve(raw), ("none", "unknown"), raw)
 
 
