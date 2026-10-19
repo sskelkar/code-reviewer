@@ -99,7 +99,7 @@ On start the prompt shows a welcome banner that lists every command, grouped by 
 
 ```
 [00:04] diff: 12 files, 340 changed lines (2 excluded)
-[00:09] criteria: 12 default + 6 project rules from 3 files, 1 ignored references
+[00:09] criteria: 10 default + 6 project rules from 3 files, 1 ignored references
 [00:41] pass 1: 5 new, 0 matched, 0 ungrounded · $0.17 · quiet streak 0/2
 ...
 [07:12] converged after 4 passes
@@ -209,9 +209,13 @@ Rules of the road:
   The report lists them with the reason each was added.
 - Without a root `AGENTS.md`, or if nothing in it resolves, the files above and the defaults are still used, and the report says so.
 
+The ten defaults cover correctness, simplicity, clarity and contract documentation, security/privacy, bounded input validation, failure/resource handling, data integrity/concurrency, internal contracts, test coverage/test levels, and test independence/mocking. Each rule states what to inspect, when to report and what not to report, using repository-visible evidence. They do not include generic architecture or performance review requirements. The system prompt still owns finding scope, evidence fields, self-checks and JSON output; project rules take precedence.
+
+The current criteria are numbered `GEN-001` through `GEN-010` in checklist order. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. The revised defaults have offline plumbing coverage but have not yet been evaluated with a live Reviewer.
+
 ### Customizing the default rules
 
-Edit [criteria/defaults/general.md](criteria/defaults/general.md). Each rule is a heading of the form `## [GEN-013] Title` followed by the rule text. The ID is what findings cite. To turn rules off for your runs, list them in `disabled_default_rules`, or set `criteria_mode` to `project_only` or `defaults_only`.
+Edit [criteria/defaults/general.md](criteria/defaults/general.md). Each rule is a heading of the form `## [GEN-011] Title` followed by the rule text. The ID is what findings cite. To turn rules off for your runs, list them in `disabled_default_rules`, or set `criteria_mode` to `project_only` or `defaults_only`.
 
 ## Configuration
 
@@ -322,8 +326,8 @@ Supported Python is 3.9 and up. Before sending a change, run the tests on the ol
 
 ```
 code-reviewer/
-  README.md  pyproject.toml  review.example.toml
-  docs/                             proposal.md (short design doc) and proposal-full.md (detailed)
+  README.md  AGENTS.md  pyproject.toml  review.example.toml     AGENTS.md: working rules for AI agents
+  docs/                             HANDOVER.md (current state and next steps), proposal.md (short design doc), proposal-full.md (archived), project-explainer.md
   criteria/defaults/general.md      default review rules (IDs GEN-001...)
   prompts/                          prompt templates and JSON schemas, see prompts/README.md
   src/code_reviewer/                the package (see the code map below)
@@ -372,6 +376,8 @@ Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whol
 | `dry_run.py` | `--dry-run`: render what the Reviewer would be given, without calling a model |
 | `redact.py` | Replaces email addresses in the PR text before it is sent |
 | `replay.py` | Developer tool: re-run the comparator on a saved run to evaluate changes to the comparator prompt or model |
+| `evals.py`, `eval_runner.py` | Local eval CLI and fixed-attempt experiment orchestration over Engine |
+| `eval_cases.py`, `eval_judgments.py`, `eval_grading.py` | Pinned case validation, human judgment validation, deterministic metrics and cross-suite reports |
 | `models.py`, `config.py`, `templates.py`, `events.py`, `git_ops.py` | Shared types, settings, prompt rendering, events, git and gh helpers |
 
 Module dependencies point one way: `models`, `config` and `events` at the bottom; `engine` and the frontends at the top. Keep it that way (the engine imports the report, not the reverse).
@@ -392,6 +398,7 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_isolation_and_dry_run` | The checkout lives outside the run directory and is always deleted, the saved prompts equal what the model received, a dry run equals a real run's prompts and calls no model, and only an allow-list of PR fields is fetched from GitHub |
 | `test_doctor_and_live_envelope` | The doctor's tool check and parsing of a real Claude result (`tests/fixtures/live_envelope_haiku.json`) |
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
+| `test_evals`, `test_eval_grading` | Pinned evals, no-call plans, fake-model matrices, isolation/failures/budgets, local labels/rekey/combined reports and deterministic rubric metrics |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |
 
 Things to know when writing tests:
@@ -443,9 +450,19 @@ Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw (its l
 
 The offline tests cannot prove how Claude Code behaves. After upgrading Claude Code, or when something looks off, run `reviewer doctor --live` and a one-pass review, and check the points in [proposal.md](docs/proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
 
+## Local eval harness
+
+Use `python -m code_reviewer.evals` to create pinned local cases (`init`), preview without models (`plan`), run Claude reviews (`run`), record human findings judgments (`label`) and calculate deterministic metrics (`grade`). `rekey` revises answer keys and resets labels on copied saved reviews without new model calls. Only `run` calls Claude. See [the eval guide](evals/README.md) for commands, private local use, answer-key confirmation and combined reports.
+
+Trials vary the Reviewer model and fixed pass attempts while keeping the Comparator/settings and generic default criteria constant. Failures/budgets can interrupt a trial. Group quality scores require all scheduled trials to complete and be adjudicated; provisional answer keys never produce recall. Production manifests, answers, findings and reports stay physically outside this repository. Only Claude reviews production code; the user judges its findings locally. No production case has been accessed or real model experiment run as part of this implementation.
+
+The [eight public cases](evals/CASES.md) are four regression/repair pairs across Express, HTTPX and Resilience4j. Each case pins its own full base/head SHAs; source branch tips record provenance only. Keys remain agent-curated/provisional. One Java case needs the explicit larger cap in `evals/public.example.toml`; normal defaults are unchanged. Earlier personal-project candidates remain in `evals/reserve/`.
+
+The [grading rubric](evals/RUBRIC.md) remains provisional pending actual human judgments. Its three checks and judgment format are implemented and tested, but its authored examples are not calibration results. No LLM judge or claim of model superiority exists.
+
 ## Known limitations and roadmap
 
 - Verified live: the Reviewer flag set, isolation canaries, tool list, that files outside the working directory cannot be read or searched, and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Real multi-pass reviews of a PR have been run. Not yet exercised: posting a comment to a PR, and what Claude Code does when the per-call `--max-budget-usd` is exceeded (the run-level budget stop has been seen).
-- GitHub PRs only; `--verbose` shows stages, not live tool activity.
+- The regular review frontend uses GitHub PRs; the eval frontend also accepts pinned local commit pairs. `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
-- Planned: evals from your `mark` and `missed` labels, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).
+- Planned: importing `mark` and `missed` labels into evals, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).

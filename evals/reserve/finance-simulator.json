@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "source": "https://github.com/sskelkar/finance-simulator",
+  "default_branch": "main",
+  "source_revision": "8c556c5916bfaf43ea3e93a3e92bc4e48229e53d",
+  "source_checked_on": "2026-10-18",
+  "recommended_max_diff_lines": 2000,
+  "status": "Reserved: user switched to mature open-source projects. Not part of the active eight-case set.",
+  "cases": [
+    {
+      "id": "profile-introduction",
+      "base": "1365d84c9109d05fbf93dc0693f15abd8f4e146d",
+      "head": "53a7c3db2c7e279283f80c9caf8c0c05faf71048",
+      "title": "Introduce saved profiles and extend simulator views",
+      "description": "Add named input profiles with add, switch, save and delete actions, extend the simulator views, and add automated tests.",
+      "expected": [
+        {
+          "id": "add-overwrites-existing-profile",
+          "criterion": "GEN-007",
+          "file": "app.py",
+          "description": "Adding a profile under a different existing profile name silently replaces that saved profile with the currently displayed inputs.",
+          "evidence": "The Add handler checks empty and reserved names but not whether another named profile exists. The persistence helper writes directly to that name. Executing the actual handler and persistence helper in a temporary directory replaces a previously saved synthetic marker. The later repair preserves the marker and requests confirmation."
+        }
+      ],
+      "notes": "1867 changed lines after standard exclusions, above the normal 1500 limit. Do not run silently with a larger limit. A deliberate eval setting of max_diff_lines = 2000 is needed. The later repair and regression tests are evaluator evidence only and must not enter this historical checkout. Narrow handler/persistence execution verified overwrite; full Streamlit tests are pending."
+    },
+    {
+      "id": "profile-repair",
+      "base": "53a7c3db2c7e279283f80c9caf8c0c05faf71048",
+      "head": "8c556c5916bfaf43ea3e93a3e92bc4e48229e53d",
+      "title": "Add profile overwrite confirmation and simulator convenience controls",
+      "description": "Require confirmation when adding over another saved profile, preserve mode-specific input values, and add simulator convenience controls with documentation and tests.",
+      "expected": [],
+      "notes": "Provisional repair/control, not a certified clean change. Narrow execution confirms that the original profile data is retained pending confirmation. Judge the entire diff for new issues; do not report the fixed overwrite defect as still present. Other new defects may exist. Full Streamlit regression execution is pending. Keep this case and profile-introduction in the same dataset split."
+    }
+  ]
+}

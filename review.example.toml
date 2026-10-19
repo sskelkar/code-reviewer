@@ -13,7 +13,7 @@ self_check = true
 criteria_mode = "merge"
 # Path to a JSON manifest that replaces the criteria resolver's output (reproducible experiments).
 criteria_manifest = ""
-# Default rule IDs to switch off, for example ["GEN-012"].
+# Default rule IDs to switch off, for example ["GEN-003"].
 disabled_default_rules = []
 
 # Loop control

@@ -33,6 +33,18 @@ Templates the harness renders for each LLM call. Each role has a **system** prom
 
 **Comparator:** `pass_number`, `new_findings_json`, `candidate_findings_json`. Findings are passed as JSON arrays with the fields `local_id` (candidates: `id`), `title`, `description`, `file`, `line`, `kind`, `rule_id` and `severity`. Include `quote` for `present` findings and `anchor` for `absent` ones.
 
+## Default criteria and the Reviewer contract
+
+The ten rules (`GEN-001` through `GEN-010`, in checklist order) in `criteria/defaults/general.md` are loaded and rendered inside `<review_criteria>` in the Reviewer **user** prompt. Each rule body uses **Inspect**, **Report** and **Do not report** paragraphs. They specify repository-visible checks, including finite input bounds, atomic database updates, appropriate test levels/mocking, and updates to API/event/other contract documentation.
+
+The system prompt continues to define change scope, concrete consequences, evidence (`quote` or `anchor`/`expected`), rule citations, self-checks and JSON output. Criteria do not introduce a second output format or override those requirements. For test or maintainability gaps, describe the specific regression or maintenance consequence in the existing `description` field; unresolved assumptions belong in `notes`.
+
+`load_default_rules` loads only non-empty sections with ID-bearing headings. Introductory text is not sent as a rule, and nested Markdown headings split sections, so model-facing instructions belong in the rule bodies with bold labels rather than subheadings. The exact criteria block and index are saved per run; template hashes alone do not identify a criteria revision. No live quality improvement is established for the revised defaults yet; comparator replay cannot evaluate Reviewer criteria changes.
+
+## Evaluator-only rubric
+
+`evals/RUBRIC.md` is a grading-policy draft for human evaluators and any future calibrated judge. It is not another Reviewer prompt. Its worked examples, expected issue IDs, later repair references and per-case answer keys must not be added to `<review_criteria>`, the Reviewer checkout, or Reviewer metadata. The production templates and JSON schema are unchanged by this draft. The local eval harness implements the three-check human judgment format and deterministic metrics. It snapshots the rubric and hashes the code/prompts/default criteria for reproducibility. No LLM judge is implemented; the rubric remains provisional until calibrated on actual findings. Evals explicitly use defaults-only criteria, leaving Reviewer templates, schemas and tool permissions unchanged. See `evals/README.md`.
+
 ## Harness duties around the prompts
 
 - **Escape untrusted text.** Before rendering, replace any literal closing tag (`</untrusted_pr_metadata>`, `</diff>`, `</review_criteria>`, `</agents_md>`, and similar) inside untrusted values with `[removed]`, so PR text cannot close a delimited block early.

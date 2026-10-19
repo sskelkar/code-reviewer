@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "source": "https://github.com/resilience4j/resilience4j",
+  "default_branch": "master",
+  "source_revision": "b7c0069802e373ed72dff0b817c270fbb6e966ba",
+  "source_checked_on": "2026-10-19",
+  "status": "Agent-curated candidate cases; no model reviews or human-adjudicated model findings yet. Four regression/repair pairs across the active set.",
+  "cases": [
+    {
+      "id": "config-copy-regression",
+      "pair": "resilience4j-config-copy",
+      "base": "c846f9e5f6e5f56d979a4e20e3a1fae1aa57ab95",
+      "head": "ec72266fe7e34cd4804972b1499bac17b871e2a2",
+      "title": "Integrate fixed thread-pool bulkheads with Spring",
+      "description": "Add thread-pool bulkhead configuration support, including deriving a builder from an existing configuration, and update integrations and tests.",
+      "expected": [
+        {
+          "id": "derived-config-mutates-base",
+          "criterion": "GEN-007",
+          "file": "resilience4j-bulkhead/src/main/java/io/github/resilience4j/bulkhead/ThreadPoolBulkheadConfig.java",
+          "description": "A builder derived via from(base) aliases base, so changing the derived configuration mutates the original.",
+          "evidence": "The change adds from(config) and a Builder constructor assigning the supplied config directly. Builder setters mutate that instance. Later repair cec580d01b3fc33dcb501043463f18ca881b9779 copies fields and adds fromShouldNotMutateBaseConfig and fromShouldCopyAllFields. This is source/upstream-test evidence, not a local Java test result."
+        }
+      ],
+      "changed_lines": 1746,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "One deliberately larger case, above the normal 1500-line cap; needs an explicit max_diff_lines=2000 eval setting. No automatic override. No JDK is installed, so Java tests have not run. Full history was fetched to establish the original introduction rather than a shallow-history boundary.",
+      "expectation_status": "provisional"
+    },
+    {
+      "id": "config-copy-repair",
+      "pair": "resilience4j-config-copy",
+      "base": "158b64c235ecec44791923e4155d7e74e1217c30",
+      "head": "cec580d01b3fc33dcb501043463f18ca881b9779",
+      "title": "Copy thread-pool bulkhead configuration when deriving builders",
+      "description": "Derive an independent configuration instead of mutating the supplied base, preserving its fields and adding regression tests.",
+      "expected": [],
+      "changed_lines": 59,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "Repair/control supported by upstream tests and source review. Those tests were not executed locally because no JDK is installed. Do not flag the original aliasing issue as still present without new evidence.",
+      "expectation_status": "provisional"
+    }
+  ],
+  "recommended_max_diff_lines": 2000
+}

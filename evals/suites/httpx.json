@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "source": "https://github.com/encode/httpx",
+  "default_branch": "master",
+  "source_revision": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+  "source_checked_on": "2026-10-19",
+  "status": "Agent-curated candidate cases; no model reviews or human-adjudicated model findings yet. Four regression/repair pairs across the active set.",
+  "cases": [
+    {
+      "id": "client-certificate-regression",
+      "pair": "httpx-client-certificate",
+      "base": "a33c87852b8a0dddc65e5f739af1e0a6fca4b91f",
+      "head": "80960fa31918d7663c3f4c3ad61661cf0e80628f",
+      "title": "Prepare SSL configuration compatibility for release",
+      "description": "Update SSL configuration handling, deprecations and transport/client call sites for the upcoming release.",
+      "expected": [
+        {
+          "id": "client-certificate-ignored",
+          "criterion": "GEN-008",
+          "file": "httpx/_config.py",
+          "description": "verify=False returns before loading a supplied client certificate.",
+          "evidence": "The newly restored cert parameter is processed below an early return in the verify=False branch. Narrow execution of the actual helper ignores a deliberately missing certificate path at this head; repaired helper 89599a9541af14bcf906fc4ed58ccbdf403802ba attempts to load it and raises FileNotFoundError. Thus the option is skipped, rather than merely failing a handshake."
+        }
+      ],
+      "changed_lines": 139,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "Narrow execution used the standard-library SSLContext with a minimal certifi import stub, no real certificate or TLS server. Successful mutual TLS was not exercised. Later repair is evaluator-only.",
+      "expectation_status": "provisional"
+    },
+    {
+      "id": "client-certificate-repair",
+      "pair": "httpx-client-certificate",
+      "base": "8ecb86f0d74ffc52d4663214fae9526bee89358d",
+      "head": "89599a9541af14bcf906fc4ed58ccbdf403802ba",
+      "title": "Load client certificates when verification is disabled",
+      "description": "Keep server verification disabled while still applying supplied client-certificate configuration.",
+      "expected": [],
+      "changed_lines": 11,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "Repair/control: narrow execution confirms certificate loading is attempted. Do not complain about verify=False itself; this is an explicitly supported client option. Not a complete clean-diff certification.",
+      "expectation_status": "provisional"
+    },
+    {
+      "id": "empty-zstd-regression",
+      "pair": "httpx-empty-zstd",
+      "base": "7df47ce4d93a06f2c3310cd692b4c2336d7663ba",
+      "head": "392dbe45f086d0877bd288c5d68abf860653b680",
+      "title": "Support Zstandard response decoding",
+      "description": "Add the optional Zstandard decoder, advertise support when installed, and cover decompression behavior.",
+      "expected": [
+        {
+          "id": "empty-body-decoding-error",
+          "criterion": "GEN-001",
+          "file": "httpx/_decoders.py",
+          "description": "An empty response marked with Content-Encoding: zstd raises DecodingError during flush.",
+          "evidence": "The added decoder flush requires decompressor.eof even when no bytes were supplied. Later repair 47f4a96ffaaaa07dca1614409549b5d7a6e7af49 tracks whether data was seen and adds test_zstd_empty with an empty HTTP response. Source inspection and upstream regression-test evidence support the expected issue; local execution with zstandard has not run."
+        }
+      ],
+      "changed_lines": 174,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "Static/upstream-test evidence only; zstandard is not installed locally. Keep this validation limit visible rather than claiming a local reproducer passed.",
+      "expectation_status": "provisional"
+    },
+    {
+      "id": "empty-zstd-repair",
+      "pair": "httpx-empty-zstd",
+      "base": "189fc4bcbe5f314128775dec66a616ac9a31ad48",
+      "head": "47f4a96ffaaaa07dca1614409549b5d7a6e7af49",
+      "title": "Handle empty compressed response bodies",
+      "description": "Distinguish absent compressed data from truncated compressed streams and add coverage for both.",
+      "expected": [],
+      "changed_lines": 31,
+      "curation_status": "agent-curated; not independently human-adjudicated",
+      "notes": "Repair/control based on source and upstream test_zstd_empty/test_zstd_truncated. Local zstandard tests have not run. Review the whole diff for additional issues; do not certify it clean solely from its repair intent.",
+      "expectation_status": "provisional"
+    }
+  ]
+}

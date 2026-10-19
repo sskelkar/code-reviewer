@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "source": "https://github.com/sskelkar/expensetracker-web",
+  "default_branch": "master",
+  "source_revision": "1ea9c8e9f3fe95757c321a30d5ebc0cab5b9ef7e",
+  "source_checked_on": "2026-10-18",
+  "status": "Reserved: user switched to mature open-source projects. Not part of the active eight-case set.",
+  "cases": [
+    {
+      "id": "amount-entry",
+      "base": "f46d33bc2aeddbe7d49871a63ee598070fe9e257",
+      "head": "a8e94a4ab488b953f63192fae4a97e10547c5055",
+      "title": "Complete expense form submission",
+      "description": "Wire amount, date and category editing into the expense submission flow and update component tests.",
+      "expected": [
+        {
+          "id": "non-finite-amount",
+          "criterion": "GEN-005",
+          "file": "src/components/AddExpense.js",
+          "description": "Digit-only input has no length or finite numeric bound and can become Infinity before submission.",
+          "evidence": "Invoking the changed handleIntegerChange method with 400 digits stores Infinity. submit reads that stored amount without checking it is finite. This follows from the actual method and does not assume a backend response. Count numeric overflow and the missing bound as one root cause."
+        }
+      ],
+      "notes": "Do not infer a required currency precision or backend validation contract from outside this repository. Local method execution verifies overflow; full React/Jest execution is pending.",
+      "human_review": "User agrees with the unbounded/non-finite amount finding."
+    },
+    {
+      "id": "async-action-tests",
+      "base": "e4823fad3c30e13d013b227da168e85fe231a985",
+      "head": "4e6593538777daa0ebbd829325d0b6edbd76b336",
+      "title": "Add asynchronous action tests and return the request promise",
+      "description": "Return the fetch promise from the action thunk. Add success and failure action tests, isolate the API boundary, and update the resource test adapter.",
+      "expected": [],
+      "notes": "Provisional control. Narrow execution confirms the promise can be awaited and both success and error actions are dispatched. Mocking the API boundary is not itself a defect. Existing unrelated reducer-test weaknesses must not be attributed to this change. Full Jest execution is pending; additional findings require adjudication.",
+      "human_review": "User saw no issue; useful as a possible control, but personal-project cases are now in reserve."
+    }
+  ]
+}

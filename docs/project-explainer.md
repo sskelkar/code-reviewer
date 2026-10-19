@@ -890,3 +890,10 @@ PYTHONPATH=src python3 -c "from code_reviewer.config import Config; print(Config
 | classpath | `sys.path` |
 | `toString()` | `__str__` |
 | getter | `@property` |
+
+
+## Local evals
+
+`python -m code_reviewer.evals` is a second frontend over `Engine`, for pinned local commit pairs instead of GitHub PR metadata. `eval_cases.py` validates the suite and builds `PRContext`; only neutral title/description and the pinned diff/head reach the Reviewer, while expected answers remain evaluator-only. `eval_runner.py` runs a model/pass/repetition matrix with fixed pass attempts and default criteria, preserving interrupted trials and costs. Each trial gets its own temporary head checkout; passes within a trial share it but use fresh Claude sessions.
+
+`eval_judgments.py` validates human decisions against the three grading checks. `eval_grading.py` computes precision, confirmed-known-issue recall and combined reports without a model. Pending/uncertain labels and incomplete trials prevent group quality scores. `rekey` copies saved reviews under revised expectations and resets labels, avoiding paid reruns. Production cases and outputs stay outside this repository, reviewed by Claude and judged by the user locally. Follow [the eval guide](../evals/README.md) for commands and limitations.
