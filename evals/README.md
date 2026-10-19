@@ -137,7 +137,7 @@ A comparison is marked ready only when all trials are adjudicated/complete and e
 
 The eight cases in [CASES.md](CASES.md) are four regression/repair pairs, not eight independent scenarios. Keep pairs together when splitting calibration/held-out data. Stop expanding the set for now. Each suite uses one existing local clone; retain/fetch the pinned commits yourself.
 
-The Java introduction has 1746 changed lines. Opt in using [public.example.toml](public.example.toml), which sets `max_diff_lines = 2000`; use the same config for **all three suites** if combining them. This leaves normal review defaults unchanged.
+The Java introduction has 1746 changed lines, which fits the default cap (`max_diff_lines = 3000`). [public.example.toml](public.example.toml) pins that cap; use the same config for **all three suites** if combining them.
 
 ```bash
 python -m code_reviewer.evals plan evals/suites/express.json \

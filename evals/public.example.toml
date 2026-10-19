@@ -1,4 +1,3 @@
-# Explicit opt-in for the public set's 1746-line Java introduction.
-# Use this same file for every public suite in a combined comparison.
-# Normal reviews retain their default 1500-line cap.
-max_diff_lines = 2000
+# The public set's largest diff (1746 changed lines) now fits the default cap (3000), so this file is optional.
+# It pins the cap for every public suite in a combined comparison.
+max_diff_lines = 3000

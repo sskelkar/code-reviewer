@@ -160,7 +160,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 |---|---|
 | Passes: min / max / stop after quiet streak | 3 / 6 / 2 |
 | Consecutive failed passes before abort | 2 |
-| Diff size (after exclusions) | ~1,500 changed lines, else refuse |
+| Diff size (after exclusions) | ~3,000 changed lines, else refuse |
 | Criteria size | ~50k tokens |
 | Per call: spend / timeout | $0.50 / 10 min |
 | Per review: counted tokens / estimated cost | ~2M / ~$3 (tokens = input + output + cache writes; cache reads are excluded because multi-turn reviews re-read cached context and it is billed at a small fraction) |

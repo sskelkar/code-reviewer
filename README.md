@@ -233,7 +233,7 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `quiet_k` | `2` | Stop after this many consecutive passes with no new finding (after `min_passes`) |
 | `max_consecutive_failures` | `2` | Abort after this many failed passes in a row |
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
-| `max_diff_lines` | `1500` | Refuse PRs with more changed lines (after exclusions) |
+| `max_diff_lines` | `3000` | Refuse PRs with more changed lines (after exclusions) |
 | `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff |
 | `criteria_max_chars` | `200000` | Cap on project criteria text |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |

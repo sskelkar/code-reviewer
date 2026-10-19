@@ -31,7 +31,7 @@ Changed-line counts come from the review parser with standard exclusions. The li
 | Resilience4j configuration-copy regression | [c846f9e -> ec72266](https://github.com/resilience4j/resilience4j/compare/c846f9e5f6e5f56d979a4e20e3a1fae1aa57ab95...ec72266fe7e34cd4804972b1499bac17b871e2a2) | 1746 | Detect that deriving a builder aliases and mutates the original configuration. |
 | Resilience4j configuration-copy repair | [158b64c -> cec580d](https://github.com/resilience4j/resilience4j/compare/158b64c235ecec44791923e4155d7e74e1217c30...cec580d01b3fc33dcb501043463f18ca881b9779) | 59 | Recognize independent field copying and the regression tests. |
 
-The Java introduction exceeds the normal 1500-line cap. Including it needs an explicit eval configuration (`max_diff_lines = 2000`); the manifest's recommendation is metadata and does not override the engine. No input limit or tool permissions have been changed. If we decide against that larger case, replace it rather than increasing the eight-case cap.
+The Java introduction has 1746 changed lines; it fit under no earlier default but is within the current default cap of 3000. The manifest's recommendation is metadata and does not override the engine. No tool permissions have been changed. If we decide against that larger case, replace it rather than increasing the eight-case cap.
 
 ## Evidence and its limits
 

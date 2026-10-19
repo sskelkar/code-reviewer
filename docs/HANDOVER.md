@@ -93,7 +93,7 @@ See `evals/CASES.md` for all eight pinned GitHub diff links, full source revisio
 
 This changes the earlier suggested six-defect/two-control mix to four of each, using well-supported pairs rather than extending the search. The user set the total cap at eight; the ratio was an agent proposal. Repairs are provisional controls, not certified free of other defects. Additional findings need adjudication. Keep related pairs together when splitting calibration/held-out data: there are four underlying scenarios, not eight independent ones.
 
-Default-branch tips were observed on cloning on 2026-10-19 and are pinned in each suite. Every case has its own full base/head SHAs; review the historical head, not the current default branch. Future pushes must not silently update the dataset. The Resilience4j introduction has 1746 changed lines, above the normal 1500 cap. Including it needs an explicit max_diff_lines=2000 eval setting; no global limit has been changed and the manifest recommendation is not an override.
+Default-branch tips were observed on cloning on 2026-10-19 and are pinned in each suite. Every case has its own full base/head SHAs; review the historical head, not the current default branch. Future pushes must not silently update the dataset. The Resilience4j introduction has 1746 changed lines, which fit under no earlier default; the default `max_diff_lines` is now 3000, so it is accepted without an override.
 
 The user's earlier-project feedback is preserved in `evals/reserve/`: trip creation uncertain; resident filter no issue seen/requested replacement; amount-entry issue agreed; async action tests no issue seen. The user then said their projects were too shallow and asked to check open source. Those earlier six candidates are not in the active set. Repository-reference permission does not extend to copying unrelated private production runs, secrets or profile data.
 
@@ -141,7 +141,7 @@ Implemented modules:
 - `eval_grading.py`: deterministic trial/group metrics and combined reports.
 - `evals.py`: CLI (`init`, `plan`, `run`, `label`, `grade`, `rekey`).
 
-No eval dependency/framework was added: this is a small standard-library adapter over Engine, not an implementation of Inspect AI/promptfoo/DeepEval. The JSON format is project-specific. `evals/public.example.toml` is an explicit 2000-line opt-in for all public suites in a combined experiment; normal 1500-line defaults are unchanged.
+No eval dependency/framework was added: this is a small standard-library adapter over Engine, not an implementation of Inspect AI/promptfoo/DeepEval. The JSON format is project-specific. `evals/public.example.toml` pins the 3000-line cap for all public suites in a combined experiment.
 
 Dedicated tests use synthetic throwaway git repositories and FakeRunner. They cover pinning, no-call plans, fixed passes/repetitions, answer isolation, fresh checkouts/cleanup, working-tree preservation, Comparator accounting, failures/cancellation, known/unknown budgets, CLI labels/grade/rekey, expectation eligibility, duplicates/additional findings, undefined metrics, stale artifacts, path escapes, combined settings/coverage and paired scenario counting. No test calls a real model.
 

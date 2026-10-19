@@ -72,7 +72,7 @@ class Config:
     candidate_max: int = 40
 
     # Input limits
-    max_diff_lines: int = 1500
+    max_diff_lines: int = 3000
     criteria_max_chars: int = 200000
     exclude_patterns: List[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
     grounding_line_window: int = 30
