@@ -1,0 +1,84 @@
+tests/test_findings.py
+  s_0aa18f51442760::t_2d2d758bcd038e 93,106
+  s_0aa18f51442760::t_e3040da0c1abb1 94-105,107-111
+src/code_reviewer/diffview.py
+  s_0aa18f51442760::t_5bb970f970c482 156-160,162-163,168-169
+src/code_reviewer/engine.py
+  s_0aa18f51442760::t_22d7041717eb54 88
+  s_0aa18f51442760::t_dcfdbead3a52e6 89
+docs/project-explainer.md
+  s_0aa18f51442760::t_bc82055a246715 105,673-674,896,898
+tests/helpers.py
+  s_0aa18f51442760::t_3e6fac865ee3b4 9
+docs/proposal.md
+  s_0aa18f51442760::t_021a51813d48d8 101
+  s_0aa18f51442760::t_821c8b63e08b69 102
+tests/test_engine.py
+  s_0aa18f51442760::t_6ce706c14fbff5 124-129
+  s_0aa18f51442760::t_021a51813d48d8 114-116,122-123,130-136
+  s_0aa18f51442760::t_80a349a8c2d7e7 117-119,137
+  s_0aa18f51442760::t_821c8b63e08b69 120-121
+src/code_reviewer/config.py
+  s_0aa18f51442760::t_dcfdbead3a52e6 78-79,118-120
+  s_0aa18f51442760::t_e09ba3f463543b 121
+review.example.toml
+  s_0aa18f51442760::t_2a87e1839d19c4 32-33,35-37
+criteria/defaults/general.md
+  s_0aa18f51442760::t_e3040da0c1abb1 27
+src/code_reviewer/review_inputs.py
+  s_0aa18f51442760::t_6ce706c14fbff5 100,103-107
+  s_0aa18f51442760::t_dcfdbead3a52e6 50
+  s_0aa18f51442760::t_ac07d9f2bac67f 108
+docs/HANDOVER.md
+  s_0aa18f51442760::t_fd249b716c625e 5,7,9,11,58,60,62,68,70,77,79,81
+  s_0aa18f51442760::t_27734c16123e21 18,20,23,30,32,85,91-93,95,97-100,116,124,126
+prompts/reviewer.user.md
+  s_0aa18f51442760::t_dcfdbead3a52e6 26
+src/code_reviewer/passes.py
+  s_0aa18f51442760::t_22d7041717eb54 39-40,62
+tests/test_diffview.py
+  s_0aa18f51442760::t_a44bf9c24b6ba4 71-80
+src/code_reviewer/report.py
+  s_0aa18f51442760::t_6ce706c14fbff5 188,195-196
+  s_0aa18f51442760::t_dcfdbead3a52e6 254
+tests/test_claude_cli_and_templates.py
+  s_0aa18f51442760::t_3e6fac865ee3b4 5
+src/code_reviewer/models.py
+  s_0aa18f51442760::t_dcfdbead3a52e6 69
+README.md
+  s_0aa18f51442760::t_821c8b63e08b69 237
+  s_0aa18f51442760::t_bc82055a246715 117,166,215,269,279,297,581,583,587,596
+  s_0aa18f51442760::t_021a51813d48d8 238
+src/code_reviewer/findings.py
+  s_0aa18f51442760::t_dcfdbead3a52e6 26,185-186,208-209,216-218,221
+  s_0aa18f51442760::t_22d7041717eb54 12,33,179,184,210-211,219-220
+  s_0aa18f51442760::t_2b1ce977fff882 222
+src/code_reviewer/progress.py
+  s_0aa18f51442760::t_dcfdbead3a52e6 58
+  s_0aa18f51442760::t_22d7041717eb54 57
+prompts/reviewer.system.md
+  s_0aa18f51442760::t_dcfdbead3a52e6 16
+prompts/README.md
+  s_0aa18f51442760::t_021a51813d48d8 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9c158f2c7f35a8ee13b4713955c105368c07ac3b",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
