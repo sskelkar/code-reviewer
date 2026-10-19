@@ -1,7 +1,7 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented, pending review and first live run (see [README.md](../README.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
-(Full detailed version: [proposal-full.md](proposal-full.md))
+**Status:** v0 implemented and being tried on real pull requests; next: multi-perspective review (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+(Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
 
@@ -9,7 +9,50 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
-**Not in v0:** inline PR comments, multi-perspective review, raw-API/model-agnostic backend, security hardening beyond §5, pass diversification.
+**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **multi-perspective review** (§12). Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
+
+**Not yet built:** multi-perspective review, project context pack, a separate Verifier, inline PR comments, raw-API backend, security hardening beyond §5.
+
+## Checklist
+
+**Done**
+- [x] Multi-pass engine: independent fresh-context passes, Comparator merge, confidence by agreement, stop policy, budgets
+- [x] Evidence checks: quote/anchor grounding, rule-ID repair, the Reviewer's self-check
+- [x] Thorough Reviewer prompt (reports every supported issue, not only the first)
+- [x] Ten default criteria, plus project criteria from the root `AGENTS.md`, plus nested `AGENTS.md` and `.claude/rules` files added by location
+- [x] Reports and the PR summary name the criterion and its source, never an internal ID
+- [x] Interactive REPL and one-shot CLI, summary posted only after confirmation, dry run, email redaction, `doctor --live` isolation checks
+- [x] Comparator replay tool; README flow diagrams of a review
+
+**Use it for real (you)**
+- [ ] Review real PRs from your project with the current setup (Haiku) and judge each finding yourself (`mark`, `missed`)
+- [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
+- [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
+
+**Build next, in this order**
+- [ ] Multi-perspective review (§12): perspectives such as code quality, test quality, failure modes; confidence per perspective; the report says which perspective found each finding
+- [ ] Project context pack (§12): documentation passages about the identifiers the diff touches, supplied as reference material
+- [ ] Verifier pass (§12): a fresh session tries to refute each finding with repository evidence
+- [ ] Reviewer prompt: before reporting a finding that depends on an assumption, check the comment above the code, its tests and the repo documentation; unverified assumptions go to `notes`
+- [ ] Record the tool calls each pass made (closes the "what did it search?" blind spot)
+- [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
+
+**Mature later: safety (the §5 backlog)**
+- [ ] **Sandbox the checkouts:** run the Reviewer inside an OS-level sandbox (container or `sandbox-exec`): checkout mounted read-only, no network, no access to the home directory or credentials. Today only Claude Code's own restrictions plus a temporary directory protect it
+- [ ] **Prompt-injection safeguards for text coming from the code under review:** randomized delimiters, warnings when the PR or files contain instruction-like text, a test suite that plants instructions in the diff, PR text and repository files and checks they are ignored, sanitizing text posted to the PR (links, images, HTML, @mentions), and a capability split so the component that reads untrusted code cannot post
+- [ ] Secret scanning and removing `.env*`, key files and `.git` from the checkout; read-only permissions
+- [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; re-run `doctor --live` after every Claude Code upgrade
+- [ ] Company approval for sending code through the enterprise login
+- [ ] **Audit trail of review sessions, for governance** (§7 lists what each run already saves). Still to build:
+  - who ran it and from where (user, machine, tool version), recorded in every run;
+  - a tamper-evident manifest per run (hashes of the inputs, prompts, raw model replies and outputs, chained or signed) so a saved run can be shown unchanged;
+  - an append-only log of what was posted to a PR: the exact text, target, time, and who confirmed;
+  - the resolved model IDs, the criteria files actually used and the tool calls each pass made, per run;
+  - a retention policy and access control for `~/.code-reviewer/runs/`, which holds company code, plus an option to store it centrally;
+  - a command that lists and summarizes past runs (what was reviewed, when, by whom, cost, what was posted).
+
+**Later features**
+- [ ] Inline PR comments; MCP server or `/review-pr` skill; provider-agnostic backend; optional LLM executive summary; resume of interrupted runs; revive evals if they become useful
 
 ## 1. Architecture
 
@@ -79,7 +122,7 @@ Reviewer invocation (verify per §9):
 claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,Glob" \
   --strict-mcp-config --disable-slash-commands --permission-prompts none \
   --no-session-persistence --output-format json --json-schema '<schema>' \
-  --max-budget-usd 0.5 --add-dir <input-dir>
+  --max-budget-usd 0.5
 ```
 
 - **Read-only tools for the Reviewer (Resolver and Comparator get none: `--tools ""`), no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
@@ -90,7 +133,7 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 - Structured output validated by the harness; model output is never executed.
 - Prompt-injection framing for PR text (§3) reduces risk but isn't a guarantee. The real protection is that a steered Reviewer has no way to act, and nothing is posted without your confirmation.
 - **Company data policy** must cover sending code through the enterprise login. That is a company decision, not an agent feature. Avoid repos with customer or rider data.
-- **Hardening backlog (not v0):** secret scanning and removing `.env*`/keys/`.git` from the tree, symlink scrubbing, read-only chmod, randomized delimiters and injection-pattern warnings, sanitizing posted text (images/links/HTML/mentions), capability-split designs, full isolation test suite.
+- **Hardening backlog (not v0; tracked in the Checklist at the top, including OS-level sandboxing of the checkout and prompt-injection safeguards):** secret scanning and removing `.env*`/keys/`.git` from the tree, symlink scrubbing, read-only chmod, randomized delimiters and injection-pattern warnings, sanitizing posted text (images/links/HTML/mentions), capability-split designs, full isolation test suite.
 
 ## 6. Interface
 
@@ -105,9 +148,10 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 ## 7. Report, confidence, cost
 
 - **Confidence = `seen_in_passes / passes_completed`.** Tiers (configurable): **High ≥ 75%**, **Medium 40–74%**, **Low < 40%** (still reported).
-- **Review summary (rendered by code, the main output):** at the end of every review the terminal prints a shareable summary: a headline count by confidence, then each finding with severity, `file:line`, description, evidence and suggestion. It is saved as `summary.md` and is exactly the text `post` sends as the PR comment (plus a hidden marker). With fewer than two completed passes there is no agreement to measure, so findings are shown as **unrated** instead of High. A one-line run summary and the path of the full report follow.
+- **Review summary (rendered by code, the main output):** at the end of every review the terminal prints a shareable summary: a headline count by confidence, then each finding with severity, `file:line`, the criterion it falls under (by name and source), description, evidence and suggestion. It is saved as `summary.md` and is exactly the text `post` sends as the PR comment (plus a hidden marker). With fewer than two completed passes there is no agreement to measure, so findings are shown as **unrated** instead of High. A one-line run summary and the path of the full report follow.
 - **Full report (rendered by code, for deep dives):** header (PR, head/base SHA, models, passes, stop reason, criteria applied/ignored) · counts by tier and severity · findings by tier then severity, each with `file:line`, evidence, suggestion, "seen in x/N passes", rejected-in notes · "rejected by self-check (not scored)" · appendix (discovery curve, pairwise pass overlap, ungrounded/invalid-rule/failed counts, links to artifacts).
 - **Usage and cost (required):** run totals (input/output/cache tokens, estimated USD, wall time, calls), per-pass and per-role (Resolver/Reviewer/Comparator) breakdown with each pass's new/matched counts, retries and failures included, spend vs cap. Summed from each call's JSON envelope; labeled *estimated* (enterprise login may show list-price figures; runs may also count against seat limits).
+- **Audit trail (partial):** every run already keeps its full evidence locally, listed next; governance-grade features are in the Checklist.
 - **Artifacts:** `~/.code-reviewer/runs/<timestamp>_<repo>_<pr>/` with config (incl. CLI version), inputs, per-pass raw outputs/findings/mapping, `master.json`, `stats.json`, `labels.json`, `report.md`, `run.log`. Every merge decision is replayable. No resume in v0.
 
 ## 8. Ceilings (defaults, tune from logs)
@@ -125,7 +169,7 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 
 ## 9. Experiment plan and v0 checks
 
-**Runs to compare:** single pass vs full loop · `self_check` on vs off · Haiku vs Sonnet. Judge across several runs per PR (results vary).
+**Runs to compare:** single pass vs full loop · `self_check` on vs off · Haiku vs Sonnet · general loop vs perspectives (§12). Judge across several runs per PR (results vary).
 
 **Metrics (manual in v0):** discovery curve · **pass-to-pass overlap** (near-identical passes make every finding "High" and the signal meaningless) · precision per tier (`mark`) · approximate recall from `missed` (real found ÷ (real found + missed)) · cost per pass · spot-check of Comparator merges/splits.
 
@@ -135,15 +179,11 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 
 **Comparator experiment (replaying saved runs with `python -m code_reviewer.replay`).** The comparator decides which findings of different passes are the same issue. In the six-pass run with thorough reviewers, three findings about one block (an API example that omits one of two exception types handled by the same code path) were left as separate or partly merged findings. Replaying that run: the clear duplicates (three issues found in 5-6 passes) grouped identically every time; the three borderline findings did not. With Haiku, the same prompt merged them in one replay and not in another, and a rewritten rule ("same finding = one change would resolve both; do not choose `new` merely because wording differs") did not measurably change that (2 of 4 replays identical to the original, 2 partial merges). With Sonnet all 4 replays merged the cluster into one finding found in 3 passes and kept the genuinely different finding separate. On an older run Sonnet also merged three findings about one example block into one, including one whose claim was about the actual status code, which a careful reader might keep separate, so it merges more aggressively. Sonnet costs about 15 times more for this step (about $0.0095 versus $0.0006 per call). Decision: keep the clearer rule, keep Haiku as the default comparator, and leave `model_comparator` as a setting. Borderline merges are a judgment call; the recorded `assigned` mapping and the replay tool make them auditable.
 
-**Default criteria revision (2026-10-18; live evaluation pending).** Replaced the twelve broad defaults with the agreed ten repository-assessable criteria, each with inspection scope, reporting conditions and exclusions. Retained the Reviewer templates and output schema unchanged. Input bounds, related database writes requiring atomicity, contract-document updates, test levels and unnecessary/misleading mocking are explicit. Missing test-file changes, a fixed test-pyramid ratio, multiple writes alone, or mocking alone are not findings. Offline tests check loading and delivery through the real prompt path, not review quality. No before/after Reviewer experiment has been run, so no precision or recall improvement is claimed. Comparator replay reuses saved findings and cannot test these criteria; an authorized live comparison on pinned cases is still required. Saved criteria blocks/indexes, not just template hashes, identify this change.
+**Default criteria revision (2026-10-18; not yet tried live).** Replaced the twelve broad defaults with ten repository-assessable criteria, each with inspection scope, reporting conditions and exclusions. Input bounds, related database writes requiring atomicity, contract-document updates, test levels and unnecessary or misleading mocking are explicit. Missing test-file changes, a fixed test-pyramid ratio, multiple writes alone, or mocking alone are not findings. Tests check loading and delivery through the real prompt path, not review quality; no before/after experiment exists, so no improvement is claimed. Rule IDs were renumbered, so IDs in older saved runs mean different topics: compare runs by their saved criteria blocks.
 
-**Eval-case selection (2026-10-18; no model results).** Six historical diffs across three owner-approved projects were originally pinned (now retained in `evals/reserve/`) and described in `evals/CASES.md`, with source default-branch tips verified against GitHub and separate full base/head SHAs. Four smaller JavaScript cases cover unawaited writes, unbounded numeric input, a resident filter, and asynchronous tests with appropriate boundary mocking. A larger Python profile introduction/repair pair adds a demonstrated overwrite scenario; the introduction is above the default diff cap and needs an explicit experiment setting before use. Narrow local execution supports the candidate expected findings/counterexamples, but complete project test suites and Reviewer experiments have not run. Controls are provisional; unexpected findings require adjudication. Eval adapter/grading scaffolding remains unfinished and untested; implementation was paused while choosing cases and a rubric. Do not infer any review-quality improvement from these checks.
+**Parked: local eval harness (2026-10-19).** An offline harness (`python -m code_reviewer.evals`: `init`, `plan`, `run`, `label`, `grade`, `rekey`), a human-label rubric (`evals/RUBRIC.md`: correct and supported, introduced by the change, specific and useful) and eight pinned public cases (four regression/repair pairs from open-source projects, `evals/CASES.md`) were built. No model was ever run through it, and the answer keys for the public cases are agent-curated and provisional. It was set aside as a distraction: the goal now is to use the agent on real pull requests and judge the results by hand. The code stays for later; do not extend it. If it is revived, record a reason for each wrong finding (missing project knowledge, unverified assumption, misread code, pre-existing issue, style preference), because that tells which fix to build, and add a mode that freezes the project's resolved criteria (the harness uses defaults only).
 
-**Open-source case selection update (2026-10-19; no model results).** The user switched from personal projects to mature open-source code, capped the set at eight and delegated curation. Active cases are now four regression/repair pairs across Express, HTTPX and Resilience4j; prior personal-project candidates and their user feedback are in `evals/reserve/`. See `evals/CASES.md` for pinned diffs and evidence. Narrow execution supports the Express ETag and HTTPX client-certificate cases. Zstandard and Java cases have source/upstream-test evidence but no local execution (missing zstandard/JDK). One 1746-line Java introduction needs an explicit eval-only cap of 2000; no limit was changed. Repairs are provisional controls and the paired set has only four underlying scenarios. Stop expanding the case set; rubric and runner design remain the next work. No live review or LLM judge has run.
-
-**Grading rubric draft (2026-10-19; no model or calibration results).** `evals/RUBRIC.md` defines three finding-level checks: correctness/evidence, change scope, and specificity/usefulness. Seven explicitly authored illustrations from three public diffs cover correct matches, materially wrong claims, duplicates, a repaired defect, generic security advice and unresolved additional claims. They are not captured Reviewer outputs. Human adjudication with deterministic metric calculation remains the proposed first version; the draft judgment record and expectation statuses still need reconciliation with the unfinished scaffold. The user agreed to draft using public cases, then privately validate against production changes before making production model/pass decisions. Private manifests, answers and results stay physically outside this repository; no production code was accessed or private storage created. Reviewer prompts, schemas, tool permissions and diff limits were not changed. No grading reliability or review-quality improvement is claimed.
-
-**Local eval harness (2026-10-19; offline validation only).** Implemented `init`, `plan`, `run`, `label`, `grade` and `rekey` using the existing Engine and standard library. Only `run` calls Claude. Trials vary Reviewer model/fixed attempts/repetitions, keep Comparator/settings and defaults-only criteria fixed, isolate answer keys from Reviewer inputs, and retain incomplete/skipped/cancelled trials and incurred/unknown costs. Frozen suite/rubric/environment/master hashes detect accidental edits. Human check-level labels drive deterministic duplicate-penalizing precision and confirmed-known-issue recall; provisional keys are excluded from recall. Group scores require all scheduled trials complete/adjudicated, and combined reports check coverage and fixed environment consistency. Answer-key revisions reuse copied saved reviews and reset all labels, without new calls. Thirty-four dedicated synthetic eval tests cover input pinning, isolation, cleanup, failures, budgets, label validity, scoring and the CLI workflow; all 224 tests pass on Python 3.9 and 3.13. Public-case model-free previews validate the pinned inputs, not Reviewer quality. No new dependencies, production access, real model calls, LLM judge, prompt/schema/tool expansion or global diff-limit change. The user will run production reviews through Claude and judge findings locally; production material stays outside this repository. See `evals/README.md` for commands.
+**Third finding: agreement is not correctness.** A finding raised by 4 of 6 passes was wrong. The project had a data-access rule the reviewer did not know; the rule existed in the repository, but only in files that were not review criteria and that nothing linked to, and no pass searched for it. Correlated mistakes across passes are the main weakness of agreement-based confidence. Responses: nested `AGENTS.md` and `.claude/rules` files are now added by location (§2), and the project context pack and Verifier are planned (§12). The saved raw output does not record which tools a pass called, so what each pass searched is unknown.
 
 **Proposed success bar (adjust after first runs):** High-tier precision clearly above Low-tier; the loop finds at least one real issue a single pass missed on roughly 1 in 3 PRs; cost within a small multiple of a single pass.
 
@@ -161,19 +201,32 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 | Phase | Deliverable |
 |---|---|
 | **P0** | This proposal: engine + REPL + one-shot CLI + confirmed summary comment; manual evaluation |
-| P1 | Local eval harness implemented; next collect human judgments and compare models/pass counts on representative private cases. Later add label imports and per-tier/pass analysis |
-| P2 | Verifier pass: refutes one finding at a time with repo evidence, fed by Low/Medium tiers. Early results suggest scoring candidate findings by independent verification rather than by how often passes raise them |
-| P3 | Multi-perspective passes (quality, architecture, test quality, past incidents) and diversification; "reviewer sees master report" A/B variant |
+| P1 | Evals: parked (see §9). Judge by hand on real PRs |
+| P2 | Verifier pass (§12): refutes one finding at a time with repo evidence. Early results suggest scoring candidate findings by independent verification rather than by how often passes raise them |
+| P3 | **Multi-perspective passes (§12), next**; project context pack; diversification; "reviewer sees master report" A/B variant |
 | P4 | Inline PR comments; MCP server / `/review-pr` skill |
 | P5 | Provider-agnostic backend (raw API); optional LLM executive summary |
-| Anytime | Security hardening backlog (§5) before any use beyond a controlled environment |
+| Anytime | Security hardening (§5 and the checklist: sandboxed checkouts, prompt-injection safeguards) before any use beyond a controlled environment |
 
 ## 11. Assumptions and open questions
 
 **Assumptions:** github.com host via `gh`/git · Python 3 · default criteria are Markdown files in this repo · learning use on repos without customer/rider data.
 
 **Open:**
-1. Is sending DH code through the enterprise Claude Code login approved for this?
-2. How does the real `AGENTS.md` describe review criteria: links to in-repo files, inline sections, or both?
+1. Is sending company code through the enterprise Claude Code login approved for this? (Company decision; avoid repos with customer or rider data until answered.)
+2. Perspectives (§12): which default criteria go to which perspective, and does every perspective get all project rules?
 3. Is the success bar in §9 right?
-4. Independent model settings for Reviewer and Comparator? (Proposed: yes.)
+4. Is a perspective with 3 passes the right default, and how many perspectives are worth the cost?
+
+## 12. Design notes for the next steps
+
+**Multi-perspective review (next).** Same loop, but several reviewers with different jobs. A *perspective* is a short focus paragraph plus a subset of the criteria, stored as a file under `prompts/perspectives/` so it can be edited without code changes. Proposed first set: **code quality** (`GEN-002`, `GEN-003`: simplicity, readability, documentation), **test quality** (`GEN-009`, `GEN-010`: coverage, test levels, independence, no misleading mocks), **failure modes** (`GEN-004` to `GEN-008`: security, input checks, error handling and resources, data integrity and concurrency, internal contracts; "would this cause a production incident?"); `GEN-001` correctness is open (all perspectives or the failure-modes one). Proposed: every perspective gets all project rules, because the repo's rules apply across the board. Command shape, for example: `reviewer review <pr> --perspectives quality:3,tests:3,safety:3`; with no flag, behavior is unchanged (one general perspective with all ten criteria).
+- **Independence is kept:** within a perspective every pass gets a byte-identical prompt, so passes stay independent and the prompt cache still works; each perspective has its own prompt.
+- **Confidence is computed per perspective:** the share of that perspective's passes that found the issue. A global share would make a test-quality finding unable to reach High, because the other perspectives' passes are not looking at tests. The report states which perspective found each finding.
+- **One master list and one Comparator across perspectives,** so an issue found by two perspectives is a single finding seen by both.
+- **Cost** scales with the number of passes: three perspectives with three passes each is nine Reviewer passes, about three times today's default.
+- Strategies to compare by hand on the same PRs: general loop (Haiku), general loop (Sonnet), perspectives (Haiku).
+
+**Project context pack.** The reviewer lacks project knowledge that exists in the repository but is not in the criteria (§9, third finding). After the diff is parsed, the harness extracts the identifiers it touches (changed or called methods and classes, table and column names), searches the base-commit tree for them in documentation and agent-instruction files (`*.md`, `docs/`, `.claude/`, ADRs, agent-memory directories), and adds the matching passages (capped, with path and heading) as a separate `<project_context>` block, marked as reference material and not as rules. Deterministic, no model call, identical in every pass, saved with the other inputs and listed in the report. Open points: ranking, size cap, which directories to search, how to cite.
+
+**Verifier pass.** There is no separate verifier today. Checks that exist: the harness's evidence checks (quote or anchor must be real) and the Reviewer's own self-check in the same session, which tends to confirm its own reasoning. A Verifier is a new role: a fresh session receives one finding, the relevant code reference and the criteria, and tries to refute it with evidence from the repository. The harness validates its verdict like any other model output and uses it in confidence instead of, or alongside, how many passes raised the finding. Prototype it as a replay-style tool on a saved run first.
