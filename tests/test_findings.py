@@ -1,5 +1,4 @@
 import unittest
-from pathlib import Path
 
 from code_reviewer import diffview
 from code_reviewer.findings import FileCache, FindingsPreparer, find_quote, resolve_rule_id
@@ -90,6 +89,25 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual([f["rule_id"] for f in prepared.ok], ["GEN-004", "GEN-004", "P:docs/review.md#logging", "P:docs/review.md#logging"])
         self.assertEqual((prepared.rule_repaired, prepared.rule_unknown), (4, 0))
         self.assertTrue(all("rule_citation" not in f for f in prepared.ok))
+
+    def test_findings_in_excluded_files_are_dropped_and_counted(self):
+        (self.root / "docs").mkdir(exist_ok=True)
+        (self.root / "docs" / "plan.md").write_text("step one\nstep two\n")
+        preparer = FindingsPreparer(self.rules, True, self.cache, self.diff, 30, ["docs/"])
+        prepared = preparer.prepare([
+            finding(),
+            finding(file="docs/plan.md", quote="step one", line=1),
+            finding(kind="absent", quote="", file="app.py", expected="validate user_id",
+                    anchor={"file": "docs/plan.md", "line_start": 1, "line_end": 2}),
+        ], 1)
+        self.assertEqual(len(prepared.ok), 1)
+        self.assertEqual([f["local_id"] for f in prepared.out_of_scope], ["p1-f2", "p1-f3"])
+        self.assertEqual(prepared.out_of_scope[0]["status"], "out_of_scope")
+        self.assertIn("excluded", prepared.out_of_scope[0]["reason"])
+        self.assertEqual(len(prepared.all_records()), 3)  # kept in findings.json for auditing
+
+    def test_nothing_is_out_of_scope_by_default(self):
+        self.assertEqual(self.prepare([finding()]).out_of_scope, [])
 
     def test_self_check_verdicts(self):
         prepared = self.prepare([

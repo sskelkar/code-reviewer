@@ -1,4 +1,3 @@
-import io
 import json
 import unittest
 from pathlib import Path
@@ -8,7 +7,6 @@ from code_reviewer.claude_cli import ClaudeResult
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
 from code_reviewer.models import ReviewRefused
-from code_reviewer.events import Event
 from code_reviewer.repl import Session, load_labels
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
@@ -112,6 +110,30 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(len(result.master.rejected_only()), 1)
         self.assertEqual(result.stop_reason, "converged")  # rejected-only entries do not count as new
         self.assertIn("Rejected by self-check (not scored)", result.report_path.read_text())
+
+    def test_findings_in_excluded_files_are_dropped_and_reported(self):
+        cfg = Config(runs_dir=str(self.tmp / "runs"), max_passes=1, min_passes=1)
+        runner = FakeRunner(reviewer=[{"findings": [finding(file="package-lock.json", quote="changed", line=1)]}], resolver=RESOLVER_OK)
+        result = self.engine(runner, cfg).review(self.ctx)
+        self.assertEqual(result.master.scored(), [])
+        self.assertEqual(result.passes[0].out_of_scope, 1)
+        done = [e for e in self.events if e.type == "reviewer_done"]
+        self.assertEqual([e.data["out_of_scope"] for e in done], [1])  # the progress line reports it
+        self.assertIn("Findings located in excluded files", result.report_path.read_text())
+
+    def test_excluded_files_do_not_pull_in_the_rules_of_their_directory(self):
+        from code_reviewer.diffview import FileDiff
+        from code_reviewer.review_inputs import InputBuilder
+        files = [FileDiff(path="docs/plans/plan.md", excluded=True), FileDiff(path="app/service.py")]
+        self.assertEqual(InputBuilder.scope_paths(files), ["app/service.py"])
+
+    def test_extra_exclude_patterns_add_to_the_built_in_list(self):
+        cfg = Config(runs_dir=str(self.tmp / "runs"), extra_exclude_patterns=["docs/plans/"])
+        self.assertIn("package-lock.json", cfg.all_exclude_patterns())
+        self.assertIn("docs/plans/", cfg.all_exclude_patterns())
+        everything = Config(runs_dir=str(self.tmp / "runs"), extra_exclude_patterns=["app.py"])
+        with self.assertRaises(ReviewRefused):  # app.py and the lockfile are the only changes, and both are excluded
+            self.engine(FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER_OK), everything).review(self.ctx)
 
     def test_failed_passes_abort_after_two_in_a_row(self):
         bad = ClaudeResult(ok=False, error="timed out")

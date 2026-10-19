@@ -54,7 +54,8 @@ class ProgressPrinter:
         elif kind == "reviewer_done":
             self._say("  reviewer: %d findings (%d usable, %d ungrounded, %d self-rejected)%s" % (
                 d["raised"], d["usable"], d["ungrounded"], d["rejected"],
-                "; %d rule citations fixed" % d["rule_fixed"] if d["rule_fixed"] else ""))
+                ("; %d rule citations fixed" % d["rule_fixed"] if d["rule_fixed"] else "")
+                + ("; %d in excluded files, dropped" % d["out_of_scope"] if d.get("out_of_scope") else "")))
         elif kind == "comparator_started" and self.verbose:
             self._say("  comparing %d new findings with %d candidates" % (d["new"], d["candidates"]))
         elif kind == "pass_finished":

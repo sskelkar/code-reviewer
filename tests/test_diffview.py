@@ -68,6 +68,16 @@ class DiffViewTests(unittest.TestCase):
         self.assertTrue(diffview.is_excluded("svc/go.sum", pats))
         self.assertFalse(diffview.is_excluded("src/app.js", pats))
 
+    def test_directory_patterns_with_several_folders(self):
+        plans = ["docs/plans/"]
+        self.assertTrue(diffview.is_excluded("docs/plans/step-1.md", plans))
+        self.assertTrue(diffview.is_excluded("repo/docs/plans/sub/step-1.md", plans))  # anywhere in the path, like `vendor/`
+        self.assertFalse(diffview.is_excluded("docs/plans.md", plans))
+        self.assertFalse(diffview.is_excluded("docs/other/plans/x.md", plans))  # the folders must follow each other
+        self.assertFalse(diffview.is_excluded("plans/docs/x.md", plans))
+        self.assertTrue(diffview.is_excluded("a/vendor/x.go", ["vendor/"]))
+        self.assertFalse(diffview.is_excluded("vendor", ["vendor/"]))  # a file named like the folder is not inside it
+
     def test_render_diff_block_markers(self):
         block = diffview.render_diff_block(self.files)
         self.assertIn("--- app.py (modified)", block)

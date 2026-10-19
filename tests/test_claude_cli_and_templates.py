@@ -2,7 +2,7 @@ import json
 import unittest
 
 from code_reviewer import claude_cli, templates
-from code_reviewer.config import PROMPTS_DIR, Config, ConfigError
+from code_reviewer.config import Config, ConfigError
 
 
 class EnvelopeTests(unittest.TestCase):

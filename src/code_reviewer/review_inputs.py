@@ -47,7 +47,7 @@ class InputBuilder:
     def load_diff(self, ctx: PRContext) -> Tuple[List[FileDiff], Dict[str, int]]:
         """Parse the merge-base diff, drop lockfiles/generated files, and refuse PRs that are empty or too large."""
         files = parse_unified_diff(git_ops.git_diff(ctx.git_dir, ctx.merge_base, ctx.head_sha))
-        mark_exclusions(files, self.cfg.exclude_patterns)
+        mark_exclusions(files, self.cfg.all_exclude_patterns())
         included = reviewable(files)
         lines = changed_line_count(files)
         if not included:
@@ -97,8 +97,14 @@ class InputBuilder:
         resolver = CriteriaResolver(caller, self.prompts["resolver"], self.cfg, ctx, work_dir, self.emit)
         return criteria_mod.resolve_project(
             agents_text, tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
-            resolver, override, self.cfg.criteria_max_chars, [f.path for f in files],
+            resolver, override, self.cfg.criteria_max_chars, self.scope_paths(files),
         )
+
+    @staticmethod
+    def scope_paths(files: List[FileDiff]) -> List[str]:
+        """The files whose directories decide which nested AGENTS.md and .claude/rules files apply: the ones under review.
+        A change in an excluded file (a planning document, a lockfile) does not pull in the rules of its directory."""
+        return [f.path for f in reviewable(files)]
 
     # ------------------------------------------------------------------ what the Reviewer sees
 

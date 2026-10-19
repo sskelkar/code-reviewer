@@ -153,12 +153,20 @@ def parse_unified_diff(text: str) -> List[FileDiff]:
     return parser.files
 
 
+def _has_directory(parent_dirs: Sequence[str], wanted: Sequence[str]) -> bool:
+    """Do the directory names `wanted` appear one after another among `parent_dirs` (anywhere in the path)?"""
+    return any(list(parent_dirs[i:i + len(wanted)]) == list(wanted) for i in range(len(parent_dirs) - len(wanted) + 1))
+
+
 def is_excluded(path: str, patterns: Sequence[str]) -> bool:
+    """Does the path match one of the patterns? A pattern ending in `/` names a directory, wherever it is in the path
+    (`vendor/`, or several folders such as `docs/plans/`); any other pattern is a glob on the whole path or on the file name."""
     parts = path.split("/")
     base = parts[-1]
     for pattern in patterns:
         if pattern.endswith("/"):
-            if pattern[:-1] in parts[:-1]:
+            wanted = [p for p in pattern.strip("/").split("/") if p]
+            if wanted and _has_directory(parts[:-1], wanted):
                 return True
         elif fnmatch.fnmatch(path, pattern) or fnmatch.fnmatch(base, pattern):
             return True

@@ -75,6 +75,8 @@ class Config:
     max_diff_lines: int = 3000
     criteria_max_chars: int = 200000
     exclude_patterns: List[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE_PATTERNS))
+    # Added to `exclude_patterns` (so the built-in list stays in place), for example planning documents such as PRDs
+    extra_exclude_patterns: List[str] = field(default_factory=list)
     grounding_line_window: int = 30
     # Replace email addresses in the PR title, description and commit messages before they are sent to the model
     redact_emails: bool = True
@@ -112,6 +114,10 @@ class Config:
         for tier in self.post_tiers:
             if tier not in ("High", "Medium", "Low"):
                 raise ConfigError("post_tiers entries must be High, Medium or Low")
+
+    def all_exclude_patterns(self) -> List[str]:
+        """Files left out of the diff, and about which no findings are reported."""
+        return list(self.exclude_patterns) + list(self.extra_exclude_patterns)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

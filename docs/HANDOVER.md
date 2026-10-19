@@ -2,36 +2,34 @@
 
 For an AI agent (or a person) taking over. Read [`AGENTS.md`](../AGENTS.md) first for the working rules. This file says where things stand and what to do next. The design reasoning lives in [`proposal.md`](proposal.md); usage and the code map are in the [README](../README.md).
 
-**Current state: 2026-10-19.** The ten generic review criteria and local eval harness are implemented. Active public cases remain eight pinned changes (four regression/repair pairs across Express, HTTPX and Resilience4j). `evals/RUBRIC.md` draft-2 is implemented as a human-label policy with deterministic scoring, but is not calibrated. Public keys remain agent-curated/provisional; no model-quality result exists.
+**Current state: 2026-10-20.** Everything described here is committed except the changes listed at the end of section 7. 231 tests pass on Python 3.13 and 3.9; they validate the harness with a fake Claude, not review quality. The agent has been run on real pull requests of the user's own project (Haiku, 3 to 6 passes) and the user judges the results by hand.
 
-**Direction change (later on 2026-10-19), supersedes the eval-first plan below:** the user decided that building an eval harness now is a distraction. The eval code stays in the repository but is **parked**: do not extend it. The goal is to make the agent genuinely useful on the user's real pull requests and to let the user judge reviews themselves, trying different strategies: the current Haiku loop, the same loop with Sonnet, and then **multi-perspective review** (roadmap P3: for example a code-quality perspective, a test-quality perspective and a failure-modes/safety perspective, each with its own passes, over the ten default criteria plus the project's rules). Agreed order of work: (1) done: criteria appear in reports and summaries by name and source, never by internal ID, and rule IDs written by the model into free text are replaced; the README now has flow diagrams of a review; (2) perspectives, with confidence computed per perspective (agreement among the passes of the perspective that looked for the issue) and a report that says which perspective found each finding; (3) project context pack; (4) Verifier pass. Open design questions for (2): which default criteria go to which perspective, and whether every perspective gets all project rules (proposed: yes). There is no separate Verifier yet: only harness grounding checks and the Reviewer's own self-check exist.
+**Direction (supersedes the eval-first plan of 2026-10-19):** the user decided that building an eval harness now is a distraction. The eval code stays in the repository but is **parked**: do not extend it (section 4). The goal is to make the agent useful on real pull requests and to try strategies side by side on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **multi-perspective review** (for example code quality, test quality, failure modes, each with its own passes). The task checklist is in [`proposal.md`](proposal.md) (section "Checklist"); the design notes for the next steps are in proposal section 12.
 
-**Latest user direction:** finish the harness, then update this handover. The user cannot usefully judge unfamiliar public cases and expects to refine the rubric on their own project. **Only Claude is allowed to review production code.** Do not inspect their production clone, diffs, saved findings or private cases in this Codex chat. The user will run Claude reviews and judge findings locally. Do not ask them to paste production material here. Generic framework development and public/synthetic verification are allowed.
+**Constraints from the user:** commit or push only when asked. Only Claude may review production code: another agent (for example Codex) must not read the user's production clone, diffs, saved findings or private cases, and must not ask the user to paste them. Generic framework work and public or synthetic verification are fine. Never put company or project identifiers (repository names, PR numbers, ticket keys, run directory names, code from saved runs) into this repository.
 
-**Working tree:** all changes remain uncommitted, including prior criteria/docs changes. Preserve them. No commits, pushes or paid model calls were made. All **224 tests** pass on Python 3.9.6 and 3.13 (see verification below). Tests validate the harness, not Claude's review quality.
-
-**Immediate next step:** the user can follow `evals/README.md` to create one private pinned case outside this repository, preview it, and when ready run a one-model/one-pass pilot locally through Claude. Judge actual findings, refine/confirm expectations privately, then compare models/pass counts on the same frozen cases. Do not expand the public dataset or ask for abstract rubric rubber-stamping. No production project/path was supplied or accessed, and no production storage directory was created.
+**Immediate next step:** the user is running reviews on their own PRs and will report what they see. Then, in order: multi-perspective review, project context pack, Verifier pass (proposal section 12). Parallel passes (harness threads, not Claude sub-agents) and an effort/thinking setting to cut cost are also on the list (section 6).
 
 ## 1. What exists
 
 A Python package (`code_reviewer`, command `reviewer`) that reviews a GitHub PR with several independent Claude Code headless passes:
 
 1. Check out the PR head in a temporary directory (outside the run directory, always deleted afterward) and fetch only an allow-list of PR fields.
-2. Build the inputs once: redacted PR text, the filtered diff with line markers, and the review criteria.
+2. Build the inputs once: redacted PR text, the filtered diff with line markers (files matching `exclude_patterns` or `extra_exclude_patterns`, such as lockfiles and planning documents, are left out of the diff but named in `<excluded_files>`), and the review criteria.
 3. Run passes. Each pass is a fresh `claude -p` session with only Read, Grep and Glob, blind to other passes. The prompt is byte-identical every pass.
-4. After each pass, the harness grounds every finding against the code (quote must match, or an anchor over a changed hunk for "absent" findings), repairs or neutralizes the rule ID, and applies the model's own self-check verdict.
+4. After each pass, the harness drops findings located in excluded files (counted as out of scope), grounds every finding against the code (quote must match, or an anchor over a changed hunk for "absent" findings), repairs or neutralizes the rule ID, and applies the model's own self-check verdict.
 5. The Comparator maps each pass's findings onto a master list (same finding, or new). The harness validates its answer.
 6. A stop policy ends the run (min 3 passes, max 6, stop after 2 consecutive quiet passes, stop after 2 failures, token budget).
-7. Output: a shareable summary (printed, and the same text posted as a PR comment after confirmation), a detailed `report.md`, token and cost accounting, and every input and raw model reply saved under `~/.code-reviewer/runs/<run>/`.
+7. Output: a shareable summary (printed, and the same text posted as a PR comment after confirmation) and a detailed `report.md`, both naming each finding's criterion by name and source, never by its internal ID, plus token and cost accounting, and every input and raw model reply saved under `~/.code-reviewer/runs/<run>/`.
 
 Confidence is the share of completed passes that found a finding: High at 75% or more, Medium at 40% or more, Low below that, Unrated if fewer than 2 passes completed.
 
 **Criteria** come from three places, merged with project rules taking precedence:
 - Defaults: `criteria/defaults/general.md` (ten criteria numbered `GEN-001` through `GEN-010` in checklist order).
 - Files named by the Resolver model from links in the project's root `AGENTS.md` (read from the base branch, never the PR head).
-- Files added by location without a model call: an `AGENTS.md` in or above any directory containing a changed file, and every `.claude/rules/*.md` file that has no `paths:` front matter or whose `paths:` globs match a changed file.
+- Files added by location without a model call: an `AGENTS.md` in or above any directory containing a file under review (excluded files do not count), and every `.claude/rules/*.md` file that has no `paths:` front matter or whose `paths:` globs match a changed file.
 
-**Interfaces:** `reviewer` (interactive REPL with `review`, `show`, `drop`, `undrop`, `mark`, `missed`, `summary`, `post`, `open`, `help`), `reviewer review <pr>` (one-shot), `reviewer doctor [--live]`, `python -m code_reviewer.replay <run dir>` (re-runs only the Comparator on saved findings), and `python -m code_reviewer.evals` (local eval workflow; section 4).
+**Interfaces:** `reviewer` (interactive REPL with `review`, `show`, `drop`, `undrop`, `mark`, `missed`, `summary`, `post`, `open`, `help`), `reviewer review <pr>` (one-shot), `reviewer doctor [--live]`, `python -m code_reviewer.replay <run dir>` (re-runs only the Comparator on saved findings), and the parked `python -m code_reviewer.evals` (section 4.2). The README has flow diagrams of a review (a high-level one and a detailed one).
 
 ## 2. Decisions to keep (and why)
 
@@ -57,120 +55,49 @@ These are summaries of real runs on private repositories (identifiers deliberate
 3. **Agreement is not correctness.** One finding was raised by 4 of 6 passes and was wrong: the reviewer did not know a project-specific data-access rule, so a refactor it flagged as risky was actually the required form. The rule existed in the repository but only in a subagent-memory file and an eval rubric, and no criteria file or `AGENTS.md` mentioned it. All six passes looked at the right code; none searched for the documentation. Correlated errors across passes are the main weakness of agreement-based confidence, and the reason for the Verifier (P2) and the context pack below.
 4. **Observability gap:** `reviewer.raw.json` does not record the tool calls a pass made, so we cannot tell what a pass searched. Only the pass's own `notes` ("checked X, not verified Y") say what it opened.
 
-## 4. Current work: criteria and eval design
+## 4. Default criteria, and the parked eval harness
 
-### 4.1 Agreed review criteria (implemented)
+### 4.1 Default criteria
 
-`criteria/defaults/general.md` now contains only the new ten criteria, numbered in checklist order. The user explicitly requested dropping the old list and legacy ID mappings:
+`criteria/defaults/general.md` has ten criteria numbered in checklist order. Each has **Inspect / Report / Do not report** paragraphs and is assessable from the repository. Architecture and performance are deliberately not generic defaults (projects add them). The IDs changed meaning in the 2026-10-18 revision (`GEN-004` used to be injection), so older saved runs cannot be compared by ID: compare their saved criteria blocks.
 
 | ID | Topic |
 |---|---|
 | GEN-001 | Correctness |
 | GEN-002 | Simplicity and maintainability |
-| GEN-003 | Clarity and documentation, including API/event/other contract-document updates |
+| GEN-003 | Clarity and documentation, including API/event/other contract documents (not planning documents) |
 | GEN-004 | Security and privacy |
-| GEN-005 | Input validation and finite bounds (no unbounded inputs) |
+| GEN-005 | Input validation and finite bounds |
 | GEN-006 | Failure handling and resource management |
 | GEN-007 | Data integrity and concurrency, including missing atomicity for related database writes |
 | GEN-008 | Internal contract consistency |
 | GEN-009 | Test coverage and appropriate test levels |
 | GEN-010 | Test independence and responsible mocking |
 
-Each has **Inspect / Report / Do not report** paragraphs. Criteria must be assessable from the repository rather than undocumented external behavior. Architecture and performance were deliberately excluded from generic defaults; projects can add them. Multiple writes alone do not prove a transaction is needed, and mocking alone is not a defect. Test levels follow the behavior being tested, with no numerical test-pyramid quota. Existing test coverage counts.
+The rules are loaded into `<review_criteria>` in the Reviewer user prompt; the system prompt (`prompts/reviewer.system.md`) owns scope, evidence, self-check and JSON. The criteria have been used on real PRs but never compared before/after, so no improvement is claimed.
 
-The rules are loaded into `<review_criteria>` in the Reviewer user prompt. `prompts/reviewer.system.md` and the output schema are unchanged: they still define scope, consequences, evidence, self-checks and JSON. Tests check that all ten complete rule bodies reach the actual Reviewer invocation. There is no live evidence yet that this revision improves quality. Historical rule IDs can mean different topics: use each saved run's criteria block/index, not its ID alone or template hashes alone, when comparing runs.
+### 4.2 Parked: local eval harness
 
-### 4.2 Active open-source cases (eight total)
-
-See `evals/CASES.md` for all eight pinned GitHub diff links, full source revisions, line counts, evidence and limits. Active manifests are `evals/suites/express.json` (two cases), `httpx.json` (four) and `resilience4j.json` (two). The eight cases are four regression/repair pairs:
-
-| Pair | Expected regression | Validation |
-|---|---|---|
-| Express ETag | Transfer-Encoding condition also suppresses ETag generation | Actual send function exercised before/regression/repair; full HTTP suite not run |
-| HTTPX client certificate | verify=False returns before applying a supplied certificate | Actual helper exercised with standard-library SSLContext; no real TLS handshake |
-| HTTPX empty Zstandard body | Decoder flush rejects an empty encoded response | Source and upstream regression tests; zstandard not installed locally |
-| Resilience4j configuration copy | Derived builder aliases/mutates original config | Source and upstream regression tests; no local JDK |
-
-This changes the earlier suggested six-defect/two-control mix to four of each, using well-supported pairs rather than extending the search. The user set the total cap at eight; the ratio was an agent proposal. Repairs are provisional controls, not certified free of other defects. Additional findings need adjudication. Keep related pairs together when splitting calibration/held-out data: there are four underlying scenarios, not eight independent ones.
-
-Default-branch tips were observed on cloning on 2026-10-19 and are pinned in each suite. Every case has its own full base/head SHAs; review the historical head, not the current default branch. Future pushes must not silently update the dataset. The Resilience4j introduction has 1746 changed lines, which fit under no earlier default; the default `max_diff_lines` is now 3000, so it is accepted without an override.
-
-The user's earlier-project feedback is preserved in `evals/reserve/`: trip creation uncertain; resident filter no issue seen/requested replacement; amount-entry issue agreed; async action tests no issue seen. The user then said their projects were too shallow and asked to check open source. Those earlier six candidates are not in the active set. Repository-reference permission does not extend to copying unrelated private production runs, secrets or profile data.
-
-No real model evaluations, full external-project suites, or human-adjudicated findings exist. The harness is implemented and tested offline; case curation and passing harness tests do not establish review quality.
-
-### 4.3 Implemented local evaluation workflow
-
-See **`evals/README.md`** for copyable commands and private use. Entry point: `python -m code_reviewer.evals`.
-
-| Command | Behavior |
-|---|---|
-| `init` | Resolve local base/head refs, pin merge-base/head SHA, write a new neutral case outside both repositories; no model calls |
-| `plan` | Preflight all selected commits/diffs, save Reviewer inputs for the matrix; no model/version calls or checkout |
-| `run` | Paid Claude reviews via existing Engine; only Reviewer model varies |
-| `label` | Record human verdict/checks, issue ID, evidence reason and duplicate reference locally; no model calls |
-| `grade` | Validate frozen artifacts/labels and calculate JSON/Markdown reports, optionally combining suites; no model calls |
-| `rekey` | Copy saved reviews under revised expected/status/reason fields and reset all labels; no model calls |
-
-Each suite targets one existing clone. Nothing fetches, modifies its working tree or posts comments. Expected answers/notes/case IDs/later repair references/commit messages do not enter Reviewer prompts. Titles/descriptions must be neutral; historical head files may still reveal clues. Production manifests, code references, outputs, labels and detailed reports must stay physically outside code-reviewer, not merely gitignored. Output location checks resolve symlinks and reject either repository.
-
-Evals use **defaults_only** criteria, ignoring the normal criteria mode/manifest; configured disabled defaults still apply. This keeps generic criteria fixed and avoids Resolver variance. It does not evaluate normal project-rule discovery. Comparator/settings stay fixed. Requested passes mean fixed attempts (`min_passes = max_passes`); budgets/failures can make trials incomplete. This does not evaluate the production early-stop policy.
-
-One trial uses one temporary head checkout shared read-only across fresh Claude sessions. Separate trials get fresh checkouts, removed after completion/errors. Engine Reviewer tools remain Read/Grep/Glob; no tool permissions/prompts/schemas were changed. Only `run` calls Claude; local storage does not imply local inference.
-
-Existing run/call budgets remain active. Optional `--max-total-cost` stops scheduling between trials, reduces remaining trial/call budgets and halts if cost is unknown. Limits are soft and may overshoot; incomplete/skipped/cancelled trials and incurred/unknown costs stay visible. Ctrl-C stops subsequent trials. There is no resume command and output directories must be new.
-
-### 4.4 Human judgments and scores
-
-The rubric is **provisional**, not rubber-stamp-validated. The three implemented checks are correctness/support, introduced-or-worsened-by-the-change, and specificity/usefulness. `judgments.json` binds check-level labels to rubric/master hashes. Labels: match, additional, wrong, duplicate, uncertain, pending. Valid findings pass all checks; wrong findings need demonstrated failure; uncertainty needs an unresolved check. Additional valid discoveries are not automatically false positives; duplicate valid issues explicitly reference an original with the same stable issue ID.
-
-Precision = distinct valid issues / reported scored findings (duplicates penalized). Known-issue recall uses only cases explicitly human-attested `expectation_status: confirmed` with an `expectation_reason`. All eight public keys remain provisional. Python validates the attestation field, not whether the human actually verified it. Empty reviews have undefined precision; zero recall only when confirmed expected issues exist. Repairs are not certified clean.
-
-Pending/uncertain labels or incomplete scheduled trials suppress the group's final quality scores; individual trial status/scores and all spending remain visible. Combined reports require identical frozen code/prompt/default-criteria/rubric/settings hashes, reject overlapping trials, and flag unequal case/repetition coverage. Scenario counts group pairs. Bookkeeping readiness does not imply statistical significance, judge calibration or broad model superiority.
-
-Suite/rubric/environment/master hashes reject accidental edits. The hashes are not tamper-proof signatures. Actual prompts/criteria/config/model usage are retained per run; requested aliases can change across time, so compare close in time or use explicit model IDs. Revising only answer keys is supported through `rekey`, which copies the old reviews and resets all labels for consistent re-adjudication. Code/prompt/criteria/rubric changes require a new experiment. Bundled-claim splitting, per-tier/pass scores, `mark`/`missed` imports, independent Comparator scoring and LLM judging are not implemented.
-
-Research links and authored examples remain in the rubric/proposal history. These are not actual Reviewer outputs or calibration data. Production reviews and judgments belong to Claude and the user locally; Codex should work only on generic/public/synthetic material here.
-
-### 4.5 Files, verification and next actions
-
-Implemented modules:
-- `eval_cases.py`: version-1 suite validation, local SHA pinning/PRContext, path/hash helpers.
-- `eval_runner.py`: preflight, fixed-attempt matrix, environment/rubric snapshots, costs/failures/cancellation.
-- `eval_judgments.py`: human-label schema and rubric consistency/duplicate checks.
-- `eval_grading.py`: deterministic trial/group metrics and combined reports.
-- `evals.py`: CLI (`init`, `plan`, `run`, `label`, `grade`, `rekey`).
-
-No eval dependency/framework was added: this is a small standard-library adapter over Engine, not an implementation of Inspect AI/promptfoo/DeepEval. The JSON format is project-specific. `evals/public.example.toml` pins the 3000-line cap for all public suites in a combined experiment.
-
-Dedicated tests use synthetic throwaway git repositories and FakeRunner. They cover pinning, no-call plans, fixed passes/repetitions, answer isolation, fresh checkouts/cleanup, working-tree preservation, Comparator accounting, failures/cancellation, known/unknown budgets, CLI labels/grade/rekey, expectation eligibility, duplicates/additional findings, undefined metrics, stale artifacts, path escapes, combined settings/coverage and paired scenario counting. No test calls a real model.
-
-Verification completed for this implementation:
-- `PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .`: **224 passed** (Python 3.9.6).
-- `PYTHONPATH=src /opt/homebrew/bin/python3.13 -m unittest discover -s tests -t .`: **224 passed**.
-- **34 dedicated eval tests** are included in that total; the prior suite had 190.
-- A model-free preflight of all eight active cases created **32 planned trials** (Haiku/Sonnet x 1/3 passes, one repetition), using the explicit public configuration and identical environment hashes across all three suites. A runner that raises on model/version calls confirmed neither was invoked. These are plans, not paid reviews or quality results.
-- `git diff --check` passed. No production code, production findings or private run artifacts were read/copied.
-
-Next actions:
-1. User runs one private pilot locally following `evals/README.md`; no production content should be supplied here.
-2. User labels actual findings and independently establishes any recall key, revising the provisional rubric only when concrete examples justify it. Any generic changes discussed here must omit production details.
-3. Run a paid comparison only after the user chooses/authorizes its concrete matrix and budget. Haiku/Sonnet with 1/3 passes and repetitions is an example, not an approved experiment.
-4. Report honest quality/cost/variance and incomplete trials. Do not infer quality from offline harness tests or agent-curated keys.
+Built 2026-10-19 and then set aside (details and reasons: proposal section 9, "Parked"). It is `python -m code_reviewer.evals` (`init`, `plan`, `run`, `label`, `grade`, `rekey`) with modules `evals.py`, `eval_cases.py`, `eval_runner.py`, `eval_judgments.py`, `eval_grading.py`, the human-label rubric `evals/RUBRIC.md`, eight pinned public cases (four regression/repair pairs from open-source projects, `evals/CASES.md`, `evals/suites/`) with agent-curated, provisional answer keys, and the guide `evals/README.md`. The user's earlier personal-project candidates are in `evals/reserve/` and cite the old rule numbering. No model was ever run through the harness and no quality result exists. It uses default criteria only, so it cannot test project-rule discovery. If revived: record a reason for every wrong finding (missing project knowledge, unverified assumption, misread code, pre-existing issue, style preference), and add a mode that freezes the project's resolved criteria.
 
 ## 5. Practical notes for the next agent
 
-- **Do not run real reviews or `doctor --live` unprompted.** They use the user's Claude Code login and cost money. The user runs production reviews and judges them locally; do not request or inspect their production reports in this Codex chat. For public/synthetic runs, saved artifacts are read-only evidence: `~/.code-reviewer/runs/<run>/` holds `input/` (what the reviewer was given: prompts, criteria block and index, diff, PR text), `pass-NN/` (`reviewer.raw.json`, `findings.json`, `comparator.raw.json`, `mapping.json`), `master.json`, `stats.json`, `labels.json`, `report.md` and `summary.md`.
+- **Do not run real reviews or `doctor --live` unprompted.** They use the user's Claude Code login and cost money. The user runs reviews on their own PRs and shares report paths. Saved runs are read-only evidence: `~/.code-reviewer/runs/<run>/` holds `input/` (what the reviewer was given: prompts, criteria block and index, diff, PR text), `pass-NN/` (`reviewer.raw.json` with each attempt's usage envelope, `findings.json`, `comparator.raw.json`, `mapping.json`), `master.json`, `stats.json`, `labels.json`, `report.md` and `summary.md`. Only Claude may read production material (see the constraints at the top).
 - **Replay a saved run's Comparator** (cheap, a few cents with Haiku): `python -m code_reviewer.replay <run dir> --model haiku --repeat 2`. The tool is for comparator experiments only; it cannot test Reviewer prompt changes, which need a real run.
 - **Claude CLI facts** (Claude Code 2.1.x): the reviewer flags are `--safe-mode --restricted --tools "Read,Grep,Glob" --strict-mcp-config --disable-slash-commands --permission-prompts none --no-session-persistence --output-format json --json-schema <schema> --max-budget-usd <n> --append-system-prompt <text>`, with the prompt on stdin. There is no `--max-turns`. `--json-schema` adds an internal `StructuredOutput` tool and the answer is in `structured_output` (the doctor allows that tool name).
 - **Prompt caching:** identical prompts across passes mean cache hits. Do not add anything pass-specific to the prompt.
 - **Test helpers:** `tests/helpers.py` has `FakeRunner`, throwaway git repos (with `gc.auto=0` to avoid background cleanup races) and `finding(...)`. A real reply is kept as `tests/fixtures/live_envelope_haiku.json`.
 - **Docs that go stale most easily:** README (options, code map, limits), `docs/proposal.md` (sections 4, 5, 9 and 10), `prompts/README.md` (what the harness enforces) and the explainer (call-stack tree, module list).
-- **User preferences:** short, direct answers with scannable structure; explain eval design and agree on it before implementing further; no commits without being asked; the user likes the `reviewer review <pr>` one-shot command and the welcome banner; keep documentation honest about what did not work.
+- **User preferences:** short, direct answers with scannable structure; explain a design and agree on it before building it; no commits without being asked; the user likes the `reviewer review <pr>` one-shot command and the welcome banner; keep documentation honest about what did not work.
 
-## 6. Deferred backlog (not the current priority)
+## 6. Next steps and backlog
 
-These ideas predate the current eval discussion. They are not the execution order. The local eval harness is implemented; representative private judgments and model comparisons come first as described in section 4. Preserve the ideas for later, with tests, synchronized docs and honest evidence in proposal section 9.
+The checklist with the agreed order is in [`proposal.md`](proposal.md). Order: multi-perspective review (proposal section 12), project context pack (A), Verifier (D), then the rest. Each item ends with tests, synchronized docs and an honest note in proposal section 9. The items below are design notes.
+
+Additional items raised after the first handover (all unbuilt):
+- **Parallel passes.** Reviewer calls are independent of each other, so they can run concurrently in harness threads (not Claude sub-agents, which would break independence, validation and accounting). Split `PassRunner.run` into a parallel review phase and a serial compare-and-merge phase processed in pass order, run pass 1 alone first so the prompt cache is warm, then batches, behind a `--parallel N` option with default 1 so comparisons stay unchanged. `Stats` and progress output need locks.
+- **Cost.** One pass costs roughly $0.19 (first, cache write) then $0.05-0.07 on a 2,100-line diff, driven by the 85k-token prompt (criteria about half), cache reads on every turn, and about 12k thinking tokens of output. Try the `claude --effort` option (not used yet) and a smaller criteria cap; compare findings by hand.
+- **Audit trail for governance and sandboxing of checkouts and prompt-injection safeguards** are on the proposal checklist.
 
 ### A. Project context pack
 
@@ -186,7 +113,7 @@ Add to `prompts/reviewer.system.md`: before reporting a finding that rests on an
 
 ### C. Label command
 
-The REPL has `mark` and `missed`, which write `labels.json` in the run directory, but there is no way to label a run from the shell and no aggregate view. Add `reviewer label <run dir> <finding id> <right|wrong|duplicate> [--why "…"]` (and `reviewer labels` to list/aggregate) so past runs can be labeled quickly. Labeled runs are the seed data for evals (E) and the check for the Verifier (D).
+The REPL has `mark` and `missed`, which write `labels.json` in the run directory, but there is no way to label a run from the shell and no aggregate view. Useful once the user has judged several real runs; add a short reason for each wrong finding. Add `reviewer label <run dir> <finding id> <right|wrong|duplicate> [--why "…"]` (and `reviewer labels` to list/aggregate) so past runs can be labeled quickly. Labeled runs are the seed data for evals (E) and the check for the Verifier (D).
 
 ### D. Verifier pass prototype (roadmap P2)
 
@@ -194,9 +121,9 @@ Not a second Comparator: the Comparator decides whether two findings are the *sa
 
 A new role: for each Low or Medium finding (not only the unrated ones), a fresh session receives only that one finding, the relevant code reference and the criteria, and is asked to refute it with evidence from the repository. The harness validates the verdict like any other model output and uses it in confidence instead of, or alongside, pass frequency. Prototype it as a replay-like tool on a saved run first (as `replay.py` does for the Comparator) and compare against labels from C.
 
-### E. Broader eval coverage (roadmap P1)
+### E. Evals (roadmap P1, parked)
 
-Expand the pinned external-project cases from section 4 with adjudicated saved runs and, if useful, planted defects. The original suggestion to write a sample repository from scratch is not the current plan.
+See section 4.2. Not the current plan.
 
 ### F. Smaller items
 

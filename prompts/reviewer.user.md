@@ -23,7 +23,7 @@ Commit messages:
 </changed_files>
 
 <excluded_files>
-These files changed but are left out of the diff (lockfiles, vendored, generated or minified files): {{excluded_files_list}}
+These files changed but are left out of the diff (lockfiles, vendored, generated or minified files, and any planning documents the project listed): {{excluded_files_list}}
 </excluded_files>
 
 <diff>

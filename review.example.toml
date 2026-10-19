@@ -29,8 +29,12 @@ tier_medium = 0.40
 # Limits
 max_diff_lines = 3000          # changed lines after exclusions
 criteria_max_chars = 200000    # about 50k tokens
-# Files left out of the diff (a trailing slash matches a directory). This list replaces the built-in one.
+# Files left out of the diff, and about which no findings are reported. A trailing slash matches a directory anywhere in the
+# path, including several folders such as "docs/plans/". This list REPLACES the built-in one (lockfiles, minified, generated, vendor/ ...).
 # exclude_patterns = ["package-lock.json", "yarn.lock", "*.min.js", "vendor/", "node_modules/"]
+# Added to the built-in list instead of replacing it. Planning documents (PRDs, implementation plans) are the author's claims and may
+# drift from the code, so leave them out of the prompt (the reviewer can still open them); public API or event docs must stay in.
+# extra_exclude_patterns = ["docs/prds/", "docs/plans/"]
 
 # Matching tuning (rarely needed)
 candidate_window = 20          # same-file line distance for duplicate candidates

@@ -11,7 +11,6 @@ from code_reviewer.claude_cli import ClaudeError
 from code_reviewer.config import Config
 from code_reviewer.dry_run import render_dry_run
 from code_reviewer.engine import Engine
-from code_reviewer.events import Event
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
 

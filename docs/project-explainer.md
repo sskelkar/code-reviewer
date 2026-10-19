@@ -102,7 +102,7 @@ reviewer review <url>
           ├─ RunStore.create(...)          directory for this run's files
           ├─ inputs.load_diff              -> diffview.parse_unified_diff
           ├─ git_ops.export_tree           read-only copy of the PR's code, in its own temporary directory
-          ├─ inputs.resolve_criteria       -> criteria.* (+ CriteriaResolver, an LLM call)
+          ├─ inputs.resolve_criteria       -> criteria.* (+ CriteriaResolver, an LLM call; nested AGENTS.md and .claude/rules files are added without a model)
           ├─ build PassRunner(...)         manual wiring of collaborators (section 10.1)
           ├─ _run_passes: loop, asking StopPolicy whether to continue
           │    PassRunner.run
@@ -670,7 +670,8 @@ pass_runner = PassRunner(
     cfg,
     Reviewer(caller, self.prompts["reviewer"], cfg, review_input),
     Comparator(caller, self.prompts["comparator"], cfg, store.input_dir),
-    FindingsPreparer(criteria.index(), cfg.self_check, FileCache(checkout), DiffIndex(files), cfg.grounding_line_window),
+    FindingsPreparer(criteria.index(), cfg.self_check, FileCache(checkout), DiffIndex(files), cfg.grounding_line_window,
+                     cfg.all_exclude_patterns()),
     master, stats, store, self.emit,
 )
 ```
@@ -892,8 +893,8 @@ PYTHONPATH=src python3 -c "from code_reviewer.config import Config; print(Config
 | getter | `@property` |
 
 
-## Local evals
+## Local evals (parked)
 
-`python -m code_reviewer.evals` is a second frontend over `Engine`, for pinned local commit pairs instead of GitHub PR metadata. `eval_cases.py` validates the suite and builds `PRContext`; only neutral title/description and the pinned diff/head reach the Reviewer, while expected answers remain evaluator-only. `eval_runner.py` runs a model/pass/repetition matrix with fixed pass attempts and default criteria, preserving interrupted trials and costs. Each trial gets its own temporary head checkout; passes within a trial share it but use fresh Claude sessions.
+This part of the project was built and then set aside; the project now judges reviews by hand on real pull requests. `python -m code_reviewer.evals` is a second frontend over `Engine`, for pinned local commit pairs instead of GitHub PR metadata. `eval_cases.py` validates the suite and builds `PRContext`; only neutral title/description and the pinned diff/head reach the Reviewer, while expected answers remain evaluator-only. `eval_runner.py` runs a model/pass/repetition matrix with fixed pass attempts and default criteria, preserving interrupted trials and costs. Each trial gets its own temporary head checkout; passes within a trial share it but use fresh Claude sessions.
 
 `eval_judgments.py` validates human decisions against the three grading checks. `eval_grading.py` computes precision, confirmed-known-issue recall and combined reports without a model. Pending/uncertain labels and incomplete trials prevent group quality scores. `rekey` copies saved reviews under revised expectations and resets labels, avoiding paid reruns. Production cases and outputs stay outside this repository, reviewed by Claude and judged by the user locally. Follow [the eval guide](../evals/README.md) for commands and limitations.

@@ -24,7 +24,7 @@ Ten generic, language-agnostic criteria, supplied inside `<review_criteria>`. Th
 
 **Report:** Misleading descriptions, a non-obvious constraint demonstrated in the repository whose missing explanation enables a specific misuse, or contract documentation that is missing required changed details or contradicts the implementation. Identify the changed contract, the affected document or repository-defined documentation location, and the incorrect use or understanding it causes.
 
-**Do not report:** Comments that merely restate code, personal naming or formatting preferences, or assumptions that an external document exists or must be updated. Do not invent a documentation location when the repository provides no evidence of one.
+**Do not report:** Comments that merely restate code, personal naming or formatting preferences, problems in planning or intent documents (requirements, implementation plans, decision records), or assumptions that an external document exists or must be updated. Do not invent a documentation location when the repository provides no evidence of one.
 
 ## [GEN-004] Protect security and privacy
 

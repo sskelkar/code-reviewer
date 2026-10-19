@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .diffview import DiffIndex
+from .diffview import DiffIndex, is_excluded
 
 SEVERITIES = ("high", "medium", "low", "nit")
 KINDS = ("present", "absent", "cross_file")
@@ -23,13 +23,14 @@ class PreparedFindings:
     ok: List[Dict[str, Any]] = field(default_factory=list)
     ungrounded: List[Dict[str, Any]] = field(default_factory=list)
     malformed: List[Dict[str, Any]] = field(default_factory=list)
+    out_of_scope: List[Dict[str, Any]] = field(default_factory=list)  # findings located in excluded files
     self_check_missing: int = 0
     line_corrected: int = 0
     rule_repaired: int = 0  # rule citations that only needed reformatting, e.g. "[GEN-010]" -> "GEN-010"
     rule_unknown: int = 0   # rule citations that matched no rule: the finding is kept with rule "none"
 
     def all_records(self) -> List[Dict[str, Any]]:
-        return self.ok + self.ungrounded + self.malformed
+        return self.ok + self.ungrounded + self.malformed + self.out_of_scope
 
 
 # --- small helpers ---------------------------------------------------------------
@@ -175,12 +176,14 @@ def ground(finding: Dict[str, Any], cache: FileCache, diff: DiffIndex) -> Tuple[
 # --- preparing a pass's findings ---------------------------------------------------
 
 class FindingsPreparer:
-    """Normalizes Reviewer output and sorts each finding into ok / ungrounded / malformed.
+    """Normalizes Reviewer output and sorts each finding into ok / ungrounded / malformed / out of scope.
 
     A finding is only set aside when its evidence is missing or cannot be found. A badly written rule citation is repaired or
     reset to "none", never a reason to drop an otherwise grounded finding."""
 
-    def __init__(self, rule_index: Dict[str, Any], self_check_on: bool, cache: FileCache, diff: DiffIndex, line_window: int):
+    def __init__(self, rule_index: Dict[str, Any], self_check_on: bool, cache: FileCache, diff: DiffIndex, line_window: int,
+                 excluded_paths: Sequence[str] = ()):
+        self.excluded_paths = list(excluded_paths)
         self.rule_index = rule_index
         self.self_check_on = self_check_on
         self.cache = cache
@@ -202,9 +205,20 @@ class FindingsPreparer:
                 finding.update(status="malformed", reason=problem)
                 prepared.malformed.append(finding)
                 continue
+            if self._is_excluded(finding):
+                finding.update(status="out_of_scope", reason="the file is excluded from the review: findings are not reported on it")
+                prepared.out_of_scope.append(finding)
+                continue
             self._apply_self_check(finding, raw, prepared)
             self._sort(finding, prepared)
         return prepared
+
+    def _is_excluded(self, finding: Dict[str, Any]) -> bool:
+        """Is the finding located in a file that is excluded from the review (lockfiles, generated files, planning documents)?"""
+        if not self.excluded_paths:
+            return False
+        anchor = finding["anchor"] or {}
+        return any(is_excluded(path, self.excluded_paths) for path in (finding["file"], _rel(anchor.get("file"))) if path)
 
     @staticmethod
     def _normalize(raw: Dict[str, Any], local_id: str, pass_no: int) -> Dict[str, Any]:

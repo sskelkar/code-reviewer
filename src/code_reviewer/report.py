@@ -185,13 +185,15 @@ def _rejected_section(result: RunResult) -> List[str]:
     rejected_only = result.master.rejected_only()
     if not rejected_only:
         return []
+    rules = result.criteria.index()
     out = ["## Rejected by self-check (not scored)", "",
            "The model raised these and then refuted them in its own self-check. Listed for transparency.", ""]
     for item in rejected_only:
         canon = item["canonical"]
         reason = "; ".join(r for r in item["rejected_reasons"].values() if r) or "no reason given"
         out.append("- **%s** `%s` %s: %s (rejected in passes %s)" % (
-            item["id"], _location(canon), canon["title"], reason, ", ".join(str(p) for p in item["rejected_in_passes"])))
+            item["id"], _location(canon), humanize(canon["title"], rules), humanize(reason, rules),
+            ", ".join(str(p) for p in item["rejected_in_passes"])))
     return out + [""]
 
 
@@ -249,6 +251,7 @@ def _counters_section(result: RunResult) -> List[str]:
     return [
         "### Other counters", "",
         "- Ungrounded findings (evidence not found): %d" % total("ungrounded"),
+        "- Findings located in excluded files (dropped): %d" % total("out_of_scope"),
         "- Rule citations that only needed reformatting (for example brackets), repaired: %d" % total("rule_repaired"),
         "- Findings citing a rule that does not exist (kept, rule set to none): %d" % total("rule_unknown"),
         "- Malformed findings: %d" % total("malformed"),

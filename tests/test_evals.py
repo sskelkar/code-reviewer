@@ -13,7 +13,6 @@ from code_reviewer.claude_cli import ClaudeResult
 from code_reviewer.config import Config, REPO_ROOT
 from code_reviewer.eval_cases import EvalError, case_context, load_suite, read_object, validate_suite
 from code_reviewer.eval_grading import load_experiment, summarize
-from code_reviewer.eval_judgments import make_judgment
 from code_reviewer.eval_runner import environment, run_matrix
 from code_reviewer.evals import main
 from code_reviewer.models import ReviewRefused

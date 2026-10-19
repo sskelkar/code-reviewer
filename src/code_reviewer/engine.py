@@ -85,7 +85,8 @@ class Engine:
                 cfg,
                 Reviewer(caller, self.prompts["reviewer"], cfg, review_input),
                 Comparator(caller, self.prompts["comparator"], cfg, store.input_dir),
-                FindingsPreparer(criteria.index(), cfg.self_check, FileCache(checkout), DiffIndex(files), cfg.grounding_line_window),
+                FindingsPreparer(criteria.index(), cfg.self_check, FileCache(checkout), DiffIndex(files), cfg.grounding_line_window,
+                                 cfg.all_exclude_patterns()),
                 master, stats, store, self.emit,
             )
             passes, completed, stop_reason = self._run_passes(pass_runner, stats)

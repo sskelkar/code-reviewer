@@ -114,7 +114,7 @@ When the review ends it prints the **review summary**: the findings, in exactly 
 | Command | What it does |
 |---|---|
 | `show F-007` | Full detail of one finding |
-| `mark F-007 real\|nit\|wrong` | Record your judgment. Saved in the run directory; later used to build evals |
+| `mark F-007 real\|nit\|wrong` | Record your judgment. Saved in the run directory (`labels.json`) so you can judge how much to trust the tool |
 | `missed "no length check in create()"` | Record a real issue the agent did not find |
 | `drop F-007` / `undrop F-007` | Exclude a finding from the comment you may post |
 | `post [--tiers High,Medium,Low]` | Preview the PR comment (the review summary), then post it **only if you answer `y`** |
@@ -163,7 +163,7 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 | Header | PR, commits reviewed, models, passes completed, why it stopped, diff size, estimated cost |
 | Criteria applied | Default and project rules used, project criteria files, references that were ignored (for example a wiki link), warnings (for example "this PR modifies the criteria files") |
 | Overview | Finding counts by confidence tier and severity |
-| High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the rule, the evidence, a suggestion and "seen in x/N passes" |
+| High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the criterion it falls under (by name and source), the evidence, a suggestion and "seen in x/N passes" |
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
 | Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified, and for rule citations that were repaired or unknown |
 
@@ -212,7 +212,7 @@ Rules of the road:
 
 The ten defaults cover correctness, simplicity, clarity and contract documentation, security/privacy, bounded input validation, failure/resource handling, data integrity/concurrency, internal contracts, test coverage/test levels, and test independence/mocking. Each rule states what to inspect, when to report and what not to report, using repository-visible evidence. They do not include generic architecture or performance review requirements. The system prompt still owns finding scope, evidence fields, self-checks and JSON output; project rules take precedence.
 
-The current criteria are numbered `GEN-001` through `GEN-010` in checklist order. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. The revised defaults have offline plumbing coverage but have not yet been evaluated with a live Reviewer.
+The current criteria are numbered `GEN-001` through `GEN-010` in checklist order. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. The revised defaults are tested for loading and delivery to the Reviewer, and have been used on real pull requests, but no before/after comparison of review quality exists. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
 
 ### Customizing the default rules
 
@@ -234,7 +234,8 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `max_consecutive_failures` | `2` | Abort after this many failed passes in a row |
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
 | `max_diff_lines` | `3000` | Refuse PRs with more changed lines (after exclusions) |
-| `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff |
+| `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff (this list replaces the built-in one) |
+| `extra_exclude_patterns` | none | Added to `exclude_patterns` without replacing it. Use it for planning documents such as PRDs and implementation plans (the author's claims, which may drift from the code): `["docs/prds/", "docs/plans/"]`. They are left out of the prompt but listed by path, the reviewer can still open them in the checkout, and findings located in excluded files are dropped and counted. Keep public-facing documentation (API and event docs) out of this list: it must stay reviewed |
 | `criteria_max_chars` | `200000` | Cap on project criteria text |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |
 | `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Caps for a whole review; it stops between passes once either is exceeded. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. The dollar cap is the real spending limit |
@@ -265,7 +266,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Cost, time and limits
 
-- Each pass is a full agent run, so a review takes minutes per pass and several passes. These numbers have not been measured yet; your first runs will tell you. Every run reports its own tokens and estimated cost, and the budget settings above cap the spend. For scale: in the first real runs (Haiku, a 61-line docs-only diff) one reviewer pass took 23-53 seconds and cost about $0.012-0.026, with the reviewer taking 4 to 18 turns. Reviewers are now asked to verify every claim against the code and not to stop after the first finding, which should mean more turns per pass; compare your run's appendix with those numbers.
+- Each pass is a full agent run, so a review takes minutes per pass and several passes (passes run one after another). Every run reports its own tokens and estimated cost, and the budget settings above cap the spend. For scale: on a 2,100-line diff with a large set of project criteria (about 85,000 tokens of prompt), the first Haiku reviewer pass cost about $0.19 (it writes the prompt cache) and later passes $0.05-0.07 each, taking about a minute each; a six-pass review cost under $0.50. Cost grows with the size of the prompt (diff plus criteria), the number of tool turns, and the model's thinking tokens. Keeping planning documents out of the diff (`extra_exclude_patterns`) and keeping the criteria small both cut it.
 - Only GitHub pull requests are supported (no local-branch mode yet).
 - Diffs above `max_diff_lines` are refused rather than reviewed badly. Lockfiles, vendored and generated files do not count.
 - The tool does not run tests, linters or builds. Your pipeline still owns those.
@@ -275,7 +276,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 - **What is sent to Claude:** the PR title, description and commit messages, the diff, the criteria text, and any repository files the Reviewer reads. It goes through your Claude Code login. Make sure your company policy allows that for the repository, and do not point the agent at repositories or PRs containing customer, rider or other personal data.
 - **What the Reviewer can do:** read files in a separate checkout of the PR. It cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so even if the file restrictions failed it could not find earlier passes' findings next to it. `reviewer doctor --live` checks that these restrictions hold, including that a planted file outside the working directory cannot be read or searched.
-- **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub (a test fails if comments are ever added to it). Use `reviewer review <url> --dry-run` to see exactly what would be sent, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
+- **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub for the review (a test fails if comments are ever added to it). Posting a comment separately lists the PR's comments to find the tool's own earlier one; that list is never given to the model. Use `reviewer review <url> --dry-run` to see exactly what would be sent, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
 - **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. `--dry-run` shows the text exactly as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
 - **Untrusted PR text:** the PR description and code are treated as data and the model is told never to follow instructions found in them. That reduces the risk of prompt injection but cannot eliminate it. Read findings critically.
 - **Nothing outward-facing happens without you:** the only action on GitHub is `post`, after a preview and your confirmation (or the explicit `--post` flag).
@@ -293,7 +294,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, the canary or hook was not ignored, or a file outside the working directory could be read or searched (`LEAK`) | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
-| `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` |
+| `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` or `extra_exclude_patterns` |
 | `pass N FAILED: ... timed out` or `not a valid JSON object` | Look at `pass-NN/reviewer.raw.json` in the run directory. Raise `call_timeout_s` or `call_budget_usd`, or try another model |
 | `pass N FAILED` mentioning budget | The call hit `call_budget_usd`. Raise it, or review a smaller PR |
 | Many findings counted as ungrounded | See the `reason` of each in `pass-NN/findings.json`. The model may be quoting from memory. Try `--model sonnet` |
@@ -577,13 +578,13 @@ Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw (its l
 
 The offline tests cannot prove how Claude Code behaves. After upgrading Claude Code, or when something looks off, run `reviewer doctor --live` and a one-pass review, and check the points in [proposal.md](docs/proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
 
-## Local eval harness
+## Local eval harness (parked)
 
-Use `python -m code_reviewer.evals` to create pinned local cases (`init`), preview without models (`plan`), run Claude reviews (`run`), record human findings judgments (`label`) and calculate deterministic metrics (`grade`). `rekey` revises answer keys and resets labels on copied saved reviews without new model calls. Only `run` calls Claude. See [the eval guide](evals/README.md) for commands, private local use, answer-key confirmation and combined reports.
+This harness was built and then set aside: the project now judges reviews by hand on real pull requests (see [proposal.md](docs/proposal.md), section 9). It is kept for later and should not be extended for now. Use `python -m code_reviewer.evals` to create pinned local cases (`init`), preview without models (`plan`), run Claude reviews (`run`), record human findings judgments (`label`) and calculate deterministic metrics (`grade`). `rekey` revises answer keys and resets labels on copied saved reviews without new model calls. Only `run` calls Claude. See [the eval guide](evals/README.md) for commands, private local use, answer-key confirmation and combined reports.
 
 Trials vary the Reviewer model and fixed pass attempts while keeping the Comparator/settings and generic default criteria constant. Failures/budgets can interrupt a trial. Group quality scores require all scheduled trials to complete and be adjudicated; provisional answer keys never produce recall. Production manifests, answers, findings and reports stay physically outside this repository. Only Claude reviews production code; the user judges its findings locally. No production case has been accessed or real model experiment run as part of this implementation.
 
-The [eight public cases](evals/CASES.md) are four regression/repair pairs across Express, HTTPX and Resilience4j. Each case pins its own full base/head SHAs; source branch tips record provenance only. Keys remain agent-curated/provisional. One Java case needs the explicit larger cap in `evals/public.example.toml`; normal defaults are unchanged. Earlier personal-project candidates remain in `evals/reserve/`.
+The [eight public cases](evals/CASES.md) are four regression/repair pairs across Express, HTTPX and Resilience4j. Each case pins its own full base/head SHAs; source branch tips record provenance only. Keys remain agent-curated/provisional. The largest case (1,746 changed lines) fits the default diff limit of 3,000. Earlier personal-project candidates remain in `evals/reserve/`.
 
 The [grading rubric](evals/RUBRIC.md) remains provisional pending actual human judgments. Its three checks and judgment format are implemented and tested, but its authored examples are not calibration results. No LLM judge or claim of model superiority exists.
 
@@ -592,4 +593,4 @@ The [grading rubric](evals/RUBRIC.md) remains provisional pending actual human j
 - Verified live: the Reviewer flag set, isolation canaries, tool list, that files outside the working directory cannot be read or searched, and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Real multi-pass reviews of a PR have been run. Not yet exercised: posting a comment to a PR, and what Claude Code does when the per-call `--max-budget-usd` is exceeded (the run-level budget stop has been seen).
 - The regular review frontend uses GitHub PRs; the eval frontend also accepts pinned local commit pairs. `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
-- Planned: importing `mark` and `missed` labels into evals, a Verifier pass, multi-perspective review, inline PR comments, MCP server, raw-API backends (proposal section 10).
+- Planned (see the checklist at the top of [proposal.md](docs/proposal.md)): multi-perspective review, a project context pack, a Verifier pass, parallel passes, an audit trail for governance, sandboxed checkouts and prompt-injection safeguards, inline PR comments, an MCP server, raw-API backends.
