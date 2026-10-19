@@ -1,0 +1,33 @@
+src/code_reviewer/summary.py
+  s_0aa18f51442760::t_99d525b2b3a639 13,56,58,63,67-69,73,75,96,98
+tests/test_summary.py
+  s_0aa18f51442760::t_ec90c4d844fbf1 11,119-152
+  s_0aa18f51442760::t_eb236ed759a493 153-154
+src/code_reviewer/report.py
+  s_0aa18f51442760::t_99d525b2b3a639 60-77,80,83,86,88,98,101
+docs/HANDOVER.md
+  s_0aa18f51442760::t_f60bd810f69be6 7-8
+README.md
+  s_0aa18f51442760::t_30d6a3029fd8d7 343-423,428,430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "730f22ef30aab8c0db2f3c9ecb73a9887978fb56",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
