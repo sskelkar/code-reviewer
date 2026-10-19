@@ -1,0 +1,46 @@
+.gitignore
+  s_0aa18f51442760::t_68b184723bcc9c 10-15
+docs/HANDOVER.md
+  s_68cd0db0a8fc3a::t_3a241d9f8ee6e8 81,83,85,87-90,92,94,96
+  s_68cd0db0a8fc3a::t_aa4dc57886e8b8 5,7,11-12,100,102,104-111,113,115,117,119,121,123,125,127,129,131,133,135-140,142,144,153-157,171
+  s_68cd0db0a8fc3a::t_e01498bac80082 9,145-151
+  s_0aa18f51442760::t_35c9fe90d33cd6 1-4,6,13-27,29-31,33-54,56-57,59,61,63,175-192,194,196-204
+  s_68cd0db0a8fc3a::t_30424082bfcb26 10
+  s_68cd0db0a8fc3a::t_e52e117855bf26 118,120
+  s_0aa18f51442760::t_68b184723bcc9c 55
+  s_68cd0db0a8fc3a::t_245f63909021d2 8
+  s_68cd0db0a8fc3a::t_acc0c86d5de755 58,60,62,64-80,82,84,86,91,93,95,97-99,101,103,112,114,116,122,124,126,128,130,132,134,141,143,152,158-160,162-170,172-174,193,195
+  s_68cd0db0a8fc3a::t_13cf24b8c2a010 32,161
+  s_68cd0db0a8fc3a::t_635d97d0e3ec74 28
+AGENTS.md
+  s_0aa18f51442760::t_0703bc09f88586 1-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b56d9fcb5ed914ea9aa80d695763fa6c7a7acc12",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    },
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
