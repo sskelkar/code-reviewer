@@ -1,0 +1,41 @@
+tests/test_engine.py
+  s_68cd0db0a8fc3a::t_a4839ad6ac08ee 62-65
+tests/test_criteria.py
+  s_68cd0db0a8fc3a::t_a4839ad6ac08ee 31-33
+  s_68cd0db0a8fc3a::t_635d97d0e3ec74 28
+criteria/defaults/general.md
+  s_68cd0db0a8fc3a::t_4d032ac1000517 3,29,31,33,35,53-65,71-76,78-82
+  s_68cd0db0a8fc3a::t_635d97d0e3ec74 5,7,9,11,13,15,17,19,21,23,25,27,37,39,41,43,45,47,49,51-52,67-69,77,83
+  s_68cd0db0a8fc3a::t_a52a2f2be15e59 66,70
+tests/test_findings.py
+  s_0aa18f51442760::t_68b184723bcc9c 119,131-134,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "501b4785dc8a0443a285492a416613bb5667c730",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    },
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
