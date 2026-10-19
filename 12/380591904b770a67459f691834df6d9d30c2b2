@@ -1,0 +1,26 @@
+docs/proposal.md
+  s_0aa18f51442760::t_504a46d8b28ba1 3-4,12-45,53-55,151,172,182,184,186,204-206,209,216-217,219-232
+  s_0aa18f51442760::t_aff1a795892967 46-52,154
+  s_0aa18f51442760::t_d3d29f69690c92 125,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "12380591904b770a67459f691834df6d9d30c2b2",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
