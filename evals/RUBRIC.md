@@ -2,7 +2,7 @@
 
 **Version:** draft-2, 2026-10-19. Evaluator-only: do not include this document, its examples or answer keys in the Reviewer's checkout or prompt. The local harness implements this human-label policy and deterministic scoring. The policy remains provisional; it is not a calibrated or validated LLM judge.
 
-The ten [review criteria](../criteria/defaults/general.md) tell the agent what to inspect. This rubric judges its findings. A separate answer key identifies expected issues for each pinned diff. The same rubric can be used for public and privately stored production cases; private case details must remain outside this repository.
+The ten [review criteria](../src/code_reviewer/flows/single_agent/criteria/general.md) tell the agent what to inspect. This rubric judges its findings. A separate answer key identifies expected issues for each pinned diff. The same rubric can be used for public and privately stored production cases; private case details must remain outside this repository.
 
 ## What is graded
 

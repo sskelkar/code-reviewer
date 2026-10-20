@@ -4,6 +4,8 @@ This guide is for an experienced Java programmer who has never written Python an
 
 Code samples are copied from this repository (some are abridged, marked with `...` or "simplified"); a few short samples are written purely to illustrate a language feature and are not from the repo (they are in sections 5, 8 and 15). The claims about this project were checked against the code. File links are relative to this `docs/` directory.
 
+**Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The `agent_personas` folder is an explicit unavailable-mode boundary until that workflow is built. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
+
 **How to use this guide**
 
 | If you want to... | Read |
@@ -81,7 +83,7 @@ if __name__ == "__main__":
 | `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
 | `reviewer doctor` | `cli.main` | [`doctor.run_doctor`](../src/code_reviewer/doctor.py): environment checks |
 
-Both review paths go through `review_flow.run_review` and end in the same place: **[`Engine.review`](../src/code_reviewer/engine.py)** is the heart of the project, and the best first file to read.
+Both review paths go through `review_flow.run_review` and end in the same place: **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the heart of the project, and the best first file to read.
 
 ### 2.3 Tests
 
@@ -95,9 +97,9 @@ reviewer review <url>
   ├─ load_config()                         -> Config (settings object)
   ├─ ClaudeRunner(...)                     -> wrapper that runs `claude -p ...` as a subprocess
   └─ review_flow.run_review(...)           shared by the one-shot command and the interactive prompt
-      ├─ Engine(cfg, runner, emit=ProgressPrinter())
+      ├─ Engine(cfg, runner, emit=ProgressPrinter()) -> selects SingleAgentFlow (default)
       ├─ engine.prepare(ref)               -> pr_source.load_pr_context -> git_ops (runs gh and git)
-      └─ engine.review(ctx)
+      └─ engine.review(ctx) -> SingleAgentFlow.review(ctx)
           ├─ inputs.redact                 email addresses in the PR text -> [email]
           ├─ RunStore.create(...)          directory for this run's files
           ├─ inputs.load_diff              -> diffview.parse_unified_diff
@@ -151,7 +153,7 @@ from . import git_ops                         # import a sibling module itself
 from .templates import ROLES, load_prompt, prompt_hashes   # several names at once
 ```
 
-The leading dot means "this package", so `from .config import Config` is `import code_reviewer.config.Config`. Imports are executed top to bottom when the module is first loaded, and each module is loaded once. **Circular imports fail at load time**, which is why the dependency direction matters here: `models`, `config` and `events` are at the bottom; `engine` and the frontends are at the top. `engine.py` imports `report.py`, never the other way around.
+The leading dot means "this package", so `from .config import Config` is `import code_reviewer.config.Config`. Imports are executed top to bottom when the module is first loaded, and each module is loaded once. **Circular imports can fail at load time**, which is why the dependency direction matters here: shared types and mechanics do not import flows; flows use shared code; `Engine` selects a flow and the frontends call it. `flows/single_agent/flow.py` imports its report renderer, never the other way around.
 
 The first line of almost every file is:
 
@@ -161,7 +163,7 @@ from __future__ import annotations
 
 It makes type annotations lazy (they are stored as text and not evaluated), which lets the code use newer annotation syntax on older Python and refer to classes before they are defined. You can read it as a required incantation.
 
-`engine.py` also has `__all__ = ["Engine", "PRContext", ...]`, which declares the module's public names (it controls what `from engine import *` pulls in and tells readers what is meant to be used). `engine.py` imports `ReviewRefused` and `PRContext` from `models.py`, so they are also reachable as `engine.ReviewRefused`; the tests and the REPL rely on that re-export. Importing a name that another module merely imported is allowed in Python, whether or not `__all__` lists it.
+`engine.py` has `__all__ = ["Engine"]`, which declares its public name (it controls what `from engine import *` pulls in). The root `models.py`, `roles.py` and `templates.py` similarly declare compatibility exports. Other legacy root modules alias their canonical module objects via `sys.modules`, so existing imports and test patch targets refer to the same implementation. New code should import the owning `shared/` or flow module directly.
 
 ### 3.3 The `src/` layout and `tests/__init__.py`
 
@@ -209,7 +211,7 @@ The project deliberately uses only the standard library. This is what each modul
 | `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `run_store.py`, `git_ops.py`, `post.py`, `doctor.py` |
 | `shutil` | High-level file ops (delete a tree) | `FileUtils` | `run_store.py`, `doctor.py` |
 | `tarfile` | Read `.tar` archives | commons-compress | `git_ops.py` |
-| `hashlib` | SHA-256 hashing | `MessageDigest` | `templates.py` |
+| `hashlib` | SHA-256 hashing | `MessageDigest` | `flows/single_agent/prompt_contract.py` |
 | `fnmatch` | Shell-style glob matching (`*.min.js`) | `PathMatcher` | `diffview.py` |
 | `itertools` | Iteration helpers (`combinations`) | Streams helpers | `master.py`, `replay.py` |
 | `copy` | Deep copies | copy constructors | `master.py` |
@@ -219,7 +221,7 @@ The project deliberately uses only the standard library. This is what each modul
 
 ### 4.3 External programs, not libraries
 
-The agent drives three command-line tools by running them as processes and reading their output: **`claude`** (Claude Code, in headless mode), **`gh`** (GitHub CLI) and **`git`**. No HTTP client, no GitHub SDK, no LLM SDK is used. The wrappers are [`claude_cli.py`](../src/code_reviewer/claude_cli.py) and [`git_ops.py`](../src/code_reviewer/git_ops.py).
+The agent drives three command-line tools by running them as processes and reading their output: **`claude`** (Claude Code, in headless mode), **`gh`** (GitHub CLI) and **`git`**. No HTTP client, no GitHub SDK, no LLM SDK is used. The wrappers are [`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py) and [`git_ops.py`](../src/code_reviewer/shared/git_ops.py).
 
 ### 4.4 What you might expect but will not find
 
@@ -318,7 +320,7 @@ cmd = ["gh", "api", *extra_args, "user"]         # list with another list spread
 
 Useful built-ins you will see: `len(x)`, `sorted(x, key=...)`, `x.sort(key=...)` (in place), `min/max(x, key=...)`, `any(...)`/`all(...)`, `sum(...)`, `enumerate(x, start=1)` (index + value), `isinstance(v, dict)`, `dict(other)` (shallow copy), `str(v)`, `int(v)`.
 
-`key=` takes a function that extracts the value to compare by, e.g. in [`report.py`](../src/code_reviewer/report.py):
+`key=` takes a function that extracts the value to compare by, e.g. in [`report.py`](../src/code_reviewer/flows/single_agent/report.py):
 
 ```python
 for items in groups.values():
@@ -342,7 +344,7 @@ stated = finding.get("line") or starts[0]   # use starts[0] when line is None OR
 - Functions, variables, modules: `snake_case`. Classes: `PascalCase`. Constants: `UPPER_SNAKE_CASE` (not enforced, there is no `final`).
 - **A leading underscore means "private by convention"**: `_run`, `_ground_quote`, `Reviewer._variables`. Nothing prevents access; it is a signal to readers. Names without it are the module's public surface. (Honest note: `post.py` imports `_run` from `git_ops`, which bends the convention.)
 - Names with double underscores on both sides (`__init__`, `__call__`, `__str__`, `__name__`) are special hooks defined by the language ("dunder" methods, section 8).
-- A trailing underscore (`type_` in `Engine.emit(self, type_, ...)`) avoids clashing with a built-in name (`type`).
+- A trailing underscore (`type_` in `SingleAgentFlow.emit(self, type_, ...)`) avoids clashing with a built-in name (`type`).
 
 ---
 
@@ -366,7 +368,7 @@ Annotations such as `repo: str` or `-> int` are everywhere. They are **not enfor
 
 Two things to notice in this repo:
 
-- **Type aliases** are plain variable assignments: `EventSink = Callable[[Event], None]` ([`events.py`](../src/code_reviewer/events.py)) and `Validator = Callable[[Dict[str, Any]], List[str]]` ([`llm.py`](../src/code_reviewer/llm.py)). They name a function shape, like declaring a functional interface.
+- **Type aliases** are plain variable assignments: `EventSink = Callable[[Event], None]` ([`events.py`](../src/code_reviewer/shared/events.py)) and `Validator = Callable[[Dict[str, Any]], List[str]]` ([`llm.py`](../src/code_reviewer/shared/llm.py)). They name a function shape, like declaring a functional interface.
 - A class name in quotes (`-> "RunStore"`) is a forward reference to a class that is not fully defined yet at that point.
 
 Because hints are not checked, a wrong hint cannot fail at runtime. The unit tests, not a compiler, are what keep this code honest. That is also why the test suite is large relative to the code size.
@@ -421,7 +423,7 @@ Java lambdas cannot reassign captured locals; Python inner functions can, if the
 
 ### 7.3 Callable objects
 
-Any object whose class defines `__call__` can be invoked like a function. `ProgressPrinter` (in `progress.py`) and `CriteriaResolver` (in `roles.py`) do this, so an instance can be passed where a function is expected:
+Any object whose class defines `__call__` can be invoked like a function. `ProgressPrinter` (in `progress.py`) and `CriteriaResolver` (in `shared/resolver.py`) do this, so an instance can be passed where a function is expected:
 
 ```python
 engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=options.verbose))   # emit expects a function Event -> None (review_flow.run_review)
@@ -441,7 +443,7 @@ If you are used to deep Java hierarchies, expect something flatter here.
 
 ### 8.2 A plain class
 
-From [`stop_policy.py`](../src/code_reviewer/stop_policy.py):
+From [`stop_policy.py`](../src/code_reviewer/flows/single_agent/stop_policy.py):
 
 ```python
 class StopPolicy:
@@ -526,7 +528,7 @@ A decorator is written `@name` above a function or class. It looks like a Java a
 | `@staticmethod` | Method that does not receive `self` | `static` method |
 | `@classmethod` | Method that receives the **class** (`cls`) instead of an instance | A static factory method |
 
-`@staticmethod`, from `Comparator` in [`roles.py`](../src/code_reviewer/roles.py):
+`@staticmethod`, from `Comparator` in [`roles.py`](../src/code_reviewer/flows/single_agent/roles.py):
 
 ```python
 @staticmethod
@@ -535,7 +537,7 @@ def is_trivial(findings: Sequence[Dict[str, Any]], candidates: Sequence[Dict[str
     return not findings or (not candidates and len(findings) == 1)
 ```
 
-`@classmethod`, from [`run_store.py`](../src/code_reviewer/run_store.py), a factory that builds the object:
+`@classmethod`, from [`run_store.py`](../src/code_reviewer/shared/run_store.py), a factory that builds the object:
 
 ```python
 @classmethod
@@ -560,7 +562,7 @@ Operator overloading exists in Python and is why `Path` objects use `/`: `self.w
 
 ### 8.6 Inheritance, as it is actually used here
 
-**Exceptions** ([`models.py`](../src/code_reviewer/models.py), [`git_ops.py`](../src/code_reviewer/git_ops.py), [`claude_cli.py`](../src/code_reviewer/claude_cli.py), [`config.py`](../src/code_reviewer/config.py), [`review_options.py`](../src/code_reviewer/review_options.py)):
+**Exceptions** ([`models.py`](../src/code_reviewer/models.py), [`git_ops.py`](../src/code_reviewer/shared/git_ops.py), [`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py), [`config.py`](../src/code_reviewer/config.py), [`review_options.py`](../src/code_reviewer/review_options.py)):
 
 ```python
 class ReviewRefused(ValueError):
@@ -603,21 +605,21 @@ This is the one place where a method is **overridden**. The standard library's `
 
 Java would define `interface ClaudeRunner` and two implementations. Python does not need that. `Engine` takes `runner: Any`, and anything with a matching `run(...)` method works:
 
-- Production: `ClaudeRunner` ([`claude_cli.py`](../src/code_reviewer/claude_cli.py)) launches the real `claude` process.
+- Production: `ClaudeRunner` ([`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py)) launches the real `claude` process.
 - Tests: `FakeRunner` ([`tests/helpers.py`](../tests/helpers.py)) returns scripted answers.
 
-The two classes share no parent. This structural typing ("if it walks like a duck...") is how all the test doubles work, and why no mocking framework is needed. It also means there is no compile-time check that a replacement is complete; the tests catch that. You will see runtime capability checks such as `hasattr(self.runner, "version")` in `Engine._run_metadata`.
+The two classes share no parent. This structural typing ("if it walks like a duck...") is how all the test doubles work, and why no mocking framework is needed. It also means there is no compile-time check that a replacement is complete; the tests catch that. You will see runtime capability checks such as `hasattr(self.runner, "version")` in `SingleAgentFlow._run_metadata`.
 
 ### 8.8 Encapsulation, statics and enums
 
 - **No `private`/`protected`/`public`.** Convention only (leading underscore).
 - **No `static` keyword.** Module-level functions and constants take its place. A function that does not need an object is just a function in the module, for example `findings._norm`. `@staticmethod` is used only when a function belongs with a class, such as `Comparator.is_trivial`.
 - **Class-level constants** live in the class body, e.g. `Reviewer.TOOLS = "Read,Grep,Glob"`, accessed as `self.TOOLS` or `Reviewer.TOOLS`.
-- **No enums are used.** States are strings such as `"converged"`, kept in constants (`CONVERGED = "converged"` in [`stop_policy.py`](../src/code_reviewer/stop_policy.py)). Python has `enum.Enum`, but plain strings keep the JSON output simple. Where Java would use an enum, check the nearby constants instead.
+- **No enums are used.** States are strings such as `"converged"`, kept in constants (`CONVERGED = "converged"` in [`stop_policy.py`](../src/code_reviewer/flows/single_agent/stop_policy.py)). Python has `enum.Enum`, but plain strings keep the JSON output simple. Where Java would use an enum, check the nearby constants instead.
 
 ### 8.9 Dicts instead of POJOs
 
-Most of the "findings" data is a `Dict[str, Any]`, not a class. A finding is built in [`findings.py`](../src/code_reviewer/findings.py) as a dict with keys like `"title"`, `"severity"`, `"quote"`, and the master list stores dicts with `"seen_in_passes"` and so on. The reasons are practical: the data arrives as JSON from the model, goes back out as JSON, and has optional fields. The cost is that you lose compile-time field checking and must rely on tests and on reading the key names (listed in `findings._normalize` and `master.MasterList._new_item`). Where the data has a fixed, code-owned shape (settings, per-pass records, a call specification), a `@dataclass` is used. If you are tempted to refactor findings into classes, that is a reasonable change; the tests would guide it.
+Most of the "findings" data is a `Dict[str, Any]`, not a class. A finding is built in [`findings.py`](../src/code_reviewer/shared/findings.py) as a dict with keys like `"title"`, `"severity"`, `"quote"`, and the master list stores dicts with `"seen_in_passes"` and so on. The reasons are practical: the data arrives as JSON from the model, goes back out as JSON, and has optional fields. The cost is that you lose compile-time field checking and must rely on tests and on reading the key names (listed in `findings._normalize` and `master.MasterList._new_item`). Where the data has a fixed, code-owned shape (settings, per-pass records, a call specification), a `@dataclass` is used. If you are tempted to refactor findings into classes, that is a reasonable change; the tests would guide it.
 
 Related: `getattr(p, field)` (read an attribute by its name, in `report._counters_section`) and `outcome.__dict__` (an object's fields as a dict, in `passes.py`) are Python's lightweight reflection.
 
@@ -645,7 +647,7 @@ raise GitError("command not found: %s" % cmd[0]) from exc     # `from exc` chain
 
 - A tuple of exception classes can be named once and reused in `except`, like a Java multi-catch that you can name and share between callers.
 - `raise` is `throw`; `except` is `catch`. There is **no `throws` clause and no checked exceptions.** Any function may raise anything.
-- `except Exception` catches almost everything but not `KeyboardInterrupt` (Ctrl-C) or `SystemExit`; those derive from `BaseException`. `engine.py` catches `KeyboardInterrupt` deliberately so Ctrl-C ends a review gracefully with a partial report.
+- `except Exception` catches almost everything but not `KeyboardInterrupt` (Ctrl-C) or `SystemExit`; those derive from `BaseException`. `SingleAgentFlow._run_passes` catches `KeyboardInterrupt` deliberately so Ctrl-C ends a review gracefully with a partial report.
 - Python culture prefers "try it and handle the failure" over pre-checking; `json.loads` is called inside `try`, for example.
 
 **`with` is try-with-resources.** From `config.py`:
@@ -663,7 +665,7 @@ The file is closed automatically when the block ends, even if an exception occur
 
 ### 10.1 Manual dependency injection
 
-There is no framework. Collaborators are passed through constructors, and `Engine.review` is the composition root:
+There is no framework. Collaborators are passed through constructors, and `SingleAgentFlow.review` is the composition root:
 
 ```python
 pass_runner = PassRunner(
@@ -680,7 +682,7 @@ This is what a Spring `@Configuration` class would do. It is also why classes ar
 
 ### 10.2 Events and callbacks (observer pattern, without an interface)
 
-`Engine` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. The CLI passes a `ProgressPrinter`, which prints a line. Other frontends (or tests) could pass a different function. The engine never prints. See [`events.py`](../src/code_reviewer/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
+`SingleAgentFlow` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. The CLI passes a `ProgressPrinter`, which prints a line. Other frontends (or tests) could pass a different function. The engine never prints. See [`events.py`](../src/code_reviewer/shared/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
 
 ### 10.3 The central design rule
 
@@ -694,9 +696,9 @@ A typical module here reads top to bottom as: docstring, `from __future__ import
 
 ## 11. Guided tour of real code
 
-### 11.1 `Engine.review`: read this first
+### 11.1 `SingleAgentFlow.review`: read this first
 
-[`engine.py`](../src/code_reviewer/engine.py), about 45 lines. Read it as a recipe; each line delegates to a module:
+[`flows/single_agent/flow.py`](../src/code_reviewer/flows/single_agent/flow.py), method `review`. Read it as a recipe; each line delegates to a module:
 
 ```python
 def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
@@ -733,11 +735,11 @@ Shown in 8.2. It has no I/O, only counters and rules, so [`tests/test_stop_polic
 
 ### 11.3 `ClaudeCaller`: retry, try/finally
 
-[`llm.py`](../src/code_reviewer/llm.py) wraps every model call: run, record usage, validate the result with a supplied function, retry once with feedback if invalid, always write the raw output to disk (`finally`). It shows passing functions as arguments (`validate: Validator`) and the `Validator` alias.
+[`llm.py`](../src/code_reviewer/shared/llm.py) wraps every model call: run, record usage, validate the result with a supplied function, retry once with feedback if invalid, always write the raw output to disk (`finally`). It shows passing functions as arguments (`validate: Validator`) and the `Validator` alias.
 
 ### 11.4 `CriteriaResolver.__call__`: a callable object
 
-[`roles.py`](../src/code_reviewer/roles.py). A class whose instances are called like functions:
+[`shared/resolver.py`](../src/code_reviewer/shared/resolver.py). A class whose instances are called like functions:
 
 ```python
 resolver = CriteriaResolver(caller, prompt, cfg, ctx, work_dir, emit)
@@ -748,7 +750,7 @@ and `criteria.resolve_project` simply accepts "a function that takes (list, str)
 
 ### 11.5 `ClaudeRunner`: talking to an external process
 
-[`claude_cli.py`](../src/code_reviewer/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. Note it runs one-shot processes; there is no server and no network client in this code.
+[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. Note it runs one-shot processes; there is no server and no network client in this code.
 
 ### 11.6 Reading a regex
 
@@ -807,17 +809,17 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 ## 14. Suggested reading order
 
 1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and the three modes (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds the steps the prompt shares).
-2. [`engine.py`](../src/code_reviewer/engine.py): `Engine.review` and `_run_passes`; then [`review_inputs.py`](../src/code_reviewer/review_inputs.py), which builds what the Reviewer is given.
+2. [`flows/single_agent/flow.py`](../src/code_reviewer/flows/single_agent/flow.py): `SingleAgentFlow.review` and `_run_passes`; then [`review_inputs.py`](../src/code_reviewer/shared/review_inputs.py), which builds what the Reviewer is given.
 3. [`models.py`](../src/code_reviewer/models.py) and [`config.py`](../src/code_reviewer/config.py): dataclasses, your gentlest introduction to Python classes.
-4. [`stop_policy.py`](../src/code_reviewer/stop_policy.py) with its test: a plain class and its rules.
-5. [`passes.py`](../src/code_reviewer/passes.py) and [`roles.py`](../src/code_reviewer/roles.py): what happens in one pass and what each model is asked.
-6. [`llm.py`](../src/code_reviewer/llm.py) and [`claude_cli.py`](../src/code_reviewer/claude_cli.py): how a model call is made and its output parsed.
-7. [`findings.py`](../src/code_reviewer/findings.py), [`master.py`](../src/code_reviewer/master.py): validation, evidence checks and merging (the densest logic).
-8. [`criteria.py`](../src/code_reviewer/criteria.py), [`diffview.py`](../src/code_reviewer/diffview.py), [`git_ops.py`](../src/code_reviewer/git_ops.py): the input side (criteria discovery, diff parsing, git/gh).
-9. [`summary.py`](../src/code_reviewer/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py) and [`review_flow.py`](../src/code_reviewer/review_flow.py) (the review steps both frontends share): the output side.
+4. [`stop_policy.py`](../src/code_reviewer/flows/single_agent/stop_policy.py) with its test: a plain class and its rules.
+5. [`passes.py`](../src/code_reviewer/flows/single_agent/passes.py) and [`roles.py`](../src/code_reviewer/flows/single_agent/roles.py): what happens in one pass and what each model is asked.
+6. [`llm.py`](../src/code_reviewer/shared/llm.py) and [`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): how a model call is made and its output parsed.
+7. [`findings.py`](../src/code_reviewer/shared/findings.py), [`master.py`](../src/code_reviewer/flows/single_agent/master.py): validation, evidence checks and merging (the densest logic).
+8. [`criteria.py`](../src/code_reviewer/shared/criteria.py), [`diffview.py`](../src/code_reviewer/shared/diffview.py), [`git_ops.py`](../src/code_reviewer/shared/git_ops.py): the input side (criteria discovery, diff parsing, git/gh).
+9. [`summary.py`](../src/code_reviewer/flows/single_agent/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/flows/single_agent/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py) and [`review_flow.py`](../src/code_reviewer/review_flow.py) (the review steps both frontends share): the output side.
 10. `tests/`: executable documentation, starting with `test_engine.py`.
 
-Small supporting modules to read when you need them: [`repl_help.py`](../src/code_reviewer/repl_help.py) (the prompt's banner and help text), [`review_options.py`](../src/code_reviewer/review_options.py) (the `review` options, shared by both frontends, and the one-shot banner), [`dry_run.py`](../src/code_reviewer/dry_run.py) (`--dry-run`), [`redact.py`](../src/code_reviewer/redact.py) (email redaction) and [`replay.py`](../src/code_reviewer/replay.py) (a developer tool for evaluating the comparator).
+Small supporting modules to read when you need them: [`repl_help.py`](../src/code_reviewer/repl_help.py) (the prompt's banner and help text), [`review_options.py`](../src/code_reviewer/review_options.py) (the `review` options, shared by both frontends, and the one-shot banner), [`dry_run.py`](../src/code_reviewer/flows/single_agent/dry_run.py) (`--dry-run`), [`redact.py`](../src/code_reviewer/shared/redact.py) (email redaction) and [`replay.py`](../src/code_reviewer/replay.py) (a developer tool for evaluating the comparator).
 
 The prompt files in [`../prompts/`](../prompts/README.md) are plain Markdown and JSON, not code, but they are half of what the agent does.
 

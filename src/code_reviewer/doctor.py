@@ -8,10 +8,10 @@ import tempfile
 from pathlib import Path
 from typing import Callable, List, Tuple
 
-from .claude_cli import ClaudeResult, ClaudeRunner
+from .shared.claude_cli import ClaudeResult, ClaudeRunner
 from .config import DATA_DIR, DEFAULT_CRITERIA_DIR, PROMPTS_DIR, Config
-from .criteria import load_default_rules
-from .templates import ROLES, load_prompt
+from .shared.criteria import load_default_rules
+from .flows.single_agent.prompt_contract import ROLES, load_prompt
 
 REQUIRED_FLAGS = [
     "--model", "--safe-mode", "--restricted", "--tools", "--strict-mcp-config", "--disable-slash-commands",

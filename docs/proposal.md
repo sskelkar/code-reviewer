@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented and being tried on real pull requests; next: multi-perspective review (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** v0 implemented and being tried on real pull requests; next: optional four-persona review with conflict annotations (design agreed, not implemented; see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -9,9 +9,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
-**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **multi-perspective review** (§12). Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
+**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each. The Comparator will merge duplicates, categorize findings and flag possible conflicts; a targeted Verifier will annotate flagged groups only. Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
 
-**Not yet built:** multi-perspective review, project context pack, a separate Verifier, inline PR comments, raw-API backend, security hardening beyond §5.
+**Not yet built:** the agent-personas review behavior and its project-rule classification, extended Comparator and conflict-only Verifier; project context pack; broader per-finding verification; inline PR comments; raw-API backend; security hardening beyond §5. The existing single-agent reviewer remains the default. The structural refactor is implemented; persona behavior remains a design. Active prompt/schema/default contents are unchanged.
 
 ## Checklist
 
@@ -23,6 +23,8 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [x] Reports and the PR summary name the criterion and its source, never an internal ID
 - [x] Interactive REPL and one-shot CLI, summary posted only after confirmation, dry run, email redaction, `doctor --live` isolation checks
 - [x] Comparator replay tool; README flow diagrams of a review
+- [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch and an unavailable `agent_personas` boundary
+- [x] Agree the optional four-persona design and document the proposed flow (§12); implementation is still pending
 
 **Use it for real (you)**
 - [ ] Review real PRs from your project with the current setup (Haiku) and judge each finding yourself (`mark`, `missed`)
@@ -30,9 +32,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
 **Build next, in this order**
-- [ ] Multi-perspective review (§12): perspectives such as code quality, test quality, failure modes; confidence per perspective; the report says which perspective found each finding
+- [ ] Optional four-persona mode (§12): static default assignments, complete project-rule distribution, exact prompts per persona, three fixed passes each, shared merging/categorization/conflict flags, and advisory conflict verification
 - [ ] Project context pack (§12): documentation passages about the identifiers the diff touches, supplied as reference material
-- [ ] Verifier pass (§12): a fresh session tries to refute each finding with repository evidence
+- [ ] Broader Verifier (§12): consider extending verification beyond flagged conflicts after learning from the initial advisory implementation
 - [ ] Reviewer prompt: before reporting a finding that depends on an assumption, check the comment above the code, its tests and the repo documentation; unverified assumptions go to `notes`
 - [ ] Record the tool calls each pass made (closes the "what did it search?" blind spot)
 - [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
@@ -56,11 +58,13 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 ## 1. Architecture
 
+Sections 1–8 describe the implemented single-agent mode. The optional persona mode and its extended roles are specified separately in §12; they are not available yet.
+
 **The harness (Python, deterministic) runs everything; LLMs only propose.** No subagents, no orchestrator LLM.
 
 | Role | Type | Job |
 |---|---|---|
-| Criteria Resolver | LLM, once per review | Reads the project's `AGENTS.md`, proposes which in-repo files hold review criteria. |
+| Criteria Resolver | LLM, once when root discovery needs it | Reads the project's `AGENTS.md`, proposes which in-repo files hold review criteria. |
 | Reviewer | LLM, fresh per pass | Reviews the whole PR thoroughly (every changed block and every claim, verified against the code), emits **all** findings it can support as JSON. Blind to earlier passes and to which pass it is: its prompts are identical in every pass. Optional self-check phase: refute its own findings. |
 | Comparator | LLM, findings only | Maps each new finding to an existing master ID or `new`. Mapping only. |
 | Harness | Python | Checkout, validation, grounding check, applies mappings, counters, convergence, budget, renders report. |
@@ -82,7 +86,7 @@ render report
 
 - **Convergence (computed, never self-declared):** a pass is *quiet* if it adds no new scored finding (one with ≥1 confirmed sighting). Stop after **2 consecutive quiet passes** (configurable to 3), at `max_passes` (6), or on budget. `min_passes` = 3.
 - **Failed passes** (bad JSON after retry, timeout) are logged and excluded from the confidence denominator and quiet streak.
-- **Comparator prompt rule:** same root cause at same location = match; when unsure, prefer `new` (a false split is cheaper than a false merge). Harness checks every finding got exactly one valid decision. The Comparator judges *sameness* only, not correctness: a wrong finding repeated by several passes is merged and gains confidence, which is what the Verifier (§12) is for.
+- **Comparator prompt rule:** same root cause at same location = match; when unsure, prefer `new` (a false split is cheaper than a false merge). Harness checks every finding got exactly one valid decision. The Comparator judges *sameness* only, not correctness: a wrong finding repeated by several passes is merged and gains confidence, the planned conflict-only Verifier (§12) investigates flagged disagreements but does not verify every finding.
 
 ## 2. Criteria (layered)
 
@@ -108,7 +112,7 @@ Finding fields: `title, description, severity (high|medium|low|nit), kind, rule_
 
 | kind | Meaning | Required evidence | Harness check |
 |---|---|---|---|
-| `present` | Problem in existing code | exact `quote` | quote found near the line in the head file (or a removed diff line) |
+| `present` | Problem in existing code | exact `quote` | whitespace-normalized quote fragments found in the head file (line corrected), or in removed diff lines |
 | `absent` | Something missing (validation, test, error handling) | `anchor` (file, line range, symbol) + `expected` | anchor overlaps a changed hunk |
 | `cross_file` | Duplication, inconsistency, architecture | quote/anchor for the primary file | as above |
 
@@ -118,17 +122,17 @@ Failures become `ungrounded`: excluded, logged, counted. This catches fabricated
 
 ## 5. Safety (v0 baseline)
 
-Reviewer invocation (verify per §9):
+Reviewer invocation (simplified; the user prompt is sent on stdin, system text via `--append-system-prompt`; verify per §9):
 
 ```
-claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,Glob" \
+claude -p --model haiku --safe-mode --restricted --tools "Read,Grep,Glob" \
   --strict-mcp-config --disable-slash-commands --permission-prompts none \
   --no-session-persistence --output-format json --json-schema '<schema>' \
   --max-budget-usd 0.5
 ```
 
 - **Read-only tools for the Reviewer (Resolver and Comparator get none: `--tools ""`), no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
-- Fresh session per call; never `--resume`. The review uses a copy of the PR head (files only, no git history) in its own temporary directory, **outside the run directory**: nothing the run produced (earlier passes' findings, master list, reports) is reachable from the Reviewer's working directory even if `--restricted` failed. The copy is deleted at the end of the run, also when it fails.
+- Fresh session per call; never `--resume`. The review uses a copy of the PR head (files only, no git history) in its own temporary directory, **outside the run directory**: earlier findings, the master list and reports are not inside its tool working directory. Access outside that directory is enforced by Claude Code; this is not an OS sandbox. The copy is deleted at the end of the run, also when it fails.
 - **Isolation is verified, not assumed:** `reviewer doctor --live` plants a canary file next to the working directory and checks that it can be neither read (relative or absolute path) nor found by search.
 - **The Reviewer cannot see PR comments, reviews or other passes' findings.** Only an allow-list of PR fields is fetched (title, description, commits, SHAs; a test fails if comments are added), and its tools are Read, Grep and Glob. `--dry-run` prints exactly what it would be given and saves the exact prompts (`input/reviewer.*.md`) and the PR text (`input/pr.json`) for every run. Email addresses in the PR title, description and commit messages are replaced with `[email]` before sending (`redact_emails`, on by default; the diff and repository files are not redacted, and names and chat links are not covered). PR descriptions can still contain bot summaries.
 - No `--max-turns` flag exists in CLI 2.1.301: bound each call with `--max-budget-usd` plus a wall-clock timeout.
@@ -149,12 +153,12 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 
 ## 7. Report, confidence, cost
 
-- **Confidence = `seen_in_passes / passes_completed`.** Tiers (configurable): **High ≥ 75%**, **Medium 40–74%**, **Low < 40%** (still reported).
+- **Current single-agent confidence = `seen_in_passes / passes_completed`.** Tiers (configurable): **High ≥ 75%**, **Medium 40–74%**, **Low < 40%** (still reported).
 - **Review summary (rendered by code, the main output):** at the end of every review the terminal prints a shareable summary: a headline count by confidence, then each finding with severity, `file:line`, the criterion it falls under (by name and source), description, evidence and suggestion. It is saved as `summary.md` and is exactly the text `post` sends as the PR comment (plus a hidden marker). With fewer than two completed passes there is no agreement to measure, so findings are shown as **unrated** instead of High. A one-line run summary and the path of the full report follow.
 - **Full report (rendered by code, for deep dives):** header (PR, head/base SHA, models, passes, stop reason, criteria applied/ignored) · counts by tier and severity · findings by tier then severity, each with `file:line`, evidence, suggestion, "seen in x/N passes", rejected-in notes · "rejected by self-check (not scored)" · appendix (discovery curve, pairwise pass overlap, ungrounded/invalid-rule/failed counts, links to artifacts).
 - **Usage and cost (required):** run totals (input/output/cache tokens, estimated USD, wall time, calls), per-pass and per-role (Resolver/Reviewer/Comparator) breakdown with each pass's new/matched counts, retries and failures included, spend vs cap. Summed from each call's JSON envelope; labeled *estimated* (enterprise login may show list-price figures; runs may also count against seat limits).
 - **Audit trail (partial):** every run already keeps its full evidence locally, listed next; governance-grade features are in the Checklist.
-- **Artifacts:** `~/.code-reviewer/runs/<timestamp>_<repo>_<pr>/` with config (incl. CLI version), inputs, per-pass raw outputs/findings/mapping, `master.json`, `stats.json`, `labels.json`, `report.md`, `run.log`. Every merge decision is replayable. No resume in v0.
+- **Artifacts:** `~/.code-reviewer/runs/<timestamp>_<repo>_<pr>/` with config (incl. CLI version), inputs, per-pass raw outputs/findings/mapping, `master.json`, `stats.json`, `labels.json`, `report.md`, `summary.md`. Progress events are printed to the terminal, not saved as `run.log`. Every merge decision is replayable. No resume in v0.
 
 ## 8. Ceilings (defaults, tune from logs)
 
@@ -167,11 +171,11 @@ claude -p "<prompt>" --model haiku --safe-mode --restricted --tools "Read,Grep,G
 | Per call: spend / timeout | $0.50 / 10 min |
 | Per review: counted tokens / estimated cost | ~2M / ~$3 (tokens = input + output + cache writes; cache reads are excluded because multi-turn reviews re-read cached context and it is billed at a small fraction) |
 
-Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (independent; Sonnet later), `self_check` (flag, default on), `criteria_mode`, `criteria_manifest`, `disabled_default_rules`, pass/threshold/budget settings.
+Config in `review.toml` (snake_case): `review_mode`, `model_reviewer`, `model_comparator` (independent; Sonnet later), `self_check` (flag, default on), `criteria_mode`, `criteria_manifest`, `disabled_default_rules`, pass/threshold/budget settings.
 
 ## 9. Experiment plan and v0 checks
 
-**Runs to compare:** single pass vs full loop · `self_check` on vs off · Haiku vs Sonnet · general loop vs perspectives (§12). Judge across several runs per PR (results vary).
+**Runs to compare:** single pass vs full loop · `self_check` on vs off · Haiku vs Sonnet · general loop vs personas (§12). Judge across several runs per PR (results vary).
 
 **Metrics (manual in v0):** discovery curve · **pass-to-pass overlap** (near-identical passes make every finding "High" and the signal meaningless) · precision per tier (`mark`) · approximate recall from `missed` (real found ÷ (real found + missed)) · cost per pass · spot-check of Comparator merges/splits.
 
@@ -186,6 +190,8 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 **Parked: local eval harness (2026-10-19).** An offline harness (`python -m code_reviewer.evals`: `init`, `plan`, `run`, `label`, `grade`, `rekey`), a human-label rubric (`evals/RUBRIC.md`: correct and supported, introduced by the change, specific and useful) and eight pinned public cases (four regression/repair pairs from open-source projects, `evals/CASES.md`) were built. No model was ever run through it, and the answer keys for the public cases are agent-curated and provisional. It was set aside as a distraction: the goal now is to use the agent on real pull requests and judge the results by hand. The code stays for later; do not extend it. If it is revived, record a reason for each wrong finding (missing project knowledge, unverified assumption, misread code, pre-existing issue, style preference), because that tells which fix to build, and add a mode that freezes the project's resolved criteria (the harness uses defaults only).
 
 **Third finding: agreement is not correctness.** A finding raised by 4 of 6 passes was wrong. The project had a data-access rule the reviewer did not know; the rule existed in the repository, but only in files that were not review criteria and that nothing linked to, and no pass searched for it. Correlated mistakes across passes are the main weakness of agreement-based confidence. Responses: nested `AGENTS.md` and `.claude/rules` files are now added by location (§2), and the project context pack and Verifier are planned (§12). The saved raw output does not record which tools a pass called, so what each pass searched is unknown.
+
+**Flow ownership refactor (2026-10-20; no model-quality result).** Moved current orchestration, Reviewer/Comparator, master/result, reports, prompt loader and unchanged assets into `flows/single_agent/`. Shared Claude/git/diff/grounding/criteria-discovery/storage/statistics code lives in `shared/`. `Engine` preserves its API and selects one flow; CLI/REPL `--mode` overrides `review_mode` (default `single-agent`). Reserved `agent-personas` fails without loading single-agent assets, preparing a PR or calling Claude. Legacy imports remain bridges, including identical module objects for existing patch targets. A synthetic FakeRunner comparison before/after matched exact model inputs/schemas/settings, criteria, merged findings, pass accounting/stopping, summary and normalized report. Pinned SHA-256 fixtures guard unchanged prompt/schema/criteria bytes. Audit preserved the original positional `Config` model argument and the `Engine` public export; these compatibility contracts are tested. All 244 offline tests pass on Python 3.9 and 3.13, including eleven new flow-selection/isolation/compatibility tests; documentation links/anchors and `git diff --check` pass. No real reviews or production material were accessed. The parked eval tool was not run or extended; its source fingerprint traversal was adjusted only to include relocated subpackages rather than silently omitting them.
 
 **Proposed success bar (adjust after first runs):** High-tier precision clearly above Low-tier; the loop finds at least one real issue a single pass missed on roughly 1 in 3 PRs; cost within a small multiple of a single pass.
 
@@ -204,8 +210,8 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 |---|---|
 | **P0** | This proposal: engine + REPL + one-shot CLI + confirmed summary comment; manual evaluation |
 | P1 | Evals: parked (see §9). Judge by hand on real PRs |
-| P2 | Verifier pass (§12): refutes one finding at a time with repo evidence. Early results suggest scoring candidate findings by independent verification rather than by how often passes raise them |
-| P3 | **Multi-perspective passes (§12), next**; project context pack; diversification; "reviewer sees master report" A/B variant |
+| P2 | Conflict-only advisory Verifier ships with persona mode (§12). Broader per-finding verification remains later; initial annotations do not suppress claims or change agreement scores |
+| P3 | **Optional four-persona review (§12), next**: three passes per persona, shared Comparator and advisory conflict verification; then project context pack. Reviewers remain blind to other passes |
 | P4 | Inline PR comments; MCP server / `/review-pr` skill |
 | P5 | Provider-agnostic backend (raw API); optional LLM executive summary |
 | Anytime | Security hardening (§5 and the checklist: sandboxed checkouts, prompt-injection safeguards) before any use beyond a controlled environment |
@@ -216,19 +222,131 @@ Config in `review.toml` (snake_case): `model_reviewer`, `model_comparator` (inde
 
 **Open:**
 1. Is sending company code through the enterprise Claude Code login approved for this? (Company decision; avoid repos with customer or rider data until answered.)
-2. Perspectives (§12): which default criteria go to which perspective, and does every perspective get all project rules?
-3. Is the success bar in §9 right?
-4. Is a perspective with 3 passes the right default, and how many perspectives are worth the cost?
+2. Is the success bar in §9 right?
+3. After real manual comparisons, are the extra findings from twelve persona passes worth their cost? Four personas and three fixed passes each are the agreed initial design, not a measured optimum.
 
-## 12. Design notes for the next steps
+The earlier questions about giving every persona every project rule and choosing between two or three passes are settled: defaults are statically assigned, project rules are distributed with complete coverage and overlap where relevant, and each persona has three fixed pass slots (§12).
 
-**Multi-perspective review (next).** Same loop, but several reviewers with different jobs. A *perspective* is a short focus paragraph plus a subset of the criteria, stored as a file under `prompts/perspectives/` so it can be edited without code changes. Proposed first set: **code quality** (`GEN-002`, `GEN-003`: simplicity, readability, documentation), **test quality** (`GEN-009`, `GEN-010`: coverage, test levels, independence, no misleading mocks), **failure modes** (`GEN-004` to `GEN-008`: security, input checks, error handling and resources, data integrity and concurrency, internal contracts; "would this cause a production incident?"); `GEN-001` correctness is open (all perspectives or the failure-modes one). Proposed: every perspective gets all project rules, because the repo's rules apply across the board. Command shape, for example: `reviewer review <pr> --perspectives quality:3,tests:3,safety:3`; with no flag, behavior is unchanged (one general perspective with all ten criteria).
-- **Independence is kept:** within a perspective every pass gets a byte-identical prompt, so passes stay independent and the prompt cache still works; each perspective has its own prompt.
-- **Confidence is computed per perspective:** the share of that perspective's passes that found the issue. A global share would make a test-quality finding unable to reach High, because the other perspectives' passes are not looking at tests. The report states which perspective found each finding.
-- **One master list and one Comparator across perspectives,** so an issue found by two perspectives is a single finding seen by both.
-- **Cost** scales with the number of passes: three perspectives with three passes each is nine Reviewer passes, about three times today's default.
-- Strategies to compare by hand on the same PRs: general loop (Haiku), general loop (Sonnet), perspectives (Haiku).
+## 12. Agreed persona design and next steps
 
-**Project context pack.** The reviewer lacks project knowledge that exists in the repository but is not in the criteria (§9, third finding). After the diff is parsed, the harness extracts the identifiers it touches (changed or called methods and classes, table and column names), searches the base-commit tree for them in documentation and agent-instruction files (`*.md`, `docs/`, `.claude/`, ADRs, agent-memory directories), and adds the matching passages (capped, with path and heading) as a separate `<project_context>` block, marked as reference material and not as rules. Deterministic, no model call, identical in every pass, saved with the other inputs and listed in the report. Open points: ranking, size cap, which directories to search, how to cite.
+**Design agreed 2026-10-20; not implemented.** Personas (previously called perspectives) are focused Reviewer jobs run by the Python harness, not Claude sub-agents. The existing single-agent mode stays available and remains the default, including its current 3–6-pass convergence policy. Flow selection is implemented as `--mode single-agent|agent-personas` with `review_mode = "single-agent"` by default. The persona value is reserved and raises a clear error before preparation/model calls until implemented. When implemented, it will run all four personas with **three fixed passes each**. No persona has higher authority than another.
 
-**Verifier pass.** There is no separate verifier today. Checks that exist: the harness's evidence checks (quote or anchor must be real) and the Reviewer's own self-check in the same session, which tends to confirm its own reasoning. A Verifier is a new role, different from the Comparator (which asks whether two findings are the same issue, sees finding text only, and removes duplicates; the Verifier asks whether one finding is true, reads the code, and removes false positives; it runs after the Comparator, once per distinct finding): a fresh session receives one finding, the relevant code reference and the criteria, and tries to refute it with evidence from the repository. The harness validates its verdict like any other model output and uses it in confidence instead of, or alongside, how many passes raised the finding. Prototype it as a replay-style tool on a saved run first.
+### 12.1 Responsibilities and static defaults
+
+| Persona | Deliberate review responsibility |
+|---|---|
+| Correctness | Calculations, conditions, state transitions and behavior against repository-supported requirements and contracts |
+| Code quality | Simplicity, readability, modularity, abstractions, duplication, and accurate code/contract documentation |
+| Test quality | Meaningful coverage and assertions, appropriate test levels, independence and faithful mocks |
+| Production safety | Security/privacy, authorization, bounded inputs, failure handling, resources, atomicity and concurrency |
+
+A persona can read any relevant code, tests or authoritative documentation needed to reason correctly. It does not deliberately inspect every other persona's checklist, but **may report a supported correctness or safety defect it notices outside its focus**. The Comparator can categorize that finding under another persona's subject. Categorization never invents a sighting by a persona that did not report it. Language/library expectations go to the relevant persona; there is no fifth language/syntax persona initially. Existing linters and pipelines still own syntax/formatting checks; the reviewers cannot execute them.
+
+Default rule assignments are maintained in this repository ahead of time. There is no runtime model classification of defaults. Rules may be shared, but each logical rule has one canonical identity and text, retained wherever it is supplied. Single-agent mode continues to receive the complete enabled default set. The initial static allocation and proposed ID migration are:
+
+| Current ID | Planned canonical ID | Topic | Assigned personas |
+|---|---|---|---|
+| GEN-001 | COR-001 | Behavior and calculations | Correctness |
+| GEN-002 | CQ-001 | Simplicity and maintainability | Code quality |
+| GEN-003 | CQ-002 | Clarity and contract documentation | Code quality |
+| GEN-004 | SAFE-001 | Security and privacy | Production safety |
+| GEN-005 | SAFE-002 | Input validation and bounds | Production safety |
+| GEN-006 | SAFE-003 | Failures and resource cleanup | Production safety |
+| GEN-007 | SAFE-004 | Integrity, transactions and concurrency | Production safety |
+| GEN-008 | COR-002 | Producer/consumer contracts | Correctness, production safety |
+| GEN-009 | TEST-001 | Meaningful coverage and test levels | Test quality |
+| GEN-010 | TEST-002 | Test independence and mocking | Test quality |
+
+This table is a design allocation, not a change to the current `GEN-*` rules or their wording. The prefix names the rule's home category, not its exclusive audience. Project rules retain source-based identities such as `P:<path>#<heading>`; routing does not rename them. Historic runs must be interpreted with their saved criteria, not with a new ID table.
+
+The concrete [persona-criteria draft](persona-criteria.md) now supplies each persona's focus instructions and full Inspect / Report / Do not report text for these ten rules. It is for discussion, is not loaded by the harness and does not change current criteria.
+
+A preferred design pattern alone is not a finding; code quality still requires a concrete maintenance consequence. Test quality does not enforce a numerical pyramid or demand end-to-end tests when a focused test is sufficient. Planning documents remain author claims rather than authoritative contracts; existing exclusions and the current reporting standard remain in force.
+
+### 12.2 Gather and distribute project criteria once
+
+1. Use existing discovery from the base commit: root `AGENTS.md`, Resolver-selected files, and applicable nested `AGENTS.md`/`.claude/rules` files. Respect the selected criteria mode and existing explicit exclusions/limits.
+2. After loading the accepted project rules, make one classification call with those rules and the four persona definitions. It proposes assignments of existing rule IDs to one or more personas; it does not rewrite the rules. The Resolver's model setting can be reused for this classification phase. No project rules means no classification call.
+3. The harness validates allowed persona names, known rule IDs and **100% coverage of gathered, accepted project rules**. Shared or cross-cutting rules can go to multiple personas. Do not give every persona the entire list by default. Invalid classification receives the normal retry; rules still unassigned or ambiguously classified fall back to all four personas with a warning, never disappear silently.
+4. Build each persona's criteria from its static defaults and assigned project rules, retaining complete text and source. Project rules override conflicting defaults. A persona prompt-size problem must be visible, not resolved by silently dropping accepted rules.
+5. Freeze all four persona inputs before the review passes start. Within a persona every pass gets byte-identical system/user text, with no pass number or previous findings. All receive the same pinned PR text/diff and access to the same temporary head checkout.
+
+Deterministic validation proves distribution coverage, not semantic classification quality or discovery of every expectation anywhere in the repository. The actual prompts are the primary audit record; a separate verbose `criteria-routing.json` report is not required (§12.6).
+
+### 12.3 Fixed review loop
+
+Run three sequential rounds in this order: correctness, code quality, test quality, production safety. Each round selects one fresh Reviewer session from every persona. That schedules **twelve persona passes**, followed by any conflict verification. The branches are independent jobs, not parallel execution or shared Claude conversations.
+
+```text
+prepare pinned diff/head and discover project criteria
+load static default assignments; classify and validate project-rule assignments
+freeze and save the four persona prompts
+for round in 1..3:
+    for persona in [correctness, code-quality, test-quality, production-safety]:
+        check budget/cancellation/failure policy
+        findings = fresh Reviewer(frozen_input[persona])
+        findings = existing validation, exclusions, grounding and self-check handling
+        proposal = Comparator(findings, complete_master)
+        harness validates and applies duplicate mappings, categories and conflict flags
+for each distinct pending conflict group, while budget permits:
+    proposal = fresh Verifier(flagged_claims, criteria, diff, checkout)
+    harness validates and attaches annotations
+render combined findings, per-persona agreement, annotations, costs and completion status
+```
+
+**No convergence-based early stopping in persona mode.** A quiet first or second pass does not cancel a third pass. There is no "eligible third pass" condition. Keep the existing per-call retry and spending/time limits; errors, cancellation, exhausted budget or failure limits can still leave a run incomplete. Record the three scheduled pass slots per persona, actual successful completions and failed/skipped slots honestly; do not claim twelve successful passes when some failed, or silently schedule unlimited replacement passes. The Reviewer subprocess count can exceed twelve because of normal call retries.
+
+Use a shared explicit run budget, accounting for discovery/classification, Reviewer, Comparator and Verifier calls. The user can raise it for verification; do not silently increase it or add a mandatory reserved-budget scheme. Cancellation or a terminal run failure stops all further model calls, including verification. A stopped/failed Verifier leaves its groups pending/unresolved. Keep the checkout until verification/reporting has finished, then apply normal cleanup. Reviewers and the Verifier use only Read, Grep and Glob inside that checkout; neither executes tests/commands or reads other saved runs.
+
+### 12.4 One Comparator, one master list, incremental conflict flags
+
+The Comparator remains a findings-only model with no code tools. In persona mode its proposal covers three relationships: duplicate mappings, finding categories, and possible conflicts. There is **no separate Conflict Detector node or end-of-run detection call**.
+
+- Supply the complete master finding text with triggers and consequences, not only the existing near-line/same-rule duplicate candidate subset. Also compare related findings within the incoming batch. If a size limit prevents complete comparison, report the limitation instead of implying all conflicts were checked.
+- A possible factual contradiction must remain separate claims, not be collapsed as duplicate wording. Different conditions may make both valid; a design tradeoff is not proof that either claim is false. The Comparator flags potential contradictions or competing recommendations, explaining the apparent conflict; the Verifier supplies evidence and context later.
+- Conflict flags apply to actionable/scored claims, not findings already rejected by their Reviewer's self-check. A rejected-only master entry that later receives a confirmed sighting becomes eligible then.
+- Findings outside the reporting persona's focus remain eligible. The Comparator proposes one or more subject categories from the four personas. These are separate from the harness-recorded source persona/pass and criterion citation. The Verifier may suggest category corrections when examining a flagged group; ordinary findings need no extra Verifier call just for categorization.
+- The harness assigns unique pass/finding identities across personas, translates proposed local references to canonical master IDs after applying mappings, validates categories and conflict references, and writes a dedicated `conflicts` section in `master.json`. Repeated flags for the same canonical claim group do not create repeated verification jobs. Keep the explanation, original references and final annotation linked for inspection.
+- Do not reuse the current Comparator skip merely because a duplicate candidate set is empty. Initially call it for every persona pass with usable findings when categorization/conflict analysis is required, including a single new finding; an empty batch with no new actionable state can still skip it.
+
+The Comparator nominates conflicts; it cannot establish truth or guarantee every conflict was detected. A high sighting count, persona identity, or silence from another persona never selects the winner.
+
+### 12.5 Targeted, advisory Verifier
+
+After the scheduled review phase, run a fresh Claude session per distinct flagged conflict group while budget and run status allow further calls. Cancellation or a terminal run failure skips further verification and leaves pending groups visible. Each receives the competing claims, applicable criteria, pinned diff and read access to the same head checkout. It investigates relevant code/tests/contracts and proposes evidence-based outcomes: one or more claims supported or refuted, both valid under different conditions, a valid tradeoff, or insufficient evidence. Broader independent verification of every finding is outside this first feature. A repeatedly wrong claim that no finding contradicts will not trigger verification merely because it has high agreement.
+
+The harness validates output structure, finding references and cited evidence, then **only annotates**. Keep original findings visible, including refuted claims, with the explanation and any relevant conditions or tradeoffs. Do not automatically hide, drop, rewrite, change severity, select a winning persona, or modify agreement scores. Keep verification status separate from the Reviewer's self-check. A malformed response, timeout, exhausted budget or unresolved investigation stays visibly unresolved/pending; it is not a successful verification. Neither conflict flags nor Verifier responses feed back to Reviewer prompts.
+
+No persona priority hierarchy is used. Existing finding severity remains a consequence-based presentation aid, not an authority ranking between personas. The user judges the report and can use existing manual drop/mark actions. Grounded evidence references do not mechanically prove the Verifier's reasoning correct.
+
+### 12.6 Report and exact prompt logging
+
+One merged finding records independent sightings per source persona. Confidence is each persona's sightings divided by that persona's successful completed passes, with failed slots excluded and fewer than two successful passes unrated. A completed run might show `test-quality: 3/3` and `correctness: 1/3` for the same finding. Do not divide by all twelve passes, average the personas, or manufacture an overall confidence tier. Category reassignment does not transfer votes. Keep severity, category, discovering persona, criterion and verification outcome distinct.
+
+The combined report and shareable summary show each finding once, its categories, per-persona agreement and any conflict annotations/tradeoffs/unresolved status. List **every assigned criterion name and source under each persona**, rather than only counts. Show the detailed text in the saved prompts, include fallback/coverage warnings and incomplete persona/verification status, and account for all roles' costs. No hidden automatic suppression based on Verifier annotations. Where a user filters confidence tiers, evaluate the filter per discovering persona, retaining the finding if any recorded persona qualifies; display the separate agreement views rather than an aggregate tier. Preserve normal single-pass/unrated visibility.
+
+Save the fully rendered, filtered/redacted **system and user text supplied by the harness** once per persona, because its three passes share that exact text:
+
+```text
+input/personas/
+  correctness/reviewer.system.md
+  correctness/reviewer.user.md
+  code-quality/reviewer.system.md
+  code-quality/reviewer.user.md
+  test-quality/reviewer.system.md
+  test-quality/reviewer.user.md
+  production-safety/reviewer.system.md
+  production-safety/reviewer.user.md
+```
+
+Each pass references its persona prompt hashes. Keep the complete criteria index, model/schema/invocation settings, classification input/output, Comparator inputs/outputs, and each conditional Verifier prompt/reply alongside existing artifacts. Model calls see only the inputs granted to their role; saving prompts does not make earlier results accessible to Reviewers. Production prompts/findings stay in local run storage outside this repository and are read/reviewed only by Claude and the user, never by Codex.
+
+### 12.7 Implementation and manual comparison
+
+The agreed structural refactor is implemented: `Engine` selects exactly one flow, existing orchestration/assets live in `flows/single_agent/`, and reusable mechanics live in `shared/`. `flows/agent_personas/` explicitly rejects execution until implemented. Existing package-root imports remain compatibility bridges. No persona review behavior, active prompt content, schema, criterion wording or rule IDs were changed. Next implement the optional mode, static definitions/rule identities, project-rule classification/coverage validation, prompt storage, fixed scheduler, source-aware agreement, extended Comparator/conflict records, targeted annotation-only Verifier and reports together. Add synthetic/fake-Claude tests for those contracts and preserve the single-agent workflow and interfaces, accounting explicitly for the shared rule-ID migration in saved criteria/prompt hashes. New prompts require honest comparison on authorized real runs; Comparator-only replay cannot establish the quality of persona Reviewer prompts.
+
+Compare single-agent Haiku, single-agent Sonnet and persona Haiku on the same real PRs, recording useful findings, false positives, misses, conflict handling and cost manually. Twelve focused passes versus 3–6 general passes changes both focus and spend, so this is a strategy comparison, not an isolated proof that specialization alone helped. No new paid review is authorized by documenting this plan. Do not revive, extend or run the parked eval harness.
+
+**Project context pack (after persona mode).** Extract identifiers touched by the diff, search base-commit documentation/agent-instruction files, and add relevant capped passages as a separate reference block. Deterministic, no model call, stable per persona/pass, saved with inputs. Ranking, size cap, search scope and citation design remain future work; it must respect the distinction between authoritative contracts and planning claims.
+
+**Broader Verifier (later).** Consider investigating findings beyond flagged conflicts, and any stronger use of verification results, only after learning from advisory conflict verification. Automatically removing false positives or replacing agreement confidence is not part of the initial persona design.

@@ -1,5 +1,7 @@
 # Local review evals
 
+**Parked:** retained for later reference. Do not run, extend or build on this harness until explicitly resumed; current work uses manual review comparisons. See [the handover](../docs/HANDOVER.md#the-eval-harness-is-on-the-back-burner).
+
 The harness is runnable with standard-library Python. **Only `run` calls Claude and costs money.** `init`, `plan`, `label`, `grade` and `rekey` are offline. There is no LLM judge: you judge findings; Python validates those labels and calculates scores. No command fetches a repository, modifies its working tree, or posts to GitHub.
 
 For production code, run these commands yourself. Keep the clone, suite, expectations, findings, labels and reports physically outside this code-reviewer repository, and do not paste them into this chat. Claude performs the review through the existing restricted Claude Code invocation. Local artifact storage does not make inference local. The examples below contain placeholders, not production paths.

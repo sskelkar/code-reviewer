@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(os.environ.get("CODE_REVIEWER_HOME") or Path(__file__).resolve().parents[2])
-PROMPTS_DIR = REPO_ROOT / "prompts"
-DEFAULT_CRITERIA_DIR = REPO_ROOT / "criteria" / "defaults"
+SINGLE_AGENT_DIR = REPO_ROOT / "src" / "code_reviewer" / "flows" / "single_agent"
+PROMPTS_DIR = SINGLE_AGENT_DIR / "prompts"
+DEFAULT_CRITERIA_DIR = SINGLE_AGENT_DIR / "criteria"
 DATA_DIR = Path(os.environ.get("CODE_REVIEWER_DATA") or Path.home() / ".code-reviewer")
 
 DEFAULT_EXCLUDE_PATTERNS = [
@@ -35,6 +36,8 @@ DEFAULT_EXCLUDE_PATTERNS = [
     "dist/",
     ".idea/",
 ]
+
+REVIEW_MODES = ("single-agent", "agent-personas")
 
 CRITERIA_MODES = ("merge", "project_only", "defaults_only")
 
@@ -98,7 +101,12 @@ class Config:
     # Storage
     runs_dir: str = ""
 
+    # Append new fields to preserve existing positional constructor arguments.
+    review_mode: str = "single-agent"
+
     def validate(self) -> None:
+        if self.review_mode not in REVIEW_MODES:
+            raise ConfigError("review_mode must be one of %s" % ", ".join(REVIEW_MODES))
         if self.criteria_mode not in CRITERIA_MODES:
             raise ConfigError("criteria_mode must be one of %s" % ", ".join(CRITERIA_MODES))
         if self.min_passes < 1 or self.max_passes < self.min_passes:

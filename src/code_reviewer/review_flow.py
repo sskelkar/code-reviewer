@@ -9,12 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from .claude_cli import ClaudeError
+from .shared.claude_cli import ClaudeError
 from .config import Config, ConfigError
-from .dry_run import DryRun
+from .flows.single_agent.dry_run import DryRun
 from .engine import Engine
-from .git_ops import GitError, PRRef
-from .models import ReviewRefused, RunResult
+from .shared.git_ops import GitError, PRRef
+from .shared.models import ReviewRefused
+from .flows.single_agent.models import RunResult
 from .progress import ProgressPrinter
 
 # What a review can fail with in an expected way. Frontends catch these and report them as an error message.

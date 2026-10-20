@@ -1,6 +1,9 @@
 # Copy to ./review.toml (project directory) or ~/.code-reviewer/review.toml and edit.
 # Every key is optional; the values below are the defaults.
 
+# Review flow: single-agent (default); agent-personas is reserved and fails until implemented.
+review_mode = "single-agent"
+
 # Models: any alias or full name accepted by `claude --model`.
 model_reviewer = "haiku"
 model_comparator = "haiku"   # "sonnet" merges duplicate findings more consistently but costs ~15x more for this step
@@ -38,9 +41,9 @@ criteria_max_chars = 200000    # about 50k tokens
 
 # Matching tuning (rarely needed)
 candidate_window = 20          # same-file line distance for duplicate candidates
-candidate_all_threshold = 30   # below this many findings the Comparator sees all of them
+candidate_all_threshold = 30   # up to this many findings the Comparator sees all of them
 candidate_max = 40
-grounding_line_window = 30     # tolerated distance between a stated line and the quote's real line
+grounding_line_window = 30     # count corrections exceeding this distance; quotes are searched across the file
 
 # Budgets and timeouts
 call_budget_usd = 0.50         # --max-budget-usd for every claude call

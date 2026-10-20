@@ -23,7 +23,7 @@ def environment(cfg: Config) -> Dict[str, Any]:
     for name in ("model_reviewer", "min_passes", "max_passes", "runs_dir"):
         fixed.pop(name)
     fixed.update(criteria_mode="defaults_only", criteria_manifest="")
-    paths = list(Path(__file__).parent.glob("*.py"))
+    paths = list(Path(__file__).parent.rglob("*.py"))
     paths += [p for p in PROMPTS_DIR.rglob("*") if p.is_file()]
     paths += list(DEFAULT_CRITERIA_DIR.glob("*.md"))
     paths += [REPO_ROOT / "evals" / "RUBRIC.md"]

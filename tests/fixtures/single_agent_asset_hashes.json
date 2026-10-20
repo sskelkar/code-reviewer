@@ -1,0 +1,12 @@
+{
+  "prompts/resolver.system.md": "52a41cfbe30a291a083273a714e793eba1379b3d9ed84c58fbbfe273d27f45c8",
+  "prompts/resolver.user.md": "a9af0d370c272227cc701b617e291f6a9830da41f81edd95327ad72e39fa83ed",
+  "prompts/reviewer.system.md": "45254f1be564be87f3d9f7ac30bf96810d0ce292df49a5abee0b0d8180289c1b",
+  "prompts/reviewer.user.md": "d6890eb58a16c02fc17a91e671910058a7b148f945b007ff97460f8c55586bb9",
+  "prompts/comparator.system.md": "03db1b56f0132c29af1aa550f25eb84f4b06c91902d9c0cfcb6f59df84bb9607",
+  "prompts/comparator.user.md": "59b89317ef67fab58e985e50535ac236039169c9f988db6923037278a8943404",
+  "prompts/schemas/resolver.schema.json": "5917581293ca7f7e678e47407e0bea826957a0552e16226dda7098b3623b2f66",
+  "prompts/schemas/reviewer.schema.json": "9b6db374da19ac0a9e42dec20c682edbda4082972156a98c974c623b14c5b5e1",
+  "prompts/schemas/comparator.schema.json": "49f61b30432218139b32de13053ff329e882de744b2d4c3c54e6b6002a4dcb06",
+  "criteria/general.md": "f6ab44cfae38c758e1828137edae608b176f68375230f38b1ed74aacf9847b95"
+}

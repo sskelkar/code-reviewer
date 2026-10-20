@@ -1,18 +1,7 @@
-"""Structured progress events emitted by the engine."""
+"""Compatibility import; implementation lives in code_reviewer.shared.events."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict
+import sys
+from importlib import import_module
 
-
-@dataclass
-class Event:
-    type: str
-    data: Dict[str, Any] = field(default_factory=dict)
-
-
-EventSink = Callable[[Event], None]
-
-
-def null_sink(event: Event) -> None:
-    return None
+sys.modules[__name__] = import_module('code_reviewer.shared.events')

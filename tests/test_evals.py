@@ -282,7 +282,9 @@ class EvalTests(TempDirTestMixin, unittest.TestCase):
 
     def test_schema_hashes_are_frozen_and_environment_changes_stop_scheduling(self):
         frozen = environment(self.cfg)
-        self.assertTrue(any(path.startswith("prompts/schemas/") for path in frozen["files"]))
+        self.assertTrue(any("/prompts/schemas/" in path for path in frozen["files"]))
+        self.assertIn("src/code_reviewer/flows/single_agent/flow.py", frozen["files"])
+        self.assertIn("src/code_reviewer/shared/git_ops.py", frozen["files"])
         changed = copy.deepcopy(frozen)
         changed["files"]["changed-during-run"] = "different"
         runner = FakeRunner(reviewer=[{"findings": []}])

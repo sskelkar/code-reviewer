@@ -35,7 +35,7 @@ python3 -m unittest discover -s tests -t .
 ## Code conventions
 
 - Every module starts with `from __future__ import annotations`. No `match` statements and no `X | Y` types at runtime (Python 3.9).
-- Keep modules small and single-purpose; see the code map in the README. `Engine.review` is the composition root. Roles (Reviewer, Comparator, Resolver) live in `roles.py`.
+- Keep modules small and single-purpose; see the code map in the README. `Engine` is a stable mode-selection facade. `flows/single_agent/flow.py:SingleAgentFlow.review` is the current composition root. Reviewer/Comparator live in that flow's `roles.py`; the shared Resolver is in `shared/resolver.py`. The `agent_personas` flow is reserved and not implemented; common mechanics belong in `shared/`. Package-root compatibility modules are not the implementation to edit.
 - Match the surrounding code's naming, comment density and idiom. Docstrings explain why, not what.
 - A model's output is never trusted: validate it, count what you drop, and show the counts in the report.
 - Do not add dependencies.

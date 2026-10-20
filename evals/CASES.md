@@ -1,6 +1,6 @@
 # Initial open-source review cases
 
-Updated 2026-10-19. The active set is capped at **eight cases**: four historical regression/repair pairs across three mature open-source repositories. Stop searching for additional cases; refine evidence and rubric examples next. The earlier six-defect/two-control mix was a suggestion, not a requirement; four pairs provide concrete negative examples without adding more unrelated scenarios.
+Updated 2026-10-19. This parked set is capped at **eight cases**: four historical regression/repair pairs across three mature open-source repositories. Do not search for more cases or refine the harness until eval work is explicitly resumed. The earlier six-defect/two-control mix was a suggestion, not a requirement; four pairs provide concrete negative examples without adding more unrelated scenarios.
 
 The user delegated case curation to the agent after finding unfamiliar PRs difficult to assess. That is permission to curate, not independent human verification of every expected finding. No model experiment has run. The local harness is now implemented and tested offline; see [README.md](README.md). Keys remain provisional and do not enter recall until explicitly human-confirmed.
 

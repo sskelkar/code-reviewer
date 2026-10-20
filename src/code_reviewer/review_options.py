@@ -5,7 +5,7 @@ import argparse
 from dataclasses import replace
 from typing import Any
 
-from .config import Config
+from .config import Config, REVIEW_MODES
 
 
 class OptionError(ValueError):
@@ -31,6 +31,8 @@ def positive_int(text: str) -> int:
 
 def add_run_options(parser: argparse.ArgumentParser) -> None:
     """Options that change how a review runs. Both frontends add exactly these."""
+    parser.add_argument("--mode", choices=REVIEW_MODES,
+                        help="review flow (default: review_mode in review.toml, single-agent); agent-personas is not implemented yet")
     parser.add_argument(
         "--passes", type=positive_int, metavar="N",
         help="maximum number of review passes (default: max_passes in review.toml, 6). The review can stop earlier once "
@@ -56,6 +58,8 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
 def apply_run_options(cfg: Config, args: Any) -> Config:
     """Return a copy of `cfg` with the command-line overrides applied and validated. The original is untouched."""
     cfg = replace(cfg)
+    if getattr(args, "mode", None):
+        cfg.review_mode = args.mode
     if args.passes:
         cfg.max_passes = args.passes
         cfg.min_passes = min(cfg.min_passes, args.passes)
@@ -70,6 +74,7 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # The options of `reviewer review`, one line each, for the banner it prints in a terminal. A test checks that every option
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
+    ("--mode NAME", "single-agent (default); agent-personas is not implemented yet"),
     ("--passes N", "maximum number of passes; --passes 1 is one cheap pass"),
     ("--model NAME", "model for all roles, for example haiku or sonnet"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
@@ -88,9 +93,9 @@ def review_banner(pr: str, cfg: Config) -> str:
     lines = [
         "reviewer review: multi-pass pull request review",
         "",
-        "This run: %s · up to %d passes · model %s · self-check %s · emails %s" % (
+        "This run: %s · up to %d passes · model %s · self-check %s · emails %s · mode %s" % (
             pr, cfg.max_passes, cfg.model_reviewer, "on" if cfg.self_check else "off",
-            "redacted" if cfg.redact_emails else "NOT redacted"),
+            "redacted" if cfg.redact_emails else "NOT redacted", cfg.review_mode),
         "",
         "Options you can add to this command:",
     ]

@@ -3,7 +3,7 @@
     python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> [--model haiku] [--repeat 2]
 
 The comparator decides which findings of different passes are the same issue, which drives every "found in 3 of 6 passes"
-count. After editing `prompts/comparator.*.md`, replay a few real runs and check that duplicates merge and different
+count. After editing `flows/single_agent/prompts/comparator.*.md`, replay a few real runs and check that duplicates merge and different
 issues do not. This makes real (cheap) model calls for the comparator only; the Reviewer is not run again.
 """
 from __future__ import annotations
@@ -17,13 +17,13 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from .claude_cli import ClaudeRunner
+from .shared.claude_cli import ClaudeRunner
 from .config import Config, ConfigError, load_config
-from .llm import ClaudeCaller
-from .master import MasterList
-from .roles import Comparator
-from .stats import Stats
-from .templates import load_prompt
+from .shared.llm import ClaudeCaller
+from .flows.single_agent.master import MasterList
+from .flows.single_agent.roles import Comparator
+from .shared.stats import Stats
+from .flows.single_agent.prompt_contract import load_prompt
 
 PassFindings = List[Tuple[int, List[Dict[str, Any]]]]
 Groups = Dict[str, List[str]]  # master finding ID -> the local finding IDs merged into it

@@ -5,7 +5,7 @@ import sys
 import time
 from typing import Optional, TextIO
 
-from .events import Event
+from .shared.events import Event
 
 
 def _fmt_money(value: float) -> str:

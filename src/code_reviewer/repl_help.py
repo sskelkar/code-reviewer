@@ -6,12 +6,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-REVIEW_USAGE = "review PR [--passes N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
+REVIEW_USAGE = "review PR [--mode single-agent|agent-personas] [--passes N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
 
 HELP = """\
 Commands:
   review <PR URL | owner/repo#n> [options]
       Review a pull request (several independent passes, then a merged report). Options:
+        --mode NAME       single-agent (default); agent-personas is not implemented yet
         --passes N        maximum number of passes; use 1 for a single, cheap pass
         --model NAME      model for all roles, for example haiku or sonnet
         --no-self-check   skip the reviewer's self-refutation phase (cheaper, findings are not double-checked)

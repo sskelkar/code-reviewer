@@ -7,6 +7,7 @@ A multi-pass pull request review agent. It runs several **independent** review p
 | I want to... | Go to |
 |---|---|
 | Review a pull request with this tool | [Part 1: Using the agent](#part-1-using-the-agent) |
+| Review the proposed four-persona flow (not implemented) | [Proposed persona flow](#proposed-persona-flow-not-implemented) |
 | Change or extend this tool | [Part 2: Contributing](#part-2-contributing) |
 | Understand the code (written for Java developers new to Python) | [docs/project-explainer.md](docs/project-explainer.md) |
 | Understand why it is designed this way | [proposal.md](docs/proposal.md) (short) or [proposal-full.md](docs/proposal-full.md) (detailed) |
@@ -28,6 +29,17 @@ For a pull request you point it at:
 5. It stops when extra passes stop finding anything new, or at a pass or budget limit, then prints a shareable review summary and saves a detailed report next to it.
 
 Findings are advisory. Treat the confidence score as a hint, not a verdict, and use `mark` (below) to record which findings were right so you can judge how much to trust the tool.
+
+## Review modes
+
+The two flows have separate orchestration and assets. Select a flow with `--mode`, or set `review_mode` in `review.toml`.
+
+| Mode | Status | Review behavior |
+|---|---|---|
+| `single-agent` | Implemented; default | One general Reviewer, independent passes (normally 3–6), incremental duplicate merging and convergence stopping. [Full flow](#current-single-agent-flow-implemented). |
+| `agent-personas` | Planned; selection currently returns a not-implemented error | Four focused Reviewers, three passes each, per-persona agreement and advisory verification of flagged conflicts. [Proposed flow](#proposed-persona-flow-not-implemented). |
+
+For the current flow, use `reviewer review OWNER/REPO#123 --mode single-agent`. Selecting `agent-personas` never silently runs the single-agent flow.
 
 ## Prerequisites
 
@@ -138,6 +150,7 @@ These work the same in the interactive prompt (`review <url> ...`) and the one-s
 
 | Option | Meaning |
 |---|---|
+| `--mode NAME` | Select `single-agent` (default) or the reserved `agent-personas` mode. The latter fails clearly until implemented; it never falls back to single-agent. Works in both CLI and REPL |
 | `--passes N` | Maximum number of review passes (a whole number, 1 or more). Default is `max_passes` from your settings (6). The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` runs exactly one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
 | `--model NAME` | Model for all three roles, an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
@@ -169,9 +182,9 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 
 How to read it:
 
-- A finding that every pass found is much more likely to be real than one found once, but it is still not guaranteed. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
-- **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them yourself with `mark`; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. Scoring by an independent verification step is planned (see the roadmap in [docs/proposal.md](docs/proposal.md)).
-- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. A separate step that tests each finding against the code is planned (the Verifier, see the roadmap).
+- A finding that every pass found has high agreement; repetition alone does not establish correctness. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
+- **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them yourself with `mark`; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. The first planned Verifier will annotate flagged conflicts without changing confidence (see the roadmap in [docs/proposal.md](docs/proposal.md)).
+- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. The first planned separate Verifier will annotate only flagged conflicts in optional persona mode; checking every finding remains later work (see the proposed flow below).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: an exact quote that exists in the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
 - Cost figures are Claude Code's estimates and may not match your billing.
@@ -180,7 +193,7 @@ How to read it:
 
 The agent applies two sets of criteria:
 
-- **Defaults**: generic, language-agnostic rules shipped with the agent ([criteria/defaults/general.md](criteria/defaults/general.md)).
+- **Defaults**: generic, language-agnostic rules shipped with the agent ([src/code_reviewer/flows/single_agent/criteria/general.md](src/code_reviewer/flows/single_agent/criteria/general.md)).
 - **Project criteria**: your project's own rules. **Project rules take precedence** when they cover the same concern (the model is instructed to follow them).
 
 To make your project's rules visible, describe where they are in the **`AGENTS.md` at the repository root**. There is no required format; the agent reads it and works out which files hold criteria. For example:
@@ -216,7 +229,7 @@ The current criteria are numbered `GEN-001` through `GEN-010` in checklist order
 
 ### Customizing the default rules
 
-Edit [criteria/defaults/general.md](criteria/defaults/general.md). Each rule is a heading of the form `## [GEN-011] Title` followed by the rule text. The ID is what findings cite. To turn rules off for your runs, list them in `disabled_default_rules`, or set `criteria_mode` to `project_only` or `defaults_only`.
+Edit [src/code_reviewer/flows/single_agent/criteria/general.md](src/code_reviewer/flows/single_agent/criteria/general.md). Each rule is a heading of the form `## [GEN-011] Title` followed by the rule text. The ID is what findings cite. To turn rules off for your runs, list them in `disabled_default_rules`, or set `criteria_mode` to `project_only` or `defaults_only`.
 
 ## Configuration
 
@@ -224,12 +237,13 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `review_mode` | `single-agent` | Flow selected by default; override for one run with `--mode`. `agent-personas` is reserved and currently fails before PR preparation or model calls |
 | `model_reviewer`, `model_comparator`, `model_resolver` | `haiku` | Model alias or full name for each role (for example `sonnet`). The comparator decides which findings from different passes are the same issue. Haiku is cheap (about $0.0006 per comparator call) but can be inconsistent on borderline duplicates. Sonnet merged consistently in replays but more aggressively, and costs roughly 15 times more for this step (about $0.01 per call, so about $0.06 for a 6-pass review). Measure with `python -m code_reviewer.replay`. |
 | `self_check` | `true` | The Reviewer tries to refute its own findings before answering |
 | `criteria_mode` | `merge` | `merge`, `project_only` or `defaults_only` |
 | `criteria_manifest` | `""` | Path to a JSON file that replaces the criteria resolver's answer (reproducible experiments) |
 | `disabled_default_rules` | `[]` | Default rule IDs to switch off |
-| `min_passes`, `max_passes` | `3`, `6` | Passes always run / at most run |
+| `min_passes`, `max_passes` | `3`, `6` | Successful passes required before convergence / maximum scheduled attempts |
 | `quiet_k` | `2` | Stop after this many consecutive passes with no new finding (after `min_passes`) |
 | `max_consecutive_failures` | `2` | Abort after this many failed passes in a row |
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
@@ -238,15 +252,15 @@ Settings come from a TOML file, first found of: `--config PATH`, `./review.toml`
 | `extra_exclude_patterns` | none | Added to `exclude_patterns` without replacing it. Use it for planning documents such as PRDs and implementation plans (the author's claims, which may drift from the code): `["docs/prds/", "docs/plans/"]`. They are left out of the prompt but listed by path, the reviewer can still open them in the checkout, and findings located in excluded files are dropped and counted. Keep public-facing documentation (API and event docs) out of this list: it must stay reviewed |
 | `criteria_max_chars` | `200000` | Cap on project criteria text |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |
-| `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Caps for a whole review; it stops between passes once either is exceeded. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. The dollar cap is the real spending limit |
+| `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Caps for a whole review; it stops between passes once either is exceeded. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. These are stop thresholds checked between passes; calls and retries within a pass can exceed the remaining run budget |
 | `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Do not remove unless you know why |
 | `claude_bin` | `claude` | Path or name of the Claude Code binary |
 | `post_tiers` | `["High","Medium","Low"]` | Confidence tiers shown in the review summary and included in a posted comment. Single-pass (unrated) findings are always included |
 | `redact_emails` | `true` | Replace email addresses in the PR title, description and commit messages with `[email]` before they are sent to the model. The diff and repository files are not redacted. Set to `false` to send PR text as written |
 | `runs_dir` | `""` | Where runs are stored (default `~/.code-reviewer/runs`) |
-| `candidate_window`, `candidate_all_threshold`, `candidate_max`, `grounding_line_window` | `20`, `30`, `40`, `30` | Tuning for duplicate matching and line-number tolerance. Rarely needed |
+| `candidate_window`, `candidate_all_threshold`, `candidate_max`, `grounding_line_window` | `20`, `30`, `40`, `30` | First three tune duplicate candidates; `grounding_line_window` counts corrections larger than this distance. Quotes are searched across the file and line numbers are corrected even within this window |
 
-Environment variables: `CODE_REVIEWER_HOME` (location of the checkout containing `prompts/` and `criteria/`), `CODE_REVIEWER_DATA` (replaces `~/.code-reviewer` for runs, cache and config).
+Environment variables: `CODE_REVIEWER_HOME` (repository checkout containing `src/code_reviewer/flows/single_agent/` and its assets), `CODE_REVIEWER_DATA` (replaces `~/.code-reviewer` for runs, cache and config).
 
 ## Where things are stored, and cleaning up
 
@@ -290,7 +304,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
 | `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
 | `doctor`: `claude is installed` fails | Install Claude Code, or set `claude_bin` in `review.toml` |
-| `doctor`: required flags missing | Your Claude Code is too old or different. Compare `claude --help` with `isolation_flags` and the flags in `src/code_reviewer/claude_cli.py` |
+| `doctor`: required flags missing | Your Claude Code is too old or different. Compare `claude --help` with `isolation_flags` and the flags in `src/code_reviewer/shared/claude_cli.py` |
 | `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, the canary or hook was not ignored, or a file outside the working directory could be read or searched (`LEAK`) | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
@@ -328,21 +342,41 @@ Supported Python is 3.9 and up. Before sending a change, run the tests on the ol
 
 ```
 code-reviewer/
-  README.md  AGENTS.md  pyproject.toml  review.example.toml     AGENTS.md: working rules for AI agents
-  docs/                             HANDOVER.md (current state and next steps), proposal.md (short design doc), proposal-full.md (archived), project-explainer.md
-  criteria/defaults/general.md      default review rules (IDs GEN-001...)
-  prompts/                          prompt templates and JSON schemas, see prompts/README.md
-  src/code_reviewer/                the package (see the code map below)
-  tests/                            unit and integration tests with fakes
+  README.md  AGENTS.md  pyproject.toml  review.example.toml
+  docs/                              proposal, handover, criteria draft and Java/Python guide
+  prompts/README.md                  guide to model contracts; active assets live with their flow
+  src/code_reviewer/
+    engine.py                        stable facade: selects exactly one flow
+    flows/
+      single_agent/                  current multi-pass flow
+        flow.py  passes.py  stop_policy.py  roles.py
+        master.py  models.py  report.py  summary.py  dry_run.py  prompt_contract.py
+        prompts/                     unchanged system/user templates and JSON schemas
+        criteria/general.md          unchanged ten GEN-* rules
+      agent_personas/                explicit unavailable-mode boundary; implementation comes next
+        flow.py  README.md
+    shared/                          Claude, git, criteria discovery, grounding, storage, stats, types
+    cli.py  repl.py  review_flow.py   shared user entry points
+    config.py  review_options.py     settings and run options
+    ...                              legacy import bridges and developer tools
+  tests/                             offline unit/integration tests with fakes
 ```
 
 ## Design in one paragraph
 
-A deterministic Python harness runs everything. Large language models only **propose**: a Criteria Resolver names criteria files, a Reviewer reports findings, a Comparator says which findings are duplicates. The harness **validates every model output, decides, and writes all state and files**. Each model call is a separate headless `claude -p` process with read-only tools and a fresh context, so passes are independent and the Reviewer cannot change anything. Confidence is arithmetic over independent passes. The reasoning, the alternatives we rejected and the roadmap are in [proposal.md](docs/proposal.md).
+A deterministic Python harness runs everything. Large language models only **propose**: a Criteria Resolver names criteria files, a Reviewer reports findings, a Comparator says which findings are duplicates. The harness **validates every model output, decides, and writes all state and files**. The current flow lives under `flows/single_agent/`; the shared mechanics live under `shared/`. Each model call is a separate headless `claude -p` process with read-only tools and a fresh context, so passes are independent and the Reviewer cannot change anything. Confidence is arithmetic over independent passes. The reasoning, the alternatives we rejected and the roadmap are in [proposal.md](docs/proposal.md).
+
+## Flow selection and ownership
+
+`Engine` is a small compatibility facade. It selects one implementation in `flows/` before PR preparation or loading that flow's prompts. Without an override, `review_mode = "single-agent"` runs the existing multi-pass reviewer. Both `reviewer review PR --mode single-agent` and the REPL's `review PR --mode single-agent` select it explicitly. `agent-personas` is a reserved mode with a clear error until implemented; selecting it does not prepare a PR, load single-agent assets, call Claude or silently fall back.
+
+Read **[single_agent/flow.py](src/code_reviewer/flows/single_agent/flow.py)** for the complete working review sequence. Its scheduler, role contracts, master list, result, report, summary, prompt loader and prompt/criteria assets are owned by that folder. Future persona-specific code/assets belong in `flows/agent_personas/`; it will own its different scheduling, comparisons and annotations. Shared mechanics live in `shared/`, which does not import either flow. No mode checks are scattered through the single-agent loop.
+
+Older imports such as `code_reviewer.git_ops`, `code_reviewer.master` and `code_reviewer.roles` remain compatibility bridges, not second implementations. Existing `Engine.prepare/review/dry_run` calls and inspection hooks still work. Frontends use the selected flow through Engine; existing display helpers currently refer to the only implemented flow. Persona-specific presentation will be integrated when that flow is implemented.
 
 ## How a review runs
 
-### The big picture
+### Current single-agent flow (implemented)
 
 The **harness** is plain Python and runs everything. **Blue boxes are the only model calls** (each a separate `claude -p` process). A model never passes anything to another model: its answer returns to the harness, which checks it before using it.
 
@@ -371,16 +405,17 @@ flowchart TD
     class RES,REV,CMP model
 ```
 
-Per pass there are two model calls, the Reviewer and the Comparator (the Comparator is skipped when there is nothing to compare, for example a single finding in the first pass). The Criteria Resolver runs once per review. The consolidation is **not** a separate step at the end: the master list is updated by the harness after every pass, and when the loop stops the harness only turns it into confidence levels and a report.
+Per pass there are two model calls, the Reviewer and the Comparator (the Comparator is skipped when there is nothing to compare, for example a single finding in the first pass). Project criteria discovery runs once per review; it needs a Resolver call only when root `AGENTS.md` is present and no manifest override is supplied (unless criteria mode is `defaults_only`). The consolidation is **not** a separate step at the end: the master list is updated by the harness after every pass, and when the loop stops the harness only turns it into confidence levels and a report.
 
-### Detailed flow
+#### Detailed flow (current single-agent mode)
 
 The flow below follows one `reviewer review <pr>` (or `review` inside the interactive session) step by step, with the module that does each.
 
 ```mermaid
 flowchart TD
     U["<b>You</b><br/>reviewer review PR<br/><i>cli.py or repl.py</i>"] --> RF["<b>review_flow.run_review</b><br/>shared by CLI and REPL"]
-    RF --> PREP["<b>Engine.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
+    RF --> SELECT["<b>Engine</b><br/>select single-agent"]
+    SELECT --> PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
     PREP --> RED["<b>InputBuilder.redact</b><br/>replace email addresses in PR text"]
     RED --> DIFF["<b>InputBuilder.load_diff</b> (diffview)<br/>merge-base diff, drop lockfiles and generated files,<br/>refuse empty or oversized PRs"]
     DIFF --> CO["<b>RunStore + git_ops.export_tree</b><br/>read-only copy of the PR head<br/>in a temporary directory"]
@@ -388,7 +423,7 @@ flowchart TD
 
     subgraph CRIT["Criteria: InputBuilder.resolve_criteria (criteria.py)"]
         direction TB
-        C1["Load the 10 default criteria<br/>criteria/defaults/general.md"]
+        C1["Load the 10 default criteria<br/>src/code_reviewer/flows/single_agent/criteria/general.md"]
         C2["Read root AGENTS.md from the BASE commit<br/>extract in-repo paths and links it mentions"]
         C3["<b>Criteria Resolver</b> (model, no tools)<br/>which of those files hold review rules?"]
         C4["Validate: regular in-repo files only<br/>split into one rule per heading, assign rule IDs"]
@@ -402,7 +437,7 @@ flowchart TD
     CRIT --> SAVE["<b>RunStore.save_inputs / save_prompts</b><br/>saves exactly what the Reviewer will see"]
     SAVE --> LOOP
 
-    subgraph LOOP["Pass loop: Engine._run_passes"]
+    subgraph LOOP["Pass loop: SingleAgentFlow._run_passes"]
         direction TB
         SP1["<b>StopPolicy.before_pass</b><br/>budget, max passes, failures?"]
         PASS["<b>PassRunner.run</b><br/>one pass, see next diagram"]
@@ -421,7 +456,7 @@ flowchart TD
     class C3 model
 ```
 
-### Inside one pass
+#### Inside one pass (current single-agent mode)
 
 ```mermaid
 flowchart TD
@@ -449,22 +484,10 @@ What is checked, and by whom, today:
 |---|---|---|
 | The finding's quote exists in the code (or its anchor covers a changed hunk) | Harness, deterministic | `findings.FindingsPreparer` |
 | The cited rule is a real one (formatting is repaired; unknown becomes "none") | Harness | `findings.resolve_rule_id` |
-| The Reviewer tries to refute its own finding after writing it (**self-check**) | The Reviewer model, in the same session | second phase of `prompts/reviewer.system.md` |
+| The Reviewer tries to refute its own finding after writing it (**self-check**) | The Reviewer model, in the same session | second phase of `src/code_reviewer/flows/single_agent/prompts/reviewer.system.md` |
 | Are two findings the same issue? (finding vs. earlier findings; text only, no code access) | Comparator model, answer validated by the harness | `roles.Comparator` |
 | Confidence, severity ordering, what is posted | Harness arithmetic | `master.rate`, `summary.py` |
-| A separate **Verifier** that tests each finding with fresh evidence | **Not built yet** (roadmap P2) | |
-
-**Comparator vs. Verifier.** They answer different questions and do not replace each other.
-
-| | Comparator (exists) | Verifier (planned) |
-|---|---|---|
-| Question | Are these two findings the same issue? | Is this finding true? |
-| Compares | A finding against other findings | A finding against the code and the repository's docs |
-| Sees | Finding text only, no tools | One finding, with read access to the checkout |
-| Output | Which master finding each new finding belongs to | Confirmed or refuted, with evidence |
-| Removes | Duplicates | False positives (including ones every pass repeated) |
-
-The Verifier would run after the Comparator, once per distinct finding.
+| A separate **Verifier** that investigates flagged conflicts and annotates them | **Not built yet** (proposed persona mode, proposal §12) | |
 
 Numbered steps, with the module that does each:
 
@@ -472,43 +495,100 @@ Numbered steps, with the module that does each:
 2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, drops excluded files and refuses empty or oversized PRs.
 3. `git_ops.export_tree` exports the PR head to a checkout in its own temporary directory (symlinks skipped).
 4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), adds the nested `AGENTS.md` and `.claude/rules` files that cover the changed paths (`criteria.scoped_files`, no model call), and rule IDs are assigned.
-5. `Engine._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`. The Comparator is skipped when there is nothing to compare (for example a single finding in the first pass).
+5. `SingleAgentFlow._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`. The Comparator is skipped when there is nothing to compare (for example a single finding in the first pass).
 6. `StopPolicy` decides after every pass whether to stop.
 7. `report.render_report` writes the report; `RunStore` writes all artifacts. Criteria appear in the report by name and source, never by their internal IDs.
 
+### Proposed persona flow (not implemented)
+
+**Agreed persona behavior, 2026-10-20; not implemented.** The structural flow separation and mode-selection boundary are implemented. The current single-agent review remains the default and baseline for comparison. The optional persona mode will use **correctness, code quality, test quality and production safety**, with **three fixed passes each**: twelve scheduled Reviewer passes. Mode selection is now implemented as `--mode single-agent|agent-personas`. Selecting `agent-personas` fails with a not-implemented error; the persona review behavior below is still a proposal.
+
+The diagram shows the proposed persona branch. The implemented single-agent diagrams appear above. Blue boxes are Claude calls; the harness validates every proposed decision and writes all state. There is no separate Conflict Detector.
+
+```mermaid
+flowchart TD
+    REQ(["Optional persona review - proposed"]) --> PREP["Harness: pin PR, filter diff,<br/>prepare the head checkout"]
+    PREP --> RES["Claude: existing Criteria Resolver<br/>proposes project criteria files"]
+    RES --> LOAD["Harness: load accepted project rules<br/>from the base commit"]
+    LOAD -->|"project rules present"| ROUTE["Claude: classify project rules<br/>one or more personas per rule"]
+    ROUTE --> COVER["Harness: validate complete coverage<br/>fallback rules go to all personas"]
+    LOAD -->|"no project rules"| PROMPTS
+    COVER --> PROMPTS["Harness: freeze and save<br/>the complete prompts for each persona<br/>project rules override defaults"]
+    DEFAULTS["Defaults already assigned in this repo<br/>shared rules retain one identity"] --> PROMPTS
+    PROMPTS --> SCHED["Harness: select the next persona<br/>correctness, code quality, tests, safety<br/>3 sequential rounds - no quiet-pass stop"]
+    SCHED --> REV["Claude: one fresh Reviewer session<br/>only its frozen prompt and relevant code<br/>may report incidental serious defects"]
+    REV --> CHECK["Harness: validate and ground findings<br/>keep discovering persona and pass"]
+    CHECK --> CMP["Claude: Comparator sees the full master list<br/>merge duplicates, assign categories,<br/>flag potential conflicts"]
+    CMP --> MASTER["Harness: update one master list<br/>findings, sightings and conflict records"]
+    MASTER --> MORE{"More scheduled passes<br/>and review budget available?"}
+    MORE -->|yes| SCHED
+    MORE -->|"done or stopped"| FLAGS{"Flagged groups and<br/>verification allowed?"}
+    FLAGS -->|yes| VER["Claude: targeted Verifier<br/>fresh session for each flagged group<br/>reads code and explains evidence or tradeoffs"]
+    VER --> ANN["Harness: validate and annotate only<br/>keep findings and agreement counts"]
+    ANN --> REPORT
+    FLAGS -->|"none or calls stopped"| REPORT["Combined report and summary<br/>per-persona agreement, assigned criteria,<br/>conflict annotations and unfinished work"]
+    REPORT --> YOU(["You judge findings and tradeoffs<br/>post only after confirmation"])
+
+    classDef model fill:#dbeafe,stroke:#2563eb,color:#111827
+    class RES,ROUTE,REV,CMP,VER model
+```
+
+The loop arrows are scheduling control, **not feedback to Reviewers**. Each persona's three sessions get identical prompts and never see prior findings. Sessions run sequentially, one persona per turn, in three rounds; parallel execution is later work. Budget, cancellation or failures can still leave scheduled passes incomplete, but a quiet second pass never skips the third. Per-call retries remain possible. Verification requires remaining budget and a run status that allows more calls. Cancellation or terminal failure stops further calls, including the Verifier. If verification cannot run, flagged groups remain pending/unresolved in the report; budgets are never raised automatically.
+
+The four personas deliberately inspect different subjects:
+
+| Persona | Focus | Initial default topics |
+|---|---|---|
+| Correctness | Calculations, branches, state transitions, repository-supported behavior and contracts | Correctness; internal contracts |
+| Code quality | Readability, modularity, abstractions, duplication and accurate documentation | Simplicity/maintainability; clarity/contract docs |
+| Test quality | Assertions, coverage, appropriate test levels, isolation and mocks | Meaningful coverage; independence/mocking |
+| Production safety | Security, authorization, input bounds, failures, resources, transactions and concurrency | Security/privacy; validation/bounds; failures/resources; integrity/concurrency; internal contracts |
+
+Review the [default persona criteria draft](docs/persona-criteria.md) for the actual focus instructions and rule wording; it is separate from the active general criteria.
+
+- **Defaults are distributed ahead of time**, with shared rules carrying the same ID. Only discovered project rules need runtime classification; 100% of accepted rules must reach at least one persona. Project rules retain their text/source and override conflicting defaults. The planned persona-prefixed IDs and exact default allocation are in [proposal section 12](docs/proposal.md#12-agreed-persona-design-and-next-steps); current `GEN-*` IDs and active criterion text are unchanged by the refactor.
+- **Focus does not mean ignoring necessary context.** A test reviewer can read the implementation. Any persona can report an evidenced correctness/safety defect noticed outside its focus. The Comparator categorizes it, but category assignment never invents a sighting by another persona.
+- **One master list, incremental consolidation.** The Comparator compares each batch with the complete master and checks relationships within that batch. It proposes duplicate mappings, categories and conflict flags; the harness validates references, applies mappings and deduplicates flags. Opposing factual claims stay separate. There is no additional detection call at the end.
+- **Verification is conditional and advisory.** After reviewing, fresh Verifier sessions investigate only distinct flagged groups. Annotations can support/refute claims, explain different conditions or valid tradeoffs, or leave uncertainty. Findings stay visible; there is no persona hierarchy, automatic suppression, rewriting or change to agreement scores. The Verifier can suggest category corrections for groups it examines. No flags means no Verifier calls.
+- **Agreement stays per discovering persona.** Show `test-quality: 3/3`, for example, instead of diluting it across twelve passes or inventing an overall confidence tier. Failed passes do not count as completed; fewer than two completions remain unrated. Show categories, criterion, agreement and verification outcome separately.
+- **Save what each persona actually received.** Keep fully rendered system/user text once under `input/personas/<persona>/reviewer.system.md` and `reviewer.user.md`, with model/schema/settings and per-pass prompt hashes. The report lists all assigned criterion names and sources under each persona. Separate detailed routing reports are unnecessary; classification and other model inputs/outputs remain saved for inspection.
+
+The planned feature keeps the current restrictions: Reviewer and Verifier code access is Read/Grep/Glob in the same temporary checkout; neither runs tests or commands. The user judges production reviews locally through Claude. This plan does not authorize Codex to inspect production material, new paid runs, automatic budget changes, or revival of the parked eval harness. Implementation and synthetic tests come next after reviewing this flow.
+
+**Comparator vs. Verifier.** Their responsibilities remain distinct in the proposed mode:
+
+| | Comparator today | Comparator in persona mode (planned) | Targeted Verifier (planned) |
+|---|---|---|---|
+| Question | Are these findings the same issue? | Same issue, appropriate category, or potential conflict? | What does repository evidence establish about these competing claims? |
+| Sees | New findings and selected master candidates; no code tools | New batch and complete master finding text; no code tools | Flagged claims, applicable criteria, diff and read access to the checkout |
+| Proposes | Duplicate mappings | Mappings, categories and potential conflict references | Support/refutation, context, tradeoffs or uncertainty, with evidence |
+| Harness action | Validate mappings and merge duplicate sightings | Validate and merge sightings; retain separate conflicting claims and conflict records | Validate and attach annotations; retain original findings and agreement counts |
+
+Initially the Verifier runs only for distinct flagged conflict groups after the persona review passes, not once per finding. It does not automatically remove false positives. The existing single-agent mode has no separate Verifier.
+
 ## Code map
 
-Start with [engine.py](src/code_reviewer/engine.py): `Engine.review` is the whole story in about 45 lines, and each step it calls lives in its own module.
+Start with [flows/single_agent/flow.py](src/code_reviewer/flows/single_agent/flow.py): `SingleAgentFlow.review` is the composition root. [engine.py](src/code_reviewer/engine.py) only delegates to the selected flow.
 
-| Module | Responsibility |
+| Location | Responsibility |
 |---|---|
-| `engine.py` | Runs a review: wires the steps together, runs the passes under the stop policy, writes the outputs, emits progress events |
-| `review_inputs.py` | `InputBuilder`: builds what the Reviewer is given (email redaction, the filtered diff, the criteria). Shared by a real review and `--dry-run` |
-| `pr_source.py` | Turns a PR reference into a `PRContext` pinned to exact commits (`gh` + `git`) |
-| `diffview.py` | Parses the diff, excludes lockfiles and generated files, renders the numbered diff the Reviewer sees |
-| `criteria.py` | Default rules, project rules found via `AGENTS.md` and by location (nested `AGENTS.md`, `.claude/rules`), in-repo only, from the base branch, rule IDs |
-| `roles.py` | The three LLM roles: `CriteriaResolver`, `Reviewer`, `Comparator`. Each owns its prompt variables and output validation |
-| `llm.py` | Every `claude` call goes through `ClaudeCaller`: one retry, usage accounting, raw-output log |
-| `claude_cli.py` | The subprocess wrapper around `claude -p` and the JSON envelope parser |
-| `passes.py` | One pass: review, check evidence, compare with the master list, merge |
-| `findings.py` | Validates findings and checks their evidence exists (quote in the code, or anchor over a changed hunk) |
-| `master.py` | The merged finding list, comparator decision validation, confidence tiers, pass overlap |
-| `stop_policy.py` | When the loop stops: convergence, failures, budget. Pure logic |
-| `stats.py`, `report.py` | Usage and cost accounting; the detailed Markdown report |
-| `summary.py` | The shareable review summary. The terminal output, `summary.md` and the PR comment all come from one function |
-| `review_options.py` | The `review` options (`--passes`, `--model`, ...) shared by the CLI and the REPL |
-| `run_store.py` | The on-disk layout of a run. The only module that knows file names |
-| `cli.py`, `repl.py`, `review_flow.py` | Frontends: the one-shot command, the interactive prompt, and the review steps they share (`run_review`, `REVIEW_ERRORS`) |
-| `repl_help.py`, `review_options.py` | The prompt's static text (banner, help); the `review` options shared by both frontends, and the banner `reviewer review` prints in a terminal |
-| `progress.py`, `post.py`, `doctor.py` | Progress lines, PR comment posting, environment checks |
-| `dry_run.py` | `--dry-run`: render what the Reviewer would be given, without calling a model |
-| `redact.py` | Replaces email addresses in the PR text before it is sent |
-| `replay.py` | Developer tool: re-run the comparator on a saved run to evaluate changes to the comparator prompt or model |
-| `evals.py`, `eval_runner.py` | Local eval CLI and fixed-attempt experiment orchestration over Engine |
-| `eval_cases.py`, `eval_judgments.py`, `eval_grading.py` | Pinned case validation, human judgment validation, deterministic metrics and cross-suite reports |
-| `models.py`, `config.py`, `templates.py`, `events.py`, `git_ops.py` | Shared types, settings, prompt rendering, events, git and gh helpers |
+| `engine.py`, `flows/__init__.py` | Stable API and one-time mode selection |
+| `flows/single_agent/flow.py` | Complete current review sequence and pass loop |
+| `flows/single_agent/passes.py`, `stop_policy.py` | One pass and convergence/failure/budget rules |
+| `flows/single_agent/roles.py`, `prompt_contract.py`, `prompts/` | Reviewer/Comparator contracts, role-specific loading, templates and schemas |
+| `flows/single_agent/master.py`, `models.py` | Merged sightings, comparator validation, agreement and flow result |
+| `flows/single_agent/report.py`, `summary.py`, `dry_run.py` | Detailed report, shareable summary and dry-run presentation |
+| `flows/single_agent/criteria/` | Existing ten defaults, unchanged |
+| `flows/agent_personas/` | Reserved persona workflow; currently rejects selection |
+| `shared/review_inputs.py`, `criteria.py`, `resolver.py` | PR redaction/diff inputs, criteria parsing/discovery and shared Resolver role |
+| `shared/claude_cli.py`, `llm.py`, `templates.py` | Claude subprocesses/retries, accounting/logging and generic template rendering |
+| `shared/git_ops.py`, `pr_source.py`, `diffview.py`, `findings.py` | Pinned PR input, diff parsing/exclusions and evidence validation |
+| `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
+| `cli.py`, `repl.py`, `review_flow.py`, `review_options.py`, `repl_help.py` | User entry points, common launch sequence, options and help |
+| `progress.py`, `post.py`, `doctor.py`, `replay.py` | Progress, confirmed posting, environment checks and Comparator replay |
+| Legacy package-root modules | Small compatibility exports; edit canonical flow/shared files instead |
 
-Module dependencies point one way: `models`, `config` and `events` at the bottom; `engine` and the frontends at the top. Keep it that way (the engine imports the report, not the reverse).
+Shared code imports no workflow. Flow-owned result types stay inside the flow; `code_reviewer.models.RunResult` remains a compatibility export of the single-agent result.
 
 ## Tests
 
@@ -527,11 +607,12 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_doctor_and_live_envelope` | The doctor's tool check and parsing of a real Claude result (`tests/fixtures/live_envelope_haiku.json`) |
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
 | `test_evals`, `test_eval_grading` | Pinned evals, no-call plans, fake-model matrices, isolation/failures/budgets, local labels/rekey/combined reports and deterministic rubric metrics |
+| `test_flow_selection` | Default/explicit mode selection, unavailable-mode isolation, compatibility imports, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |
 
 Things to know when writing tests:
 
-- `tests/helpers.py` has `make_repo` (a base commit and a feature commit in a temp repo) and `FakeRunner`. `FakeRunner` tells the roles apart by phrases in their **system prompts** ("identify which files", "deduplicate code-review findings"). If you reword those phrases in `prompts/`, update `FakeRunner`.
+- `tests/helpers.py` has `make_repo` (a base commit and a feature commit in a temp repo) and `FakeRunner`. `FakeRunner` tells the roles apart by phrases in their **system prompts** ("identify which files", "deduplicate code-review findings"). If you reword those phrases in the flow's prompts, update `FakeRunner`.
 - Tests render the real prompt templates, so adding a `{{variable}}` to a prompt without supplying it in `roles.py` fails the tests.
 - Nothing in the suite touches the network. Keep it that way; live behavior is checked with `reviewer doctor --live`.
 
@@ -539,21 +620,21 @@ Things to know when writing tests:
 
 | To... | Do this |
 |---|---|
-| Change what a role is asked | Edit the files in `prompts/` ([prompts/README.md](prompts/README.md) lists every variable). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
-| Change output structure | Edit the schema in `prompts/schemas/`, the validation in `findings.py` or `master.py`, and the report |
-| Tune how duplicate findings are merged | Edit `prompts/comparator.*.md` (or set `model_comparator`), then replay saved runs: `python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> --repeat 3 [--model sonnet]`. It re-runs only the comparator on each pass's saved findings (about $0.004 per replay with Haiku), prints the recorded grouping and each replay's grouping, and lists the pairs of findings that are now merged or split. Judge the borderline cases yourself, and repeat the replay because the model is not deterministic |
-| Add or change default rules | Edit `criteria/defaults/*.md` using `## [GEN-xxx] Title` headings. IDs must be unique (a test checks) |
+| Change what a role is asked | Edit the files in `src/code_reviewer/flows/single_agent/prompts/` ([prompts/README.md](prompts/README.md) lists every variable). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
+| Change output structure | Edit the flow's `prompts/schemas/`, `shared/findings.py` or the flow's `master.py`, and its report |
+| Tune how duplicate findings are merged | Edit `src/code_reviewer/flows/single_agent/prompts/comparator.*.md` (or set `model_comparator`), then replay saved runs: `python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> --repeat 3 [--model sonnet]`. It re-runs only the comparator on each pass's saved findings (about $0.004 per replay with Haiku), prints the recorded grouping and each replay's grouping, and lists the pairs of findings that are now merged or split. Judge the borderline cases yourself, and repeat the replay because the model is not deterministic |
+| Add or change default rules | Edit `src/code_reviewer/flows/single_agent/criteria/*.md` using `## [GEN-xxx] Title` headings. IDs must be unique (a test checks) |
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the settings table in this README |
-| Add a progress message | Emit an event with `engine.emit(...)`, handle it in `progress.py` |
-| Add an LLM role | Add `prompts/<role>.system.md`, `.user.md` and a schema, register the name in `templates.ROLES`, add a class in `roles.py` that builds a `CallSpec` and calls `ClaudeCaller.call`, and wire it in `engine.py` |
+| Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
+| Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ClaudeCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
 | Add a REPL command | In `repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
-| Change the stop rules | `stop_policy.py` and `tests/test_stop_policy.py` |
+| Change the stop rules | `flows/single_agent/stop_policy.py` and `tests/test_stop_policy.py` |
 
 ## Code conventions
 
 - Standard library only at runtime. Compatible with Python 3.9: start modules with `from __future__ import annotations`, no `match` statements, no `X | Y` unions outside annotations.
 - LLMs propose, code decides: validate every model output in code and never execute it. All files are written by the harness.
-- Modules do one job; keep functions short and named for what they do. Put new logic in the module that owns the concept rather than in `engine.py`, which should stay a readable list of steps.
+- Modules do one job; keep functions short and named for what they do. Put new logic in the module that owns the concept and keep each flow's `flow.py` a readable list of steps. `engine.py` only selects and delegates.
 - Keep prompts language-agnostic. Project- or language-specific guidance belongs in criteria, not in prompts.
 - Add a test for every behavior change. Keep the README and [prompts/README.md](prompts/README.md) in sync with changes to usage or prompts, and update [proposal.md](docs/proposal.md) if a design decision changes.
 
@@ -580,7 +661,7 @@ The offline tests cannot prove how Claude Code behaves. After upgrading Claude C
 
 ## Local eval harness (parked)
 
-This harness was built and then set aside: the project now judges reviews by hand on real pull requests (see [proposal.md](docs/proposal.md), section 9). It is kept for later and should not be extended for now. Use `python -m code_reviewer.evals` to create pinned local cases (`init`), preview without models (`plan`), run Claude reviews (`run`), record human findings judgments (`label`) and calculate deterministic metrics (`grade`). `rekey` revises answer keys and resets labels on copied saved reviews without new model calls. Only `run` calls Claude. See [the eval guide](evals/README.md) for commands, private local use, answer-key confirmation and combined reports.
+This harness was built and then set aside: the project now judges reviews by hand on real pull requests (see [proposal.md](docs/proposal.md), section 9). Do not run, extend or build on it until explicitly resumed. The retained `python -m code_reviewer.evals` commands can create pinned local cases (`init`), preview without models (`plan`), run Claude reviews (`run`), record human findings judgments (`label`) and calculate deterministic metrics (`grade`). `rekey` revises answer keys and resets labels on copied saved reviews without new model calls. Only `run` calls Claude. See [the eval guide](evals/README.md) for commands, private local use, answer-key confirmation and combined reports.
 
 Trials vary the Reviewer model and fixed pass attempts while keeping the Comparator/settings and generic default criteria constant. Failures/budgets can interrupt a trial. Group quality scores require all scheduled trials to complete and be adjudicated; provisional answer keys never produce recall. Production manifests, answers, findings and reports stay physically outside this repository. Only Claude reviews production code; the user judges its findings locally. No production case has been accessed or real model experiment run as part of this implementation.
 
@@ -593,4 +674,4 @@ The [grading rubric](evals/RUBRIC.md) remains provisional pending actual human j
 - Verified live: the Reviewer flag set, isolation canaries, tool list, that files outside the working directory cannot be read or searched, and the result envelope shape (`tests/fixtures/live_envelope_haiku.json` is a real reply used as a regression fixture). Real multi-pass reviews of a PR have been run. Not yet exercised: posting a comment to a PR, and what Claude Code does when the per-call `--max-budget-usd` is exceeded (the run-level budget stop has been seen).
 - The regular review frontend uses GitHub PRs; the eval frontend also accepts pinned local commit pairs. `--verbose` shows stages, not live tool activity.
 - Deferred security hardening: secret scanning, symlink and sensitive-file scrubbing inside the checkout, sanitizing posted text, instruction-pattern warnings (the hardening backlog in proposal section 5).
-- Planned (see the checklist at the top of [proposal.md](docs/proposal.md)): multi-perspective review, a project context pack, a Verifier pass, parallel passes, an audit trail for governance, sandboxed checkouts and prompt-injection safeguards, inline PR comments, an MCP server, raw-API backends.
+- Planned (see the checklist at the top of [proposal.md](docs/proposal.md)): optional four-persona review with a conflict-flagging Comparator and annotation-only targeted Verifier, then a project context pack and broader verification, parallel passes, an audit trail for governance, sandboxed checkouts and prompt-injection safeguards, inline PR comments, an MCP server, raw-API backends.

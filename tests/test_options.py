@@ -12,7 +12,7 @@ from code_reviewer.review_options import apply_run_options
 
 from .helpers import FakeRunner
 
-RUN_OPTIONS = ("--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose", "--dry-run")
+RUN_OPTIONS = ("--mode", "--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose", "--dry-run")
 
 
 def squash(text):
