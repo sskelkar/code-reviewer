@@ -1,0 +1,239 @@
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 10-12,40-41,108-109
+  s_68cd0db0a8fc3a::t_5dcdd5b649d3f5 104-105
+  s_68cd0db0a8fc3a::t_1669c2ac819911 106
+src/code_reviewer/shared/__init__.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-2
+src/code_reviewer/flows/single_agent/report.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-279
+src/code_reviewer/eval_runner.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 26
+src/code_reviewer/git_ops.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/progress.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 8
+src/code_reviewer/shared/redact.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-28
+src/code_reviewer/events.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/diffview.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/roles.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/shared/claude_cli.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-223
+tests/test_evals.py
+  s_68cd0db0a8fc3a::t_75019af78445cb 286-287
+  s_68cd0db0a8fc3a::t_13520c6e929949 285
+src/code_reviewer/shared/findings.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-327
+src/code_reviewer/claude_cli.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/flows/agent_personas/README.md
+  s_68cd0db0a8fc3a::t_13520c6e929949 1-5
+evals/CASES.md
+  s_68cd0db0a8fc3a::t_1e883b54e286a5 3
+src/code_reviewer/shared/stats.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-89
+src/code_reviewer/repl.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 11,13-14,16,20
+src/code_reviewer/flows/__init__.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 1,3-19
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 2
+src/code_reviewer/shared/templates.py
+  s_68cd0db0a8fc3a::t_1e883b54e286a5 1
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 2-48
+src/code_reviewer/master.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/engine.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 1,5-10,12-15,21-23,25-26,29,32,34-36
+evals/RUBRIC.md
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 5
+src/code_reviewer/flows/single_agent/master.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-218
+src/code_reviewer/review_inputs.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/dry_run.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 100,102,156,166,347,611,650,685,701,812
+  s_68cd0db0a8fc3a::t_48c60b261177ee 214,426,742
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 7-8,86,224,323,371,446,531,540,565,608,618,622,668,699,738,753,814-819,822
+src/code_reviewer/flows/single_agent/stop_policy.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-50
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 26,195
+  s_68cd0db0a8fc3a::t_66fa00cd5d97a5 3,178,213,299,316
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 14,232,245
+  s_68cd0db0a8fc3a::t_8e2236ebd4b7bd 262-263
+  s_68cd0db0a8fc3a::t_fc4722cdd4a5d5 12,27,35,37,62,89,214,225-231,233-244,246-261,264-298,300-315,317-344,350,352
+  s_68cd0db0a8fc3a::t_1e883b54e286a5 67,125,128,135,161,174
+  s_68cd0db0a8fc3a::t_48c60b261177ee 115,194
+  s_68cd0db0a8fc3a::t_5fac4919248073 61,156,346,348
+src/code_reviewer/redact.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/flows/single_agent/roles.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 2-5,7-12,14-92
+  s_68cd0db0a8fc3a::t_5fac4919248073 1,6,13
+src/code_reviewer/shared/resolver.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-11,13-36
+  s_68cd0db0a8fc3a::t_6f798f6fc44d0b 12
+tests/test_options.py
+  s_68cd0db0a8fc3a::t_9f870731152599 15
+docs/HANDOVER.md
+  s_0aa18f51442760::t_ca0e2d7f043af3 1,3,9,11,13,39,41-45,47,49,51,53-54,56,58,60,62-70,72,74-78,80,83-87,89,93-97
+  s_68cd0db0a8fc3a::t_5fac4919248073 15
+  s_68cd0db0a8fc3a::t_66fa00cd5d97a5 24
+  s_68cd0db0a8fc3a::t_009d63a87f8dcd 17,19-23,25
+  s_68cd0db0a8fc3a::t_50be9044965be0 27,36,82
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 52
+  s_68cd0db0a8fc3a::t_48c60b261177ee 5,7,18,31-32
+  s_68cd0db0a8fc3a::t_58868fca48476d 29,33-35,37
+  s_68cd0db0a8fc3a::t_84919ced7777df 91
+src/code_reviewer/criteria.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/shared/pr_source.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-48
+src/code_reviewer/flows/single_agent/dry_run.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-81
+src/code_reviewer/llm.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/flows/single_agent/models.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-26
+src/code_reviewer/flows/agent_personas/__init__.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-2
+src/code_reviewer/findings.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/pr_source.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/shared/criteria.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-442
+src/code_reviewer/post.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 8-9
+src/code_reviewer/shared/diffview.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-253
+tests/fixtures/single_agent_asset_hashes.json
+  s_68cd0db0a8fc3a::t_9f870731152599 1-12
+src/code_reviewer/passes.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/summary.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/run_store.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/repl_help.py
+  s_68cd0db0a8fc3a::t_9f870731152599 9,15
+src/code_reviewer/shared/events.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-18
+src/code_reviewer/shared/llm.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-74
+src/code_reviewer/shared/models.py
+  s_68cd0db0a8fc3a::t_9f870731152599 4
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-3,5-79
+src/code_reviewer/stop_policy.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/shared/git_ops.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-221
+src/code_reviewer/cli.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 9-10,13,18
+AGENTS.md
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 38
+src/code_reviewer/doctor.py
+  s_68cd0db0a8fc3a::t_84919ced7777df 14
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 11,13
+src/code_reviewer/flows/single_agent/passes.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-79
+src/code_reviewer/report.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/shared/run_store.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-20,23-95
+  s_68cd0db0a8fc3a::t_1e883b54e286a5 21-22
+review.example.toml
+  s_68cd0db0a8fc3a::t_9f870731152599 4-6
+  s_68cd0db0a8fc3a::t_48c60b261177ee 44,46
+src/code_reviewer/replay.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 20,22-25
+  s_68cd0db0a8fc3a::t_75019af78445cb 6,26
+src/code_reviewer/flows/single_agent/prompt_contract.py
+  s_68cd0db0a8fc3a::t_84919ced7777df 1-33
+prompts/README.md
+  s_68cd0db0a8fc3a::t_5fac4919248073 17
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 4,15,52
+  s_68cd0db0a8fc3a::t_66fa00cd5d97a5 21
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 5,9,11
+  s_68cd0db0a8fc3a::t_48c60b261177ee 67
+  s_68cd0db0a8fc3a::t_84919ced7777df 3
+  s_68cd0db0a8fc3a::t_009d63a87f8dcd 13-14,16,18-20,22-23
+  s_68cd0db0a8fc3a::t_83213d4942ee1a 12
+tests/test_flow_selection.py
+  s_68cd0db0a8fc3a::t_9f870731152599 1-38,45,47-106,108-115,117-125
+  s_68cd0db0a8fc3a::t_75019af78445cb 46
+  s_68cd0db0a8fc3a::t_5dcdd5b649d3f5 39-44,107,116
+src/code_reviewer/flows/single_agent/summary.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-116
+evals/README.md
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 3-4
+src/code_reviewer/templates.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4,7
+  s_68cd0db0a8fc3a::t_84919ced7777df 5
+src/code_reviewer/shared/review_inputs.py
+  s_68cd0db0a8fc3a::t_75019af78445cb 3
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-2,4-114
+src/code_reviewer/flows/agent_personas/flow.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 1-11
+src/code_reviewer/flows/single_agent/flow.py
+  s_68cd0db0a8fc3a::t_84919ced7777df 32
+  s_68cd0db0a8fc3a::t_9f870731152599 1
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 2-31,33-178
+src/code_reviewer/models.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/stats.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1,4-5,7
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_13520c6e929949 8,34-35,61-62,77,96,98
+src/code_reviewer/flows/single_agent/__init__.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 1-2
+docs/persona-criteria.md
+  s_68cd0db0a8fc3a::t_8e2236ebd4b7bd 1-127
+  s_68cd0db0a8fc3a::t_5fac4919248073 128
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_b22af165b9b2c0 12,14,16-18
+README.md
+  s_68cd0db0a8fc3a::t_9be25b60a21ad3 10,490,558-565,677
+  s_68cd0db0a8fc3a::t_5fac4919248073 379,567
+  s_68cd0db0a8fc3a::t_af0ffcd8fd2943 153,196,232,240,307,345-352,354-362,367-375,426,440,487,571,573,575-577,579-591,610,626
+  s_68cd0db0a8fc3a::t_a3ffdcdb78327e 33-43,408,410,459,498,502-556,628,637,664
+  s_68cd0db0a8fc3a::t_66fa00cd5d97a5 187
+  s_68cd0db0a8fc3a::t_1e883b54e286a5 185
+  s_68cd0db0a8fc3a::t_75019af78445cb 263,353,578,615,623-625,629,631
+  s_68cd0db0a8fc3a::t_48c60b261177ee 186,246,255,261,417-418
+  s_68cd0db0a8fc3a::t_782c577426a1c4 557,566,568
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "da34aaf5c36b5a1409a24f20813691fc0c7bb26d",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_0aa18f51442760": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c24c640a-bbad-4a51-9ba6-9a9ab606cb6e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    },
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
