@@ -19,7 +19,7 @@ from code_reviewer.review_options import apply_run_options
 from code_reviewer.repl import Session
 from code_reviewer.shared import git_ops
 
-from .helpers import FakeRunner, TempDirTestMixin
+from .helpers import FakeRunner, TempDirTestMixin, make_repo
 
 
 class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
@@ -42,37 +42,77 @@ class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(cfg.model_reviewer, 'sonnet')
         self.assertEqual(cfg.review_mode, 'single-agent')
 
-    def test_unavailable_personas_do_not_load_prompts_prepare_git_or_create_runs(self):
+    def test_personas_load_only_their_assets_without_preparing_git_or_creating_runs(self):
         self.runner.version = lambda: self.fail('must not call Claude version')
         cfg = Config(review_mode='agent-personas', runs_dir=str(self.tmp / 'runs'))
         with patch('code_reviewer.flows.single_agent.flow.SingleAgentFlow') as single, \
-                patch.object(Path, 'read_text', side_effect=AssertionError('must not load assets')), \
+                patch('code_reviewer.flows.single_agent.prompt_contract.load_prompt', side_effect=AssertionError('single assets')), \
                 patch.object(git_ops, '_run', side_effect=AssertionError('must not call git')):
-            with self.assertRaisesRegex(ConfigError, 'agent-personas is not implemented'):
-                Engine(cfg, self.runner)
+            engine = Engine(cfg, self.runner)
+        self.assertEqual(engine._flow.__class__.__name__, 'AgentPersonasFlow')
+        self.assertEqual(engine.prompts_dir.parent.name, 'agent_personas')
         single.assert_not_called()
         self.assertFalse((self.tmp / 'runs').exists())
         self.assertEqual(self.runner.calls, [])
 
-    def test_cli_reserved_mode_fails_before_preparing_pr(self):
+    def test_cli_persona_dry_run_dispatches_without_model_calls(self):
         out, err = io.StringIO(), io.StringIO()
         cfg = Config(runs_dir=str(self.tmp / 'runs'))
+        ctx = make_repo(self.tmp)
         with patch.object(cli, 'load_config', return_value=cfg), \
                 patch.object(cli, 'ClaudeRunner', return_value=self.runner), \
-                patch.object(Engine, 'prepare', side_effect=AssertionError('must not prepare PR')), \
+                patch.object(Engine, 'prepare', return_value=ctx), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = cli.main(['review', 'example/project#1', '--mode', 'agent-personas', '--dry-run'])
-        self.assertEqual(code, 1)
-        self.assertIn('not implemented', out.getvalue() + err.getvalue())
+            code = cli.main(['review', ctx.label, '--mode', 'agent-personas', '--dry-run'])
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertIn('agent-personas', out.getvalue())
         self.assertEqual(self.runner.calls, [])
 
-    def test_repl_reserved_mode_is_reported_without_running(self):
+    def test_repl_persona_dry_run_dispatches_without_model_calls(self):
         lines = []
-        session = Session(Config(), self.runner, local_path=self.tmp, out=lines.append)
-        with patch.object(Engine, 'prepare', side_effect=AssertionError('must not prepare PR')):
-            self.assertTrue(session.dispatch('review example/project#1 --mode agent-personas'))
-        self.assertIn('not implemented', '\n'.join(lines))
+        ctx = make_repo(self.tmp)
+        session = Session(Config(runs_dir=str(self.tmp / 'runs')), self.runner, local_path=self.tmp, out=lines.append)
+        with patch.object(Engine, 'prepare', return_value=ctx):
+            self.assertTrue(session.dispatch('review ' + ctx.label + ' --mode agent-personas --dry-run'))
+        self.assertIn('agent-personas', '\n'.join(lines))
         self.assertEqual(self.runner.calls, [])
+
+    def test_persona_pass_override_reaches_both_frontends_without_mutating_config(self):
+        ctx = make_repo(self.tmp)
+        for mode in ('single-agent', 'agent-personas'):
+            for flags, count in ((['--passes', '1', '--mode', 'agent-personas'], 1), (['--mode', 'agent-personas', '--passes', '4'], 4)):
+                with self.subTest(config_mode=mode, flags=flags):
+                    cfg = Config(review_mode=mode, persona_passes=2, runs_dir=str(self.tmp / 'runs'))
+                    out, err, lines = io.StringIO(), io.StringIO(), []
+                    with patch.object(cli, 'load_config', return_value=cfg), \
+                            patch.object(cli, 'ClaudeRunner', return_value=self.runner), \
+                            patch.object(Engine, 'prepare', return_value=ctx), \
+                            contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        code = cli.main(['review', ctx.label, '--dry-run'] + flags)
+                        session = Session(cfg, self.runner, local_path=self.tmp, out=lines.append)
+                        self.assertTrue(session.dispatch('review ' + ctx.label + ' --dry-run ' + ' '.join(flags)))
+                        self.assertTrue(session.dispatch('help'))
+                    self.assertEqual(code, 0, err.getvalue())
+                    expected = '%d passes per persona (%d scheduled)' % (count, count * 4)
+                    self.assertIn(expected, out.getvalue())
+                    self.assertIn(expected, '\n'.join(lines))
+                    self.assertEqual(cfg.persona_passes, 2)
+                    self.assertIsNone(session.result)
+        self.assertEqual(self.runner.calls, [])
+
+    def test_persona_pass_config_is_loaded_and_rejects_invalid_types_and_values(self):
+        from code_reviewer import config
+        path = self.tmp / 'review.toml'
+        path.write_text('persona_passes = 2\n')
+        with patch.object(config, '_read_toml', return_value={'persona_passes': 2}):
+            self.assertEqual(config.load_config(str(path)).persona_passes, 2)
+        for value in (0, -1, True, '2', 1.5):
+            with self.subTest(value=value):
+                with self.assertRaises(ConfigError):
+                    Config(persona_passes=value).validate()
+                with patch.object(config, '_read_toml', return_value={'persona_passes': value}):
+                    with self.assertRaises(ConfigError):
+                        config.load_config(str(path))
 
     def test_cli_mode_overrides_config_without_mutating_it(self):
         original = Config(review_mode='agent-personas')

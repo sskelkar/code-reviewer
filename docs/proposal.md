@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented and being tried on real pull requests; next: optional four-persona review with conflict annotations (design agreed, not implemented; see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** v0 implemented and being tried on real pull requests; optional four-persona review with conflict annotations implemented and offline-tested; next: manual quality comparisons (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -9,9 +9,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
-**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each. The Comparator will merge duplicates, categorize findings and flag possible conflicts; a targeted Verifier will annotate flagged groups only. Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
+**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each by default (configurable with `--passes N`). The persona Comparator merges duplicates, categorizes findings and flags possible conflicts; a targeted Verifier annotates flagged groups only. Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
 
-**Not yet built:** the agent-personas review behavior and its project-rule classification, extended Comparator and conflict-only Verifier; project context pack; broader per-finding verification; inline PR comments; raw-API backend; security hardening beyond §5. The existing single-agent reviewer remains the default. The structural refactor is implemented; persona behavior remains a design. Active prompt/schema/default contents are unchanged.
+**Not yet built:** project context pack; broader per-finding verification; inline PR comments; raw-API backend; security hardening beyond §5. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
 
 ## Checklist
 
@@ -23,8 +23,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [x] Reports and the PR summary name the criterion and its source, never an internal ID
 - [x] Interactive REPL and one-shot CLI, summary posted only after confirmation, dry run, email redaction, `doctor --live` isolation checks
 - [x] Comparator replay tool; README flow diagrams of a review
-- [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch and an unavailable `agent_personas` boundary
-- [x] Agree the optional four-persona design and document the proposed flow (§12); implementation is still pending
+- [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch (the initially unavailable persona boundary is now implemented)
+- [x] Define and load thirteen canonical persona defaults, static focus/assignments and common review instructions
+- [x] Implement the optional four-persona flow (§12), project-rule distribution, frozen prompts, source-aware agreement and advisory conflict verification
 
 **Use it for real (you)**
 - [ ] Review real PRs from your project with the current setup (Haiku) and judge each finding yourself (`mark`, `missed`)
@@ -32,7 +33,7 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
 **Build next, in this order**
-- [ ] Optional four-persona mode (§12): static default assignments, complete project-rule distribution, exact prompts per persona, three fixed passes each, shared merging/categorization/conflict flags, and advisory conflict verification
+- [ ] Manually compare the implemented persona mode (§12) with single-agent on authorized real PRs; no persona quality result exists yet
 - [ ] Project context pack (§12): documentation passages about the identifiers the diff touches, supplied as reference material
 - [ ] Broader Verifier (§12): consider extending verification beyond flagged conflicts after learning from the initial advisory implementation
 - [ ] Reviewer prompt: before reporting a finding that depends on an assumption, check the comment above the code, its tests and the repo documentation; unverified assumptions go to `notes`
@@ -58,7 +59,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 ## 1. Architecture
 
-Sections 1–8 describe the implemented single-agent mode. The optional persona mode and its extended roles are specified separately in §12; they are not available yet.
+Each review fetches the current target branch tip and PR head, then pins their SHAs for that run. `git fetch --refmap= --no-tags` directs updates exclusively to explicit private review refs: configured remote-tracking mappings must not cause updates to the user's refs/tags or contention with background fetches. A later review fetches fresh tips. Diff scope remains merge-base to head; the checkout is the PR head, not a simulated merge result.
+
+Sections 1–8 describe the implemented single-agent mode. The optional persona mode and its extended roles are specified separately in §12; the mode is now implemented and offline-tested, without live quality validation.
 
 **The harness (Python, deterministic) runs everything; LLMs only propose.** No subagents, no orchestrator LLM.
 
@@ -86,7 +89,7 @@ render report
 
 - **Convergence (computed, never self-declared):** a pass is *quiet* if it adds no new scored finding (one with ≥1 confirmed sighting). Stop after **2 consecutive quiet passes** (configurable to 3), at `max_passes` (6), or on budget. `min_passes` = 3.
 - **Failed passes** (bad JSON after retry, timeout) are logged and excluded from the confidence denominator and quiet streak.
-- **Comparator prompt rule:** same root cause at same location = match; when unsure, prefer `new` (a false split is cheaper than a false merge). Harness checks every finding got exactly one valid decision. The Comparator judges *sameness* only, not correctness: a wrong finding repeated by several passes is merged and gains confidence, the planned conflict-only Verifier (§12) investigates flagged disagreements but does not verify every finding.
+- **Comparator prompt rule:** same root cause at same location = match; when unsure, prefer `new` (a false split is cheaper than a false merge). Harness checks every finding got exactly one valid decision. The single-agent Comparator judges *sameness* only, not correctness: a wrong finding repeated by several passes is merged and gains confidence. Persona mode adds conflict flags and a conflict-only advisory Verifier (§12); it does not verify every finding.
 
 ## 2. Criteria (layered)
 
@@ -191,7 +194,17 @@ Config in `review.toml` (snake_case): `review_mode`, `model_reviewer`, `model_co
 
 **Third finding: agreement is not correctness.** A finding raised by 4 of 6 passes was wrong. The project had a data-access rule the reviewer did not know; the rule existed in the repository, but only in files that were not review criteria and that nothing linked to, and no pass searched for it. Correlated mistakes across passes are the main weakness of agreement-based confidence. Responses: nested `AGENTS.md` and `.claude/rules` files are now added by location (§2), and the project context pack and Verifier are planned (§12). The saved raw output does not record which tools a pass called, so what each pass searched is unknown.
 
-**Flow ownership refactor (2026-10-20; no model-quality result).** Moved current orchestration, Reviewer/Comparator, master/result, reports, prompt loader and unchanged assets into `flows/single_agent/`. Shared Claude/git/diff/grounding/criteria-discovery/storage/statistics code lives in `shared/`. `Engine` preserves its API and selects one flow; CLI/REPL `--mode` overrides `review_mode` (default `single-agent`). Reserved `agent-personas` fails without loading single-agent assets, preparing a PR or calling Claude. Legacy imports remain bridges, including identical module objects for existing patch targets. A synthetic FakeRunner comparison before/after matched exact model inputs/schemas/settings, criteria, merged findings, pass accounting/stopping, summary and normalized report. Pinned SHA-256 fixtures guard unchanged prompt/schema/criteria bytes. Audit preserved the original positional `Config` model argument and the `Engine` public export; these compatibility contracts are tested. All 244 offline tests pass on Python 3.9 and 3.13, including eleven new flow-selection/isolation/compatibility tests; documentation links/anchors and `git diff --check` pass. No real reviews or production material were accessed. The parked eval tool was not run or extended; its source fingerprint traversal was adjusted only to include relocated subpackages rather than silently omitting them.
+**Flow ownership refactor (2026-10-20; historical step before persona runtime, no model-quality result).** Moved current orchestration, Reviewer/Comparator, master/result, reports, prompt loader and unchanged assets into `flows/single_agent/`. Shared Claude/git/diff/grounding/criteria-discovery/storage/statistics code lives in `shared/`. `Engine` preserves its API and selects one flow; CLI/REPL `--mode` overrides `review_mode` (default `single-agent`). Reserved `agent-personas` fails without loading single-agent assets, preparing a PR or calling Claude. Legacy imports remain bridges, including identical module objects for existing patch targets. A synthetic FakeRunner comparison before/after matched exact model inputs/schemas/settings, criteria, merged findings, pass accounting/stopping, summary and normalized report. Pinned SHA-256 fixtures guard unchanged prompt/schema/criteria bytes. Audit preserved the original positional `Config` model argument and the `Engine` public export; these compatibility contracts are tested. All 244 offline tests pass on Python 3.9 and 3.13, including eleven new flow-selection/isolation/compatibility tests; documentation links/anchors and `git diff --check` pass. No real reviews or production material were accessed. The parked eval tool was not run or extended; its source fingerprint traversal was adjusted only to include relocated subpackages rather than silently omitting them.
+
+**Persona criteria assets (2026-10-20; initial asset step, before runtime wiring).** Authored thirteen canonical rules, common review instructions and four static focus/assignment definitions under `flows/agent_personas/`. Added entry-point/artifact wiring, test discovery/failure propagation and query/index compatibility to the ten existing concerns, with repository-evidence/reporting boundaries. Three offline asset-contract tests check complete static coverage, unique/shared identities and shared-parser rendering/disabling. The single-agent asset hash checks remain unchanged. All 247 tests pass on Python 3.9 and 3.13; all 24 Markdown files pass local link/anchor/fence checks. No saved production runs, paid model calls or eval experiments were used; no review-quality improvement is claimed.
+
+**Persona runtime wiring (2026-10-20; no quality result).** The optional flow now loads its own assets, classifies accepted project rules with coverage-validated fallback, freezes four Reviewer inputs, runs twelve fixed slots, merges/categories/flags conflicts, and conditionally annotates flagged groups with grounded evidence. All calls and retry attempts check budget. Synthetic tests exercise the new contracts and frontends; single-agent prompt/schema/criteria bytes and synthetic baseline behavior remain unchanged. Invalid model file paths now fail deterministic grounding instead of crashing either flow. No actual persona model calls, production material or eval runs were used. All 278 offline tests pass on Python 3.9 and 3.13, including thirty-one persona-flow tests; 77 Python modules parse/import, and 34 Markdown files pass local link/anchor/fence checks. The single-agent synthetic baseline matches. Full verification details are recorded in the handover.
+
+**Final pre-pilot audit (2026-10-20; no quality result).** Found and fixed retained sightings from a slot interrupted during consolidation: staged master changes now roll back without changing earlier completed slots. Also repaired the scheduled-pass Markdown table and stale docs/README diagram branches. Two added synthetic regressions bring the suite to 280 passing tests on Python 3.9 and 3.13 (thirty-three persona-flow tests). The single-agent synthetic baseline still matches. No model-facing prompt edits, live calls, private saved-run reads, production access, commits or pushes were needed. This supports a controlled Claude/user pilot, not a claim of model accuracy; the project context pack remains the next separate feature after manual comparison.
+
+**Configurable persona counts (2026-10-21; no quality result).** At the user's request, replaced the fixed-three restriction with `persona_passes = 3` and per-run `--passes N` (N per persona). The configured count determines round-robin slots, progress, dry runs and completion totals; agreement still uses actual successful completions, with one unrated. Budget/failure policies and model-facing prompts remain unchanged. All 286 offline tests pass on Python 3.9 and 3.13, including configured 1/2/5-round schedules, interrupted completion accounting, validation and frontend/config overrides. The single-agent synthetic baseline still matches. No real reviews, paid calls or private material were used; this establishes harness behavior only.
+
+**Parallel persona rounds and budget pools (2026-10-21; harness evidence only).** Implemented concurrent Reviewers within each round, a barrier before deterministic serial consolidation, and proportional isolated budget pools (criteria/Comparator/Verifier weights 3/3/4 out of 30, with the remainder split among personas). Per-persona exhaustion leaves other personas running; no borrowing or warmup calls. Atomic reservations, separate request logs, locked statistics and cancellable subprocess groups protect concurrency. Seven new synthetic tests cover overlap, concurrency limits, ordered merges/barriers, allocation scaling, reservations/unknown usage, isolated exhaustion and cancellation. All 294 offline tests pass on Python 3.9 and 3.13; the single-agent synthetic baseline still matches and documentation links pass. Model-facing prompts are unchanged. No production material, private saved runs or paid calls were used; real latency, quality and allocation suitability remain unmeasured.
 
 **Proposed success bar (adjust after first runs):** High-tier precision clearly above Low-tier; the loop finds at least one real issue a single pass missed on roughly 1 in 3 PRs; cost within a small multiple of a single pass.
 
@@ -211,7 +224,7 @@ Config in `review.toml` (snake_case): `review_mode`, `model_reviewer`, `model_co
 | **P0** | This proposal: engine + REPL + one-shot CLI + confirmed summary comment; manual evaluation |
 | P1 | Evals: parked (see §9). Judge by hand on real PRs |
 | P2 | Conflict-only advisory Verifier ships with persona mode (§12). Broader per-finding verification remains later; initial annotations do not suppress claims or change agreement scores |
-| P3 | **Optional four-persona review (§12), next**: three passes per persona, shared Comparator and advisory conflict verification; then project context pack. Reviewers remain blind to other passes |
+| P3 | **Optional four-persona review (§12), implemented/offline-tested**: configurable passes per persona (default 3), shared Comparator and advisory conflict verification; then project context pack. Reviewers remain blind to other passes |
 | P4 | Inline PR comments; MCP server / `/review-pr` skill |
 | P5 | Provider-agnostic backend (raw API); optional LLM executive summary |
 | Anytime | Security hardening (§5 and the checklist: sandboxed checkouts, prompt-injection safeguards) before any use beyond a controlled environment |
@@ -223,28 +236,28 @@ Config in `review.toml` (snake_case): `review_mode`, `model_reviewer`, `model_co
 **Open:**
 1. Is sending company code through the enterprise Claude Code login approved for this? (Company decision; avoid repos with customer or rider data until answered.)
 2. Is the success bar in §9 right?
-3. After real manual comparisons, are the extra findings from twelve persona passes worth their cost? Four personas and three fixed passes each are the agreed initial design, not a measured optimum.
+3. After real manual comparisons, are the extra findings from twelve persona passes worth their cost? Four personas with three passes each is the default; the pass count is user-configurable, not a measured optimum.
 
-The earlier questions about giving every persona every project rule and choosing between two or three passes are settled: defaults are statically assigned, project rules are distributed with complete coverage and overlap where relevant, and each persona has three fixed pass slots (§12).
+The earlier questions about giving every persona every project rule and choosing between two or three passes are settled: defaults are statically assigned, project rules are distributed with complete coverage and overlap where relevant, and each persona has N scheduled pass slots (`persona_passes`, default 3, overridden by `--passes N`; §12).
 
 ## 12. Agreed persona design and next steps
 
-**Design agreed 2026-10-20; not implemented.** Personas (previously called perspectives) are focused Reviewer jobs run by the Python harness, not Claude sub-agents. The existing single-agent mode stays available and remains the default, including its current 3–6-pass convergence policy. Flow selection is implemented as `--mode single-agent|agent-personas` with `review_mode = "single-agent"` by default. The persona value is reserved and raises a clear error before preparation/model calls until implemented. When implemented, it will run all four personas with **three fixed passes each**. No persona has higher authority than another.
+**Implemented and offline-tested 2026-10-20; no live quality result.** Personas (previously called perspectives) are focused Reviewer jobs run by the Python harness, not Claude sub-agents. The existing single-agent mode stays available and remains the default, including its current 3–6-pass convergence policy. Flow selection is implemented as `--mode single-agent|agent-personas` with `review_mode = "single-agent"` by default. The persona mode runs all four personas with **N scheduled passes each**, default 3 (`persona_passes` in TOML; `--passes N` overrides it per run). This replaces the initial fixed-three decision as requested on 2026-10-21. No persona has higher authority than another.
 
 ### 12.1 Responsibilities and static defaults
 
 | Persona | Deliberate review responsibility |
 |---|---|
-| Correctness | Calculations, conditions, state transitions and behavior against repository-supported requirements and contracts |
+| Correctness | Calculations, conditions, state transitions, contracts and repository-defined entry-point/artifact wiring |
 | Code quality | Simplicity, readability, modularity, abstractions, duplication, and accurate code/contract documentation |
-| Test quality | Meaningful coverage and assertions, appropriate test levels, independence and faithful mocks |
-| Production safety | Security/privacy, authorization, bounded inputs, failure handling, resources, atomicity and concurrency |
+| Test quality | Meaningful coverage/assertions, appropriate levels, independence/faithful mocks, and test discovery/failure propagation |
+| Production safety | Security/privacy, authorization, bounded inputs, failure handling, resources, atomicity/concurrency and query/index compatibility |
 
 A persona can read any relevant code, tests or authoritative documentation needed to reason correctly. It does not deliberately inspect every other persona's checklist, but **may report a supported correctness or safety defect it notices outside its focus**. The Comparator can categorize that finding under another persona's subject. Categorization never invents a sighting by a persona that did not report it. Language/library expectations go to the relevant persona; there is no fifth language/syntax persona initially. Existing linters and pipelines still own syntax/formatting checks; the reviewers cannot execute them.
 
-Default rule assignments are maintained in this repository ahead of time. There is no runtime model classification of defaults. Rules may be shared, but each logical rule has one canonical identity and text, retained wherever it is supplied. Single-agent mode continues to receive the complete enabled default set. The initial static allocation and proposed ID migration are:
+Default rule assignments are maintained in this repository ahead of time. There is no runtime model classification of defaults. Rules may be shared, but each logical rule has one canonical identity and text, retained wherever it is supplied. Single-agent mode continues to receive the complete enabled default set. The initial static allocation is below. Persona IDs identify the persona assets; the single-agent IDs remain unchanged:
 
-| Current ID | Planned canonical ID | Topic | Assigned personas |
+| Single-agent ID | Persona canonical ID | Topic | Assigned personas |
 |---|---|---|---|
 | GEN-001 | COR-001 | Behavior and calculations | Correctness |
 | GEN-002 | CQ-001 | Simplicity and maintainability | Code quality |
@@ -256,10 +269,13 @@ Default rule assignments are maintained in this repository ahead of time. There 
 | GEN-008 | COR-002 | Producer/consumer contracts | Correctness, production safety |
 | GEN-009 | TEST-001 | Meaningful coverage and test levels | Test quality |
 | GEN-010 | TEST-002 | Test independence and mocking | Test quality |
+| — | COR-003 | Entry points, registrations and packaged resources | Correctness |
+| — | TEST-003 | Intended test discovery and failure propagation | Test quality |
+| — | SAFE-005 | Repository-defined query/index compatibility | Production safety |
 
-This table is a design allocation, not a change to the current `GEN-*` rules or their wording. The prefix names the rule's home category, not its exclusive audience. Project rules retain source-based identities such as `P:<path>#<heading>`; routing does not rename them. Historic runs must be interpreted with their saved criteria, not with a new ID table.
+The assignments and focus instructions are stored in `flows/agent_personas/personas.json`, with one canonical definition per rule under that flow's `criteria/`. This does not change current `GEN-*` rules or their wording. The prefix names the rule's home category, not its exclusive audience. Project rules retain source-based identities such as `P:<path>#<heading>`; routing does not rename them. Historic runs must be interpreted with their saved criteria, not with a new ID table.
 
-The concrete [persona-criteria draft](persona-criteria.md) now supplies each persona's focus instructions and full Inspect / Report / Do not report text for these ten rules. It is for discussion, is not loaded by the harness and does not change current criteria.
+The [persona criteria guide](persona-criteria.md) links the thirteen rule definitions and common review standard. The ten existing concerns are retained and sharpened; three additions cover demonstrable integration wiring, false green test execution and query/index compatibility. `SAFE-005` requires repository-supported evidence and consequences; it does not assert actual planner choices, production index state or measured performance from schema code alone. `COR-002` is authored once and assigned to correctness and safety, giving fourteen assignments across thirteen unique rules. These assets are loaded by persona reviews; static parser/allocation tests are not model-quality evidence. Legacy `GEN-*` disabling aliases map to the corresponding persona rules; unknown disabled IDs fail clearly in persona mode.
 
 A preferred design pattern alone is not a finding; code quality still requires a concrete maintenance consequence. Test quality does not enforce a numerical pyramid or demand end-to-end tests when a focused test is sufficient. Planning documents remain author claims rather than authoritative contracts; existing exclusions and the current reporting standard remain in force.
 
@@ -273,30 +289,30 @@ A preferred design pattern alone is not a finding; code quality still requires a
 
 Deterministic validation proves distribution coverage, not semantic classification quality or discovery of every expectation anywhere in the repository. The actual prompts are the primary audit record; a separate verbose `criteria-routing.json` report is not required (§12.6).
 
-### 12.3 Fixed review loop
+### 12.3 Configured review loop
 
-Run three sequential rounds in this order: correctness, code quality, test quality, production safety. Each round selects one fresh Reviewer session from every persona. That schedules **twelve persona passes**, followed by any conflict verification. The branches are independent jobs, not parallel execution or shared Claude conversations.
+Run N rounds (default 3), with concurrent Reviewers inside each round and serial consolidation in this order: correctness, code quality, test quality, production safety. Each round selects one fresh Reviewer session from every persona. That schedules **4 × N persona passes** (twelve by default), followed by any conflict verification. The Reviewers are independent concurrent subprocesses sharing one pinned checkout; they are not Claude sub-agents and do not share conversations. The next round waits for all reviews and ordered consolidation.
 
 ```text
 prepare pinned diff/head and discover project criteria
 load static default assignments; classify and validate project-rule assignments
 freeze and save the four persona prompts
-for round in 1..3:
+for round in 1..persona_passes:
+    launch eligible fresh Reviewers with up to persona_parallel concurrent calls
+    wait for all current round outcomes
     for persona in [correctness, code-quality, test-quality, production-safety]:
-        check budget/cancellation/failure policy
-        findings = fresh Reviewer(frozen_input[persona])
-        findings = existing validation, exclusions, grounding and self-check handling
-        proposal = Comparator(findings, complete_master)
-        harness validates and applies duplicate mappings, categories and conflict flags
+        findings = validation, exclusions, grounding and self-check handling
+        proposal = Comparator(findings, complete_master) if usable findings exist
+        harness validates and applies mappings, categories and conflict flags serially
 for each distinct pending conflict group, while budget permits:
     proposal = fresh Verifier(flagged_claims, criteria, diff, checkout)
     harness validates and attaches annotations
 render combined findings, per-persona agreement, annotations, costs and completion status
 ```
 
-**No convergence-based early stopping in persona mode.** A quiet first or second pass does not cancel a third pass. There is no "eligible third pass" condition. Keep the existing per-call retry and spending/time limits; errors, cancellation, exhausted budget or failure limits can still leave a run incomplete. Record the three scheduled pass slots per persona, actual successful completions and failed/skipped slots honestly; do not claim twelve successful passes when some failed, or silently schedule unlimited replacement passes. The Reviewer subprocess count can exceed twelve because of normal call retries.
+**No convergence-based early stopping in persona mode.** A quiet pass does not cancel remaining configured slots. There is no "eligible third pass" condition. Keep the existing per-call retry and spending/time limits; errors, cancellation, exhausted budget or failure limits can still leave a run incomplete. Record the N scheduled pass slots per persona, actual successful completions and failed/skipped slots honestly; do not claim 4 × N successful passes when some failed, or silently schedule unlimited replacement passes. The Reviewer subprocess count can exceed 4 × N because of normal call retries. `persona_parallel = 4` is the default, overridden by persona-only `--parallel N` (1–4). Since consolidation and verification happen outside concurrent review phases, the limit covers all simultaneous model calls.
 
-Use a shared explicit run budget, accounting for discovery/classification, Reviewer, Comparator and Verifier calls. The user can raise it for verification; do not silently increase it or add a mandatory reserved-budget scheme. Cancellation or a terminal run failure stops all further model calls, including verification. A stopped/failed Verifier leaves its groups pending/unresolved. Keep the checkout until verification/reporting has finished, then apply normal cleanup. Reviewers and the Verifier use only Read, Grep and Glob inside that checkout; neither executes tests/commands or reads other saved runs.
+Use an explicit run budget split proportionally into independent pools: criteria builder 10%, Comparator 10%, Verifier 13⅓%, remaining funds equally among personas. This replaces the earlier no-reserve design at the user's request on 2026-10-21. Reserve allowances atomically per attempt/retry, reconcile usage, and never borrow across pools. Unknown costs conservatively consume the reserved allowance and are labeled. Persona exhaustion or its consecutive-failure limit disables only that persona; Comparator exhaustion stops new rounds and leaves unconsolidated results without votes. Verifier exhaustion leaves groups pending. Criteria exhaustion uses existing fallback warnings. The user may change the overall cap, but the harness never silently increases it. See the usage reference for rounding and token thresholds. Cancellation or a terminal run failure stops all further model calls, including verification. A stopped/failed Verifier leaves its groups pending/unresolved. Keep the checkout until verification/reporting has finished, then apply normal cleanup. Reviewers and the Verifier use only Read, Grep and Glob inside that checkout; neither executes tests/commands or reads other saved runs.
 
 ### 12.4 One Comparator, one master list, incremental conflict flags
 
@@ -321,11 +337,13 @@ No persona priority hierarchy is used. Existing finding severity remains a conse
 
 ### 12.6 Report and exact prompt logging
 
-One merged finding records independent sightings per source persona. Confidence is each persona's sightings divided by that persona's successful completed passes, with failed slots excluded and fewer than two successful passes unrated. A completed run might show `test-quality: 3/3` and `correctness: 1/3` for the same finding. Do not divide by all twelve passes, average the personas, or manufacture an overall confidence tier. Category reassignment does not transfer votes. Keep severity, category, discovering persona, criterion and verification outcome distinct.
+One merged finding records independent sightings per source persona. Confidence is each persona's sightings divided by that persona's successful completed passes, with failed slots excluded and fewer than two successful passes unrated. A completed run might show `test-quality: 3/3` and `correctness: 1/3` for the same finding. Do not divide by all 4 × N passes, average the personas, or manufacture an overall confidence tier. Category reassignment does not transfer votes. Keep severity, category, discovering persona, criterion and verification outcome distinct.
+
+Stage consolidation before committing a completed slot. An interruption during consolidation discards that slot's master changes, including sightings and conflict flags, while retaining earlier completed slots and the interrupted slot's raw artifacts. Incomplete slots must never contribute to agreement numerators.
 
 The combined report and shareable summary show each finding once, its categories, per-persona agreement and any conflict annotations/tradeoffs/unresolved status. List **every assigned criterion name and source under each persona**, rather than only counts. Show the detailed text in the saved prompts, include fallback/coverage warnings and incomplete persona/verification status, and account for all roles' costs. No hidden automatic suppression based on Verifier annotations. Where a user filters confidence tiers, evaluate the filter per discovering persona, retaining the finding if any recorded persona qualifies; display the separate agreement views rather than an aggregate tier. Preserve normal single-pass/unrated visibility.
 
-Save the fully rendered, filtered/redacted **system and user text supplied by the harness** once per persona, because its three passes share that exact text:
+Save the fully rendered, filtered/redacted **system and user text supplied by the harness** once per persona, because its configured passes share that exact text:
 
 ```text
 input/personas/
@@ -343,9 +361,17 @@ Each pass references its persona prompt hashes. Keep the complete criteria index
 
 ### 12.7 Implementation and manual comparison
 
-The agreed structural refactor is implemented: `Engine` selects exactly one flow, existing orchestration/assets live in `flows/single_agent/`, and reusable mechanics live in `shared/`. `flows/agent_personas/` explicitly rejects execution until implemented. Existing package-root imports remain compatibility bridges. No persona review behavior, active prompt content, schema, criterion wording or rule IDs were changed. Next implement the optional mode, static definitions/rule identities, project-rule classification/coverage validation, prompt storage, fixed scheduler, source-aware agreement, extended Comparator/conflict records, targeted annotation-only Verifier and reports together. Add synthetic/fake-Claude tests for those contracts and preserve the single-agent workflow and interfaces, accounting explicitly for the shared rule-ID migration in saved criteria/prompt hashes. New prompts require honest comparison on authorized real runs; Comparator-only replay cannot establish the quality of persona Reviewer prompts.
+The structural refactor and optional persona mode are implemented. `Engine` selects one flow; current single-agent orchestration/assets remain in `flows/single_agent/`, and the persona workflow owns `flow.py`, `criteria.py`, `roles.py`, `contracts.py`, `master.py`, `caller.py`, `models.py`, `report.py`, `prompt_contract.py` and its assets under `flows/agent_personas/`. Frontends dispatch presentation through `presentation.py`; shared mechanics import neither workflow. Existing package-root imports remain compatibility bridges. No single-agent prompt/schema/default contents or rule IDs changed.
 
-Compare single-agent Haiku, single-agent Sonnet and persona Haiku on the same real PRs, recording useful findings, false positives, misses, conflict handling and cost manually. Twelve focused passes versus 3–6 general passes changes both focus and spend, so this is a strategy comparison, not an isolated proof that specialization alone helped. No new paid review is authorized by documenting this plan. Do not revive, extend or run the parked eval harness.
+Persona scheduling uses 4 × N slots, with retries bounded per call and no replacement slots or quiet-pass stop. `--passes N` sets passes per persona (positive integer); otherwise `persona_passes` defaults to 3. CLI overrides do not change single-agent min/max settings, and those controls do not determine persona counts. Progress, dry-run previews, completion reports and saved configuration reflect N; one completed pass per persona remains unrated. `model_resolver` is reused for classification; `model_verifier` defaults to Haiku, and `--model` overrides every role model. Before every persona model attempt (including Resolver, classifier, comparator and verification), the locked budget ledger checks counted tokens and reserves dollars from that role/persona pool, rounded down to cents. No automatic budget increases or transfers occur. Token thresholds are evaluated against reported usage and can be exceeded by in-flight calls. Incomplete slots and verification remain visible. Reported usage is still an estimate, not an independently enforced billing total.
+
+`persona_prompt_max_chars = 500000` limits complete system/user text, including retry feedback. Inputs are not silently truncated: classification failures get visible fallback routing, comparison failures fail that slot, and verification failures remain unresolved. Actual invocation request logs (`*.raw.requests.json`) include retry feedback and settings; an `invoked` flag distinguishes a blocked oversized retry. Frozen Reviewer inputs/settings are saved once per persona and referenced by slot hashes. Dry runs save all four defaults-only inputs without models/version calls or a head checkout.
+
+The Comparator validates one mapping/category set per incoming finding, known references and distinct actionable canonical conflict groups, including within-batch relationships. Complete master text is supplied; no candidate-window filtering or 600-character description truncation is used. Verifier annotations validate finding references and head-file quote/line grounding. The complete accepted criteria set is supplied so a missing/wrong model citation cannot hide an authoritative base-commit rule. Quoted evidence does not prove reasoning; evidence available only in removed code may remain unresolved. Category corrections never change source votes, severity or finding text. Failed/cancelled/budget-blocked verification leaves claims visible.
+
+Offline tests cover configured parallel rounds, input independence, routing/fallback, agreement, conflicts/aliases/rejected-only references, advisory evidence validation, limits, interruption, CLI/REPL/manual labels, posting-format dispatch and dry runs. The single-agent synthetic before/after comparison still matches. New prompts need authorized manual comparison before drawing review-quality conclusions; replay of the old Comparator schema cannot validate persona Reviewer/classifier/Verifier quality. No private saved runs, paid model calls or eval experiments were used.
+
+Compare single-agent Haiku, single-agent Sonnet and persona Haiku on the same real PRs, recording useful findings, false positives, misses, conflict handling and cost manually. At the default, twelve focused passes versus 3–6 general passes changes both focus and spend, so this is a strategy comparison, not an isolated proof that specialization alone helped. No new paid review is authorized by documenting this plan. Do not revive, extend or run the parked eval harness.
 
 **Project context pack (after persona mode).** Extract identifiers touched by the diff, search base-commit documentation/agent-instruction files, and add relevant capped passages as a separate reference block. Deterministic, no model call, stable per persona/pass, saved with inputs. Ranking, size cap, search scope and citation design remain future work; it must respect the distinction between authoritative contracts and planning claims.
 

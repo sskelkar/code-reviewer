@@ -15,5 +15,5 @@ def create_flow(cfg: Config, runner: Any, emit: Optional[EventSink] = None,
         return SingleAgentFlow(cfg, runner, emit, prompts_dir or PROMPTS_DIR, defaults_dir or DEFAULT_CRITERIA_DIR)
     if cfg.review_mode == "agent-personas":
         from .agent_personas.flow import AgentPersonasFlow
-        return AgentPersonasFlow(cfg, runner, emit)
+        return AgentPersonasFlow(cfg, runner, emit, prompts_dir, defaults_dir)
     raise ConfigError("unknown review mode: %s" % cfg.review_mode)

@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "description", "severity", "kind", "rule_id", "file", "line", "suggestion"],
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["high", "medium", "low", "nit"] },
+          "kind": { "type": "string", "enum": ["present", "absent", "cross_file"] },
+          "rule_id": { "type": "string" },
+          "file": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 },
+          "quote": { "type": "string" },
+          "anchor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "line_start", "line_end"],
+            "properties": {
+              "file": { "type": "string" },
+              "line_start": { "type": "integer", "minimum": 1 },
+              "line_end": { "type": "integer", "minimum": 1 },
+              "symbol": { "type": "string" }
+            }
+          },
+          "expected": { "type": "string" },
+          "suggestion": { "type": "string" },
+          "self_check": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["verdict", "reason"],
+            "properties": {
+              "verdict": { "type": "string", "enum": ["confirmed", "rejected"] },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}

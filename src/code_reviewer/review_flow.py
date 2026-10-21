@@ -11,11 +11,9 @@ from typing import Any, Optional
 
 from .shared.claude_cli import ClaudeError
 from .config import Config, ConfigError
-from .flows.single_agent.dry_run import DryRun
 from .engine import Engine
 from .shared.git_ops import GitError, PRRef
 from .shared.models import ReviewRefused
-from .flows.single_agent.models import RunResult
 from .progress import ProgressPrinter
 
 # What a review can fail with in an expected way. Frontends catch these and report them as an error message.
@@ -26,8 +24,8 @@ REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, ClaudeError)
 class ReviewOutcome:
     """Exactly one of the two is set: `dry_run` for --dry-run, otherwise `result`."""
 
-    dry_run: Optional[DryRun] = None
-    result: Optional[RunResult] = None
+    dry_run: Optional[Any] = None
+    result: Optional[Any] = None
 
 
 def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:

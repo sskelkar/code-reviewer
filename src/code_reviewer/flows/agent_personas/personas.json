@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "common_instructions": "review-standard.md",
+  "personas": [
+    {
+      "id": "correctness",
+      "name": "Correctness",
+      "focus": "Trace the changed behavior from inputs to outputs and state changes. Work through calculations, conditions, branches and boundary cases. Compare both sides of changed contracts and the repository-visible callers. Prioritize understanding actual behavior over proposing refactors or judging test design. Follow the declared entry points and delivered artifacts far enough to check integration wiring.",
+      "default_rule_ids": [
+        "COR-001",
+        "COR-002",
+        "COR-003"
+      ]
+    },
+    {
+      "id": "code-quality",
+      "name": "Code quality",
+      "focus": "Understand how the changed code communicates its responsibilities and how its structure affects concrete maintenance. Examine branching, abstractions, coupling, duplicated decisions and documentation. Follow behavior far enough to support a maintainability concern, without turning every review into a redesign.",
+      "default_rule_ids": [
+        "CQ-001",
+        "CQ-002"
+      ]
+    },
+    {
+      "id": "test-quality",
+      "name": "Test quality",
+      "focus": "Determine whether the existing and changed tests would detect important regressions in the changed behavior. Read the implementation and collaborator contracts as needed to understand what a test actually exercises. Evaluate assertions, test levels, mocks and isolation rather than counting test files or praising test volume. Check that the intended tests are actually selected by repository-defined commands and that failures remain visible.",
+      "default_rule_ids": [
+        "TEST-001",
+        "TEST-002",
+        "TEST-003"
+      ]
+    },
+    {
+      "id": "production-safety",
+      "name": "Production safety",
+      "focus": "Trace the reachable failure and abuse paths of the changed code. Examine untrusted input, authorization, exceptional exits, resource ownership, retries, concurrent operations and persistence. Explain how a supported failure sequence can produce exposure, uncontrolled work, inconsistency or continued work after cancellation. Compare changed queries with repository-defined indexes while distinguishing static eligibility from actual runtime plans.",
+      "default_rule_ids": [
+        "SAFE-001",
+        "SAFE-002",
+        "SAFE-003",
+        "SAFE-004",
+        "SAFE-005",
+        "COR-002"
+      ]
+    }
+  ]
+}

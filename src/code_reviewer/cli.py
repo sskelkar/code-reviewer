@@ -10,12 +10,12 @@ from .shared import git_ops
 from .shared.claude_cli import ClaudeRunner
 from .config import ConfigError, load_config
 from .doctor import run_doctor
-from .flows.single_agent.dry_run import render_dry_run
+from .presentation import render_dry_run
 from .post import format_comment, post_comment
 from .repl import Session
 from .review_flow import REVIEW_ERRORS, run_review
 from .review_options import add_run_options, apply_run_options, review_banner
-from .flows.single_agent.summary import render_summary, run_line
+from .presentation import render_summary, run_line
 
 MAIN_EPILOG = """\
 examples:
@@ -104,7 +104,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             except git_ops.GitError as exc:
                 print("posting failed: %s" % exc, file=sys.stderr)
                 return 1
-        return 0 if result.stop_reason in ("converged", "max_passes", "cancelled", "budget_exceeded") else 1
+        return 0 if result.stop_reason in ("converged", "max_passes", "completed", "cancelled", "budget_exceeded") else 1
 
     Session(cfg, runner).loop()
     return 0

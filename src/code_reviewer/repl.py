@@ -10,14 +10,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .shared import git_ops
 from .config import Config, ConfigError
-from .flows.single_agent.dry_run import render_dry_run
-from .flows.single_agent.models import RunResult
+from .presentation import render_dry_run
 from .post import format_comment, post_comment
-from .flows.single_agent.report import TIERS, render_finding
+from .presentation import TIERS, render_finding
 from .repl_help import HELP, REVIEW_USAGE, welcome_text
 from .review_flow import REVIEW_ERRORS, run_review
 from .review_options import OptionError, ReplArgumentParser, add_run_options, apply_run_options
-from .flows.single_agent.summary import render_summary, run_line
+from .presentation import render_summary, run_line
 
 try:  # command history and line editing where available
     import readline  # noqa: F401
@@ -60,7 +59,7 @@ class Session:
         self.local_path = local_path or Path.cwd()
         self.out = out
         self.ask = ask
-        self.result: Optional[RunResult] = None
+        self.result: Optional[Any] = None
         self.ref: Optional[git_ops.PRRef] = None
         self.labels: Dict[str, Any] = {"marks": {}, "dropped": [], "missed": []}
 
@@ -148,7 +147,7 @@ class Session:
         self.labels = load_labels(outcome.result.run_dir)
         self.print_summary()
 
-    def _need_result(self) -> Optional[RunResult]:
+    def _need_result(self) -> Optional[Any]:
         if self.result is None:
             self.out("no review yet. Run 'review <PR URL>' first.")
         return self.result
@@ -168,7 +167,7 @@ class Session:
             return
         item = self._find(args[0])
         if item is not None and self.result is not None:
-            self.out(render_finding(item, self.result.passes_completed, self.result.criteria.index()))
+            self.out(render_finding(self.result, item))
             mark = self.labels["marks"].get(item["id"])
             if mark:
                 self.out("Your mark: %s" % mark)

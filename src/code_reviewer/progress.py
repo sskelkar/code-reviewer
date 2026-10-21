@@ -45,8 +45,19 @@ class ProgressPrinter:
         elif kind == "criteria_resolved":
             self._say("criteria: %d default + %d project rules from %d files, %d ignored references" % (
                 d["default_rules"], d["project_rules"], d["project_files"], d["ignored"]))
+        elif kind == 'classification_started':
+            self._say('distributing %d project rules among four personas ...' % d['rules'])
+        elif kind == 'budget_allocated':
+            self._say('budget allocation: ' + ', '.join('%s $%.2f' % (p, v['allocated_usd']) for p, v in d['pools'].items()))
         elif kind == "warning":
             self._say("warning: %s" % d["message"])
+        elif kind == "persona_pass_started":
+            self._say("%s: round %d/%d (slot %d/%d) ..." % (
+                d["persona"], d["round_no"], d["rounds"], d["pass_no"], d["scheduled"]))
+        elif kind == "persona_pass_finished":
+            self._say("%s: round %d completed, %d usable findings · %s" % (d["persona"], d["round_no"], d["usable"], _fmt_money(d["cost"])))
+        elif kind == "verification_started":
+            self._say("investigating flagged conflict %s ..." % d["conflict"])
         elif kind == "pass_started":
             self._say("pass %d/%d ..." % (d["pass_no"], d["max_passes"]))
         elif kind == "reviewer_started" and self.verbose:

@@ -10,8 +10,6 @@ from .shared.events import EventSink
 from .shared.models import PRContext
 
 if TYPE_CHECKING:
-    from .flows.single_agent.dry_run import DryRun
-    from .flows.single_agent.models import RunResult
     from .shared.git_ops import PRRef
 
 __all__ = ["Engine"]
@@ -25,10 +23,10 @@ class Engine:
     def prepare(self, ref: PRRef, local_path: Optional[Path] = None) -> PRContext:
         return self._flow.prepare(ref, local_path)
 
-    def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
+    def review(self, ctx: PRContext, keep_checkout: bool = False) -> Any:
         return self._flow.review(ctx, keep_checkout=keep_checkout)
 
-    def dry_run(self, ctx: PRContext) -> DryRun:
+    def dry_run(self, ctx: PRContext) -> Any:
         return self._flow.dry_run(ctx)
 
     def __getattr__(self, name: str) -> Any:

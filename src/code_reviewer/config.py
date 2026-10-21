@@ -103,8 +103,20 @@ class Config:
 
     # Append new fields to preserve existing positional constructor arguments.
     review_mode: str = "single-agent"
+    model_verifier: str = "haiku"
+    persona_prompt_max_chars: int = 500000
+    persona_passes: int = 3
+    persona_parallel: int = 4
 
     def validate(self) -> None:
+        if isinstance(self.persona_parallel, bool) or not isinstance(self.persona_parallel, int) or not 1 <= self.persona_parallel <= 4:
+            raise ConfigError("persona_parallel must be an integer from 1 to 4")
+        if isinstance(self.persona_passes, bool) or not isinstance(self.persona_passes, int) or self.persona_passes < 1:
+            raise ConfigError('persona_passes must be a positive integer')
+        if self.review_mode == 'agent-personas' and self.call_budget_usd < 0.01:
+            raise ConfigError('agent-personas needs call_budget_usd >= 0.01 (Claude CLI dollar limits use cents)')
+        if self.persona_prompt_max_chars < 1:
+            raise ConfigError("persona_prompt_max_chars must be positive")
         if self.review_mode not in REVIEW_MODES:
             raise ConfigError("review_mode must be one of %s" % ", ".join(REVIEW_MODES))
         if self.criteria_mode not in CRITERIA_MODES:

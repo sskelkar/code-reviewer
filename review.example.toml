@@ -1,13 +1,19 @@
 # Copy to ./review.toml (project directory) or ~/.code-reviewer/review.toml and edit.
 # Every key is optional; the values below are the defaults.
 
-# Review flow: single-agent (default); agent-personas is reserved and fails until implemented.
+# Review flow: single-agent (default); agent-personas defaults to three passes for each of four personas, then conflict-only verification.
 review_mode = "single-agent"
+
+# Persona mode: scheduled passes per persona (4 times this many total); --passes N overrides for one run.
+persona_passes = 3
+# Persona Reviewers run concurrently within a round, then merge serially; --parallel N overrides.
+persona_parallel = 4
 
 # Models: any alias or full name accepted by `claude --model`.
 model_reviewer = "haiku"
 model_comparator = "haiku"   # "sonnet" merges duplicate findings more consistently but costs ~15x more for this step
-model_resolver = "haiku"
+model_resolver = "haiku"   # also used for project-rule classification in persona mode
+model_verifier = "haiku"   # persona conflict annotations only
 
 # Reviewer refutes its own findings in a second phase.
 self_check = true
@@ -19,11 +25,11 @@ criteria_manifest = ""
 # Default rule IDs to switch off, for example ["GEN-003"].
 disabled_default_rules = []
 
-# Loop control
+# Single-agent loop control (persona mode uses persona_passes, with no quiet-pass stopping)
 min_passes = 3
 max_passes = 6
 quiet_k = 2                    # stop after this many consecutive passes with no new finding
-max_consecutive_failures = 2
+max_consecutive_failures = 2    # single-agent globally; persona mode separately per persona
 
 # Confidence tiers: share of completed passes that found an issue
 tier_high = 0.75
@@ -31,6 +37,7 @@ tier_medium = 0.40
 
 # Limits
 max_diff_lines = 3000          # changed lines after exclusions
+persona_prompt_max_chars = 500000  # complete persona call/retry text; never silently truncated
 criteria_max_chars = 200000    # about 50k tokens
 # Files left out of the diff, and about which no findings are reported. A trailing slash matches a directory anywhere in the
 # path, including several folders such as "docs/plans/". This list REPLACES the built-in one (lockfiles, minified, generated, vendor/ ...).
@@ -48,7 +55,7 @@ grounding_line_window = 30     # count corrections exceeding this distance; quot
 # Budgets and timeouts
 call_budget_usd = 0.50         # --max-budget-usd for every claude call
 call_timeout_s = 600
-run_budget_usd = 3.00
+run_budget_usd = 3.00         # personas: 10% criteria, 10% Comparator, 13 1/3% Verifier, remainder split equally
 run_budget_tokens = 2000000    # counts input, output and cache-write tokens; cache reads are not counted
 
 # Claude Code binary (name on PATH or full path)

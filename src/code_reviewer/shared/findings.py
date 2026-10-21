@@ -90,8 +90,11 @@ def _safe_path(root: Path, rel: str) -> Optional[Path]:
     rel = rel.strip()
     if not rel or rel.startswith("/") or ".." in Path(rel).parts:
         return None
-    candidate = (root / rel).resolve()
-    root_resolved = root.resolve()
+    try:
+        candidate = (root / rel).resolve()
+        root_resolved = root.resolve()
+    except (OSError, ValueError):
+        return None  # malformed model paths must fail grounding, not crash validation
     if candidate != root_resolved and root_resolved not in candidate.parents:
         return None
     return candidate
@@ -108,9 +111,12 @@ class FileCache:
         if rel not in self._cache:
             path = _safe_path(self.root, rel)
             lines = None
-            if path is not None and path.is_file():
-                text = path.read_text(encoding="utf-8", errors="replace")
-                lines = [(n, _norm(raw)) for n, raw in enumerate(text.splitlines(), start=1) if raw.strip()]
+            try:
+                if path is not None and path.is_file():
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                    lines = [(n, _norm(raw)) for n, raw in enumerate(text.splitlines(), start=1) if raw.strip()]
+            except (OSError, ValueError):
+                pass  # unreadable files are ungrounded evidence in either review flow
             self._cache[rel] = lines
         return self._cache[rel]
 

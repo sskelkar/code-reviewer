@@ -31,12 +31,14 @@ def positive_int(text: str) -> int:
 
 def add_run_options(parser: argparse.ArgumentParser) -> None:
     """Options that change how a review runs. Both frontends add exactly these."""
+    parser.add_argument("--parallel", type=positive_int, metavar="N", help="persona-only concurrent calls, 1 to 4 (default: persona_parallel, 4)")
     parser.add_argument("--mode", choices=REVIEW_MODES,
-                        help="review flow (default: review_mode in review.toml, single-agent); agent-personas is not implemented yet")
+                        help="review flow (default: review_mode in review.toml, single-agent); agent-personas defaults to three passes per persona")
     parser.add_argument(
         "--passes", type=positive_int, metavar="N",
-        help="maximum number of review passes (default: max_passes in review.toml, 6). The review can stop earlier once "
-             "passes stop finding anything new. Use --passes 1 for a single, cheap pass")
+        help="single-agent: maximum number of review passes (default: max_passes in review.toml, 6), with early convergence stopping. "
+             "agent-personas: passes per persona (default: persona_passes in review.toml, 3), with no quiet-pass stopping. "
+             "Use --passes 1 for a single, cheap pass in single-agent or one pass per persona in agent-personas")
     parser.add_argument(
         "--model", metavar="NAME",
         help="model for all roles, an alias or full name such as haiku or sonnet (default: the model_* settings in review.toml)")
@@ -60,13 +62,21 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
     cfg = replace(cfg)
     if getattr(args, "mode", None):
         cfg.review_mode = args.mode
+    if getattr(args, 'parallel', None) is not None:
+        from .config import ConfigError
+        if cfg.review_mode != 'agent-personas':
+            raise ConfigError('--parallel applies only to agent-personas')
+        cfg.persona_parallel = args.parallel
     if args.passes:
-        cfg.max_passes = args.passes
-        cfg.min_passes = min(cfg.min_passes, args.passes)
+        if cfg.review_mode == 'agent-personas':
+            cfg.persona_passes = args.passes
+        else:
+            cfg.max_passes = args.passes
+            cfg.min_passes = min(cfg.min_passes, args.passes)
     if args.no_self_check:
         cfg.self_check = False
     if args.model:
-        cfg.model_reviewer = cfg.model_comparator = cfg.model_resolver = args.model
+        cfg.model_reviewer = cfg.model_comparator = cfg.model_resolver = cfg.model_verifier = args.model
     cfg.validate()
     return cfg
 
@@ -74,8 +84,9 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # The options of `reviewer review`, one line each, for the banner it prints in a terminal. A test checks that every option
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
-    ("--mode NAME", "single-agent (default); agent-personas is not implemented yet"),
-    ("--passes N", "maximum number of passes; --passes 1 is one cheap pass"),
+    ("--parallel N", "persona-only concurrent calls, 1 to 4 (default 4)"),
+    ("--mode NAME", "single-agent (default); agent-personas defaults to three passes each"),
+    ("--passes N", "single-agent maximum passes; agent-personas passes per persona"),
     ("--model NAME", "model for all roles, for example haiku or sonnet"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
     ("--keep-checkout", "keep the temporary checkout (its location is printed)"),
@@ -94,11 +105,13 @@ def review_banner(pr: str, cfg: Config) -> str:
         "reviewer review: multi-pass pull request review",
         "",
         "This run: %s · up to %d passes · model %s · self-check %s · emails %s · mode %s" % (
-            pr, cfg.max_passes, cfg.model_reviewer, "on" if cfg.self_check else "off",
+            pr, 4 * cfg.persona_passes if cfg.review_mode == "agent-personas" else cfg.max_passes, cfg.model_reviewer, "on" if cfg.self_check else "off",
             "redacted" if cfg.redact_emails else "NOT redacted", cfg.review_mode),
         "",
         "Options you can add to this command:",
     ]
+    if cfg.review_mode == 'agent-personas':
+        lines.insert(3, 'Persona schedule: %d passes per persona; no quiet-pass stopping.' % cfg.persona_passes)
     lines += ["  %s%s" % (flag.ljust(width), description) for flag, description in BANNER_OPTIONS]
     lines += [
         "",

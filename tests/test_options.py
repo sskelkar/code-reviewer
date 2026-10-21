@@ -91,6 +91,16 @@ class ApplyOptionsTests(unittest.TestCase):
         cfg = apply_run_options(Config(), options(passes=10))
         self.assertEqual((cfg.max_passes, cfg.min_passes), (10, 3))
 
+    def test_persona_default_and_cli_overrides_are_separate_from_single_agent_controls(self):
+        original = Config(review_mode='agent-personas', persona_passes=5)
+        self.assertEqual(Config().persona_passes, 3)
+        self.assertEqual(apply_run_options(original, options()).persona_passes, 5)
+        cfg = apply_run_options(original, options(passes=2))
+        self.assertEqual((cfg.persona_passes, cfg.min_passes, cfg.max_passes), (2, 3, 6))
+        cfg = apply_run_options(original, options(mode='single-agent', passes=1))
+        self.assertEqual((cfg.persona_passes, cfg.min_passes, cfg.max_passes), (5, 1, 1))
+        self.assertEqual(original.persona_passes, 5)
+
     def test_model_applies_to_all_roles_and_self_check_can_be_disabled(self):
         cfg = apply_run_options(Config(), options(model="sonnet", no_self_check=True))
         self.assertEqual((cfg.model_reviewer, cfg.model_comparator, cfg.model_resolver), ("sonnet",) * 3)

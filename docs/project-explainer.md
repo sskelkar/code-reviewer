@@ -4,7 +4,7 @@ This guide is for an experienced Java programmer who has never written Python an
 
 Code samples are copied from this repository (some are abridged, marked with `...` or "simplified"); a few short samples are written purely to illustrate a language feature and are not from the repo (they are in sections 5, 8 and 15). The claims about this project were checked against the code. File links are relative to this `docs/` directory.
 
-**Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The `agent_personas` folder is an explicit unavailable-mode boundary until that workflow is built. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
+**Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The separate `agent_personas/flow.py` implements the optional configured parallel-round workflow (three rounds by default, `persona_passes` or `--passes N` to change it), loading `personas.json`, common review instructions and thirteen criteria. It owns its contracts, master/result, budget guard and report. Reviewer calls run concurrently within each round; consolidation is serial in fixed order, with proportional role/persona pools and cancellation-aware subprocesses. Frontends dispatch presentation through `presentation.py`; shared code imports neither workflow. Persona behavior is offline-tested, not live-validated. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
 
 **How to use this guide**
 
@@ -844,7 +844,7 @@ PYTHONPATH=src python3 -c "from code_reviewer.config import Config; print(Config
 
 - **Debugger:** put `breakpoint()` on any line; running the code (including a test) drops into `pdb`, the command-line debugger (`n` next, `s` step, `c` continue, `p expr` print, `q` quit). IDEs such as PyCharm and VS Code attach their own debuggers to the same code.
 - **Inspecting values:** `print(repr(x))`, or `dir(obj)` to list an object's attributes.
-- **Where output goes:** each review writes full details to its run directory (see the README's "Debugging a review" table); that is the equivalent of a log file.
+- **Where output goes:** each review writes full details to its run directory (see [Debugging a review](development.md#debugging-a-review)); that is the equivalent of a log file.
 - **Editing safely:** change code, rerun the tests, and for prompt or criteria edits also run a one-pass review (`reviewer review <url> --passes 1`).
 
 ---

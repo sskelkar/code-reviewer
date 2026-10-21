@@ -218,6 +218,49 @@ def git_ctx(ctx, head):
 
 
 class GitOpsTests(TempDirTestMixin, unittest.TestCase):
+    def test_review_fetch_refreshes_private_refs_without_touching_tracking_refs_or_tags(self):
+        from .helpers import git
+
+        tmp = self.make_tmp()
+        ctx = make_repo(tmp)
+        source = ctx.git_dir
+        git(source, 'update-ref', 'refs/pull/7/head', ctx.head_sha)
+        for bare in (False, True):
+            with self.subTest(bare=bare):
+                clone = tmp / ('bare.git' if bare else 'clone')
+                args = ['clone', '--quiet'] + (['--bare'] if bare else [])
+                git(tmp, *(args + [str(source), str(clone)]))
+                tracking = 'refs/heads/main' if bare else 'refs/remotes/origin/main'
+                if bare:
+                    git(clone, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*')
+                before = git(clone, 'rev-parse', tracking)
+                original_head = git(clone, 'rev-parse', 'HEAD')
+                git(source, 'checkout', '-q', 'main')
+                marker = source / 'unrelated.txt'
+                marker.write_text(str(bare))
+                git(source, 'add', '.')
+                git(source, 'commit', '-qm', 'advance target branch')
+                latest = git(source, 'rev-parse', 'HEAD')
+                tag = 'new-tag-%s' % bare
+                git(source, 'tag', tag)
+                git_dir = clone if bare else clone / '.git'
+                lock = git_dir / (tracking + '.lock')
+                lock.parent.mkdir(parents=True, exist_ok=True)
+                lock.write_text('simulated concurrent fetch')
+                try:
+                    self.assertEqual(git_ops.fetch_pr_refs(clone, 7, 'main'), (latest, ctx.head_sha))
+                    git(source, 'commit', '--allow-empty', '-qm', 'target advances again')
+                    newest = git(source, 'rev-parse', 'HEAD')
+                    self.assertEqual(git_ops.fetch_pr_refs(clone, 7, 'main'), (newest, ctx.head_sha))
+                finally:
+                    lock.unlink()
+                self.assertEqual(git(clone, 'rev-parse', tracking), before)
+                self.assertEqual(git(clone, 'rev-parse', 'HEAD'), original_head)
+                self.assertNotIn(tag, git(clone, 'tag', '--list').splitlines())
+                self.assertEqual(git_ops.merge_base(clone, newest, ctx.head_sha), ctx.base_sha)
+                if not bare:
+                    self.assertEqual(git(clone, 'status', '--porcelain'), '')
+
     def test_parse_pr_ref(self):
         ref = git_ops.parse_pr_ref("https://github.com/acme/project/pull/42/files")
         self.assertEqual((ref.owner, ref.repo, ref.number, ref.gh_repo), ("acme", "project", 42, "acme/project"))

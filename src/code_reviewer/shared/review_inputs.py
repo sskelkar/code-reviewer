@@ -1,6 +1,6 @@
 """Building what the Reviewer is given: the redacted PR text, the filtered diff, and the criteria.
 
-Used by the single-agent flow's review and dry-run paths, so a dry run builds its inputs exactly as a real review does.
+Shared by both flows. Dry runs build the pinned diff and default criteria but omit project discovery and model calls.
 """
 from __future__ import annotations
 

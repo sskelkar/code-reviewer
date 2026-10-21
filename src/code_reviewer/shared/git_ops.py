@@ -137,8 +137,10 @@ def fetch_pr_refs(git_dir: Path, number: int, base_ref: str) -> Tuple[str, str]:
     """Fetch the PR head and the base branch tip into a private ref namespace; return (base_sha, head_sha)."""
     head_ref = "refs/code-reviewer/pr-%d-head" % number
     base_local = "refs/code-reviewer/pr-%d-base" % number
+    # Explicit destinations alone still allow configured remote-tracking updates.
+    # Ignore those mappings so IDE/background fetches do not contend with this review.
     _run([
-        "git", "-C", str(git_dir), "fetch", "--quiet", "origin",
+        "git", "-C", str(git_dir), "fetch", "--quiet", "--no-tags", "--refmap=", "origin",
         "+refs/pull/%d/head:%s" % (number, head_ref),
         "+refs/heads/%s:%s" % (base_ref, base_local),
     ], timeout=1800)

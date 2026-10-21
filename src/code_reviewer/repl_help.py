@@ -6,14 +6,15 @@ from __future__ import annotations
 
 from typing import Optional
 
-REVIEW_USAGE = "review PR [--mode single-agent|agent-personas] [--passes N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
+REVIEW_USAGE = "review PR [--mode single-agent|agent-personas] [--passes N] [--parallel N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
 
 HELP = """\
 Commands:
   review <PR URL | owner/repo#n> [options]
       Review a pull request (several independent passes, then a merged report). Options:
-        --mode NAME       single-agent (default); agent-personas is not implemented yet
-        --passes N        maximum number of passes; use 1 for a single, cheap pass
+        --parallel N      persona-only concurrent calls, 1 to 4 (default 4)
+        --mode NAME       single-agent (default) or agent-personas (3 passes each by default)
+        --passes N        single-agent: maximum passes (1 for a single, cheap pass); agent-personas: passes per persona
         --model NAME      model for all roles, for example haiku or sonnet
         --no-self-check   skip the reviewer's self-refutation phase (cheaper, findings are not double-checked)
         --keep-checkout   keep the temporary checkout (its location is printed), for debugging
@@ -36,7 +37,7 @@ Commands:
 COMMAND_GROUPS = [
     ("Start a review", [
         ("review <PR URL>", "review a pull request, for example review https://github.com/OWNER/REPO/pull/123"),
-        ("review <PR URL> --passes 1", "one cheap pass to try it out (more options: review --help)"),
+        ("review <PR URL> --passes 1", "one pass per reviewer to try it out (more options: review --help)"),
         ("review <PR URL> --dry-run", "show exactly what the reviewer would be given, without calling the model"),
     ]),
     ("After a review", [

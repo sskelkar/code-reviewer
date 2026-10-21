@@ -118,6 +118,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--config", help="path to a review.toml")
     args = parser.parse_args(argv)
     run_dir = Path(args.run_dir).expanduser()
+    saved_config = run_dir / 'config.json'
+    if saved_config.is_file():
+        try:
+            metadata = json.loads(saved_config.read_text(encoding='utf-8'))
+            saved_mode = metadata.get('config', {}).get('review_mode', 'single-agent')
+        except (OSError, ValueError, AttributeError):
+            print('cannot read saved run configuration', file=sys.stderr)
+            return 1
+        if saved_mode != 'single-agent':
+            print('replay supports single-agent runs only; persona contracts require a separate replay implementation', file=sys.stderr)
+            return 1
     try:
         cfg = load_config(args.config)
     except ConfigError as exc:

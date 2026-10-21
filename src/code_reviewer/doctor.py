@@ -106,13 +106,25 @@ def _check_environment(cfg: Config, report: _Report) -> None:
     code, text = _run(["git", "--version"])
     report.check("git is installed", code == 0, text)
     try:
-        for role in ROLES:
-            load_prompt(role, PROMPTS_DIR)
-        report.check("prompt templates and schemas load", True, str(PROMPTS_DIR))
-    except Exception as exc:  # report any problem
-        report.check("prompt templates and schemas load", False, str(exc))
-    rules = load_default_rules(DEFAULT_CRITERIA_DIR)
-    report.check("default criteria load", len(rules) > 0, "%d rules from %s" % (len(rules), DEFAULT_CRITERIA_DIR))
+        if cfg.review_mode == 'agent-personas':
+            from .flows.agent_personas.criteria import Catalog
+            from .flows.agent_personas.flow import ROOT
+            from .flows.agent_personas.prompt_contract import load_prompts
+            load_prompts(ROOT / 'prompts')
+            catalog = Catalog(ROOT, ROOT / 'criteria')
+            catalog.input_config(cfg)
+            rules = catalog.rules
+            location = ROOT
+        else:
+            for role in ROLES:
+                load_prompt(role, PROMPTS_DIR)
+            rules = load_default_rules(DEFAULT_CRITERIA_DIR)
+            location = PROMPTS_DIR
+        report.check('prompt templates and schemas load', True, str(location))
+        report.check('default criteria load', len(rules) > 0, '%d rules' % len(rules))
+    except Exception as exc:
+        report.check('prompt templates and schemas load', False, str(exc))
+
 
 
 class _Sandbox:

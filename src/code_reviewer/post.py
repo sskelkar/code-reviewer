@@ -6,7 +6,7 @@ import tempfile
 from typing import Any, List, Sequence
 
 from .shared.git_ops import PRRef, _run
-from .flows.single_agent.summary import render_summary
+from .presentation import render_summary
 
 MARKER = "<!-- code-reviewer:v0 -->"
 MAX_COMMENT_CHARS = 60000

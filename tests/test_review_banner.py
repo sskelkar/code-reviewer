@@ -41,6 +41,11 @@ class BannerContentTests(unittest.TestCase):
         self.assertEqual(len(lines), len(BANNER_OPTIONS))
         self.assertEqual(len({l.index(d) for l, (_, d) in zip(lines, BANNER_OPTIONS)}), 1)
 
+    def test_persona_banner_uses_configured_per_persona_and_total_counts(self):
+        text = review_banner('a/b#1', Config(review_mode='agent-personas', persona_passes=2))
+        self.assertIn('up to 8 passes', text)
+        self.assertIn('2 passes per persona', text)
+
 
 class BannerInTheCliTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
