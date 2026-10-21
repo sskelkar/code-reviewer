@@ -2,7 +2,7 @@
 
 The active single-agent templates and schemas live in [`src/code_reviewer/flows/single_agent/prompts/`](../src/code_reviewer/flows/single_agent/prompts/). Filenames in the table below are relative to that folder. The prompt loader is `flows/single_agent/prompt_contract.py`; generic rendering lives in `shared/templates.py`. Legacy package-root modules only re-export these implementations.
 
-Templates the harness renders for each LLM call. Each role has a **system** prompt (static instructions, passed with `--append-system-prompt`) and a **user** prompt (the request with data, sent on stdin in `-p` mode). Each role also has a JSON schema (passed with `--json-schema`).
+Templates the harness renders for each LLM call. Each role has a **system** prompt (static instructions, passed with `--append-system-prompt`) and a **user** prompt (the request with data, sent on stdin in `-p` mode; persona transport uses an anonymous temporary file to deliver the complete UTF-8 input while polling for cancellation). Each role also has a JSON schema (passed with `--json-schema`).
 
 | Role | System | User | Schema | Tools |
 |---|---|---|---|---|

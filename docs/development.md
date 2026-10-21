@@ -35,7 +35,7 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
 | `test_evals`, `test_eval_grading` | Pinned evals, no-call plans, fake-model matrices, isolation/failures/budgets, local labels/rekey/combined reports and deterministic rubric metrics |
 | `test_persona_criteria` | Static assignment coverage, unique/shared rule identities, reporting sections and shared-parser rendering/disabling |
-| `test_persona_parallel` | Overlapping Reviewer calls, concurrency limits, round barriers and ordered merges, isolated budget pools, proportional allocations, and subprocess-group cancellation |
+| `test_persona_parallel` | Overlapping Reviewer calls, concurrency limits, round barriers and ordered merges, isolated budget pools, proportional allocations, large-prompt delivery to slow stdin readers, and subprocess-group cancellation |
 | `test_persona_flow` | Configured round-robin counts, independent frozen prompts, classification/fallback, source-aware agreement, conflicts/remapping, advisory verification/grounding, budgets/failures/cancellation, CLI/REPL and dry runs |
 | `test_flow_selection` | Default/explicit mode selection, asset isolation, compatibility imports, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |

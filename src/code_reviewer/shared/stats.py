@@ -30,7 +30,7 @@ class Stats:
         return sum(c["cost_usd"] or 0.0 for c in self.calls)
 
     def cost_known(self) -> bool:
-        return all(c["cost_usd"] is not None for c in self.calls if c["ok"] or c["tokens"]["input"] or c["tokens"]["output"])
+        return all(c["cost_usd"] is not None for c in self.calls)
 
     def total_tokens(self) -> int:
         """Every token Claude Code reported, including cache reads."""

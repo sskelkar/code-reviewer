@@ -128,6 +128,20 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(apply_run_options(Config(), args).persona_parallel, 2)
 
     @unittest.skipUnless(os.name == 'posix', 'process group test')
+    def test_large_prompt_reaches_slow_reader_in_full(self):
+        binary = self.tmp / 'fake-slow-claude'
+        binary.write_text('#!' + sys.executable + '\nimport sys,time,json\n'
+            'time.sleep(.3)\ntext=sys.stdin.read()\n'
+            'print(json.dumps({"structured_output":{"length":len(text)},"total_cost_usd":.001}))\n')
+        binary.chmod(0o700)
+        prompt = 'synthetic prompt \u03bb\n' * 20000
+        result = ParallelRunner(ClaudeRunner(str(binary)), Budget(self.cfg)).run(
+            system_prompt='system', user_prompt=prompt, schema={}, model='fake', tools='',
+            cwd=self.tmp, budget_usd=.01, timeout_s=2)
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(result.parsed, {'length': len(prompt)})
+
+    @unittest.skipUnless(os.name == 'posix', 'process group test')
     def test_cancel_kills_owned_process_group_before_returning(self):
         ready = self.tmp / 'ready'
         binary = self.tmp / 'fake-claude'

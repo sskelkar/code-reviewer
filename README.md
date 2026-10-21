@@ -101,7 +101,7 @@ flowchart TD
     FLAGS -->|no| REPORT["Combined report: per-persona agreement,<br/>conflict annotations and unfinished work"]
 ```
 
-Set passes per persona with `--passes N` or `persona_passes` in TOML (default 3). All 4 × N slots are scheduled even if earlier passes find nothing new. Normal retries, budgets, cancellation and failure limits can leave slots incomplete. Each round runs up to four Reviewers concurrently on one pinned checkout, then merges results in fixed persona order before the next round. `--parallel N` (1–4, default 4; `persona_parallel` in TOML) controls concurrency.
+Set passes per persona with `--passes N` or `persona_passes` in TOML (default 3). All 4 × N slots are scheduled even if earlier passes find nothing new. Normal retries, budgets, cancellation and failure limits can leave slots incomplete. A timeout leaves cost unknown; the pool ledger conservatively charges the reserved allowance ([accounting details](docs/usage.md#persona-budget-pools)). Each round runs up to four Reviewers concurrently on one pinned checkout, then merges results in fixed persona order before the next round. `--parallel N` (1–4, default 4; `persona_parallel` in TOML) controls concurrency.
 
 All passes within a persona receive identical prompts. Any persona may report an evidenced correctness/safety issue outside its focus. Categories never transfer votes: agreement stays with the discovering persona.
 

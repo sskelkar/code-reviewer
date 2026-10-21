@@ -5,6 +5,14 @@ from code_reviewer.stats import Stats
 
 
 class StatsBudgetTokensTests(unittest.TestCase):
+    def test_failed_call_without_usage_has_unknown_cost(self):
+        stats = Stats()
+        stats.record('resolver', None, ClaudeResult(ok=True, cost_usd=.002), 1, 'fake')
+        stats.record('classifier', None, ClaudeResult(ok=False, timed_out=True), 1, 'fake')
+        self.assertFalse(stats.cost_known())
+        self.assertFalse(stats.to_dict()['cost_known_for_all_calls'])
+        self.assertEqual(stats.total_cost(), .002)
+
     def test_budget_tokens_exclude_cache_reads(self):
         stats = Stats()
         tokens = {"input": 10, "output": 400, "cache_creation": 100, "cache_read": 700000}
