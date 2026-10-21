@@ -1,0 +1,277 @@
+src/code_reviewer/shared/findings.py
+  s_68cd0db0a8fc3a::t_48387fdcecc965 93-97,114-119
+src/code_reviewer/post.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 9
+tests/test_persona_criteria.py
+  s_68cd0db0a8fc3a::t_02ecd06bffb0f3 2-42,44-48,51-67
+  s_68cd0db0a8fc3a::t_19080438e15c5b 43,49-50
+  s_68cd0db0a8fc3a::t_06f01ca7765c41 1
+src/code_reviewer/flows/agent_personas/contracts.py
+  s_68cd0db0a8fc3a::t_e3184a310f72cd 1-75
+src/code_reviewer/flows/agent_personas/flow.py
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 1,86-87
+  s_68cd0db0a8fc3a::t_0474bdabd4405e 172
+  s_68cd0db0a8fc3a::t_ad5d35d120dec3 11,39-42
+  s_68cd0db0a8fc3a::t_0131a256a49caf 5,258-259
+  s_68cd0db0a8fc3a::t_68d8894751022e 103-105,107-108
+  s_68cd0db0a8fc3a::t_7aac669c274915 6,35,97-98,111-112
+  s_68cd0db0a8fc3a::t_5b3d1c31f2e264 4,8,12-30,34,36-38,43-70,73-80,85,88-96,99-102,106,109-110,113-114,116,118-134,137-145,154,206,222-225,234,237,240-241,265-289
+  s_68cd0db0a8fc3a::t_3574e09dd7b782 7,71-72,81-84,115,117,135-136,146-153,155-171,173-205,207-221,226-233,235-236,238-239,242-257,260-264
+src/code_reviewer/flows/agent_personas/prompts/classifier.user.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-8
+src/code_reviewer/flows/agent_personas/prompts/comparator.system.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-7
+src/code_reviewer/flows/agent_personas/roles.py
+  s_68cd0db0a8fc3a::t_0b95bb42fb2594 16,18,42,55-62
+  s_68cd0db0a8fc3a::t_83bbe1e86e431a 101-103
+  s_68cd0db0a8fc3a::t_5b3d1c31f2e264 1-15,17,19-41,43-54,63-100,104-106
+src/code_reviewer/flows/__init__.py
+  s_68cd0db0a8fc3a::t_aa1b48e146c5a2 18
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_4ba68169880009 203-204
+  s_68cd0db0a8fc3a::t_9cb670ed02f230 201
+  s_68cd0db0a8fc3a::t_06f01ca7765c41 3,14,197
+  s_68cd0db0a8fc3a::t_5a75e2eba59d16 26,92,341-342
+  s_68cd0db0a8fc3a::t_e540b6c651192e 12,227,239,241,245,292,300,340,346,374
+  s_68cd0db0a8fc3a::t_bbfe930561c354 207
+  s_68cd0db0a8fc3a::t_37da525b482403 27-28,36,64,199,202,278,364-365,367-370
+  s_68cd0db0a8fc3a::t_e279afeb68ef1f 62-63
+  s_68cd0db0a8fc3a::t_29de0a401aea89 205-206
+  s_68cd0db0a8fc3a::t_c07d14481ad213 200,251,253,258,260,272-273,276
+  s_68cd0db0a8fc3a::t_260be108aa98a5 254,274
+  s_68cd0db0a8fc3a::t_5391a68917be81 198,294,301-302,304-306,313,315,366,371-372
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 36,39-41,71-75,88-89,108,113-114
+  s_68cd0db0a8fc3a::t_054311e8a34e60 79
+  s_68cd0db0a8fc3a::t_ab55c2550a5d88 34,65-69,87
+src/code_reviewer/repl_help.py
+  s_68cd0db0a8fc3a::t_bbfe930561c354 9
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 40
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 16-17
+  s_68cd0db0a8fc3a::t_5c9cda9b02b311 15
+tests/test_persona_parallel.py
+  s_68cd0db0a8fc3a::t_0474bdabd4405e 91-107
+  s_68cd0db0a8fc3a::t_0bbd3572f37426 1-90,108-165
+src/code_reviewer/flows/agent_personas/prompts/resolver.user.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-12
+src/code_reviewer/repl.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 13,15,19,170
+  s_68cd0db0a8fc3a::t_c57cce1f359a60 62,150
+src/code_reviewer/flows/agent_personas/review-standard.md
+  s_68cd0db0a8fc3a::t_96a8b57b317bf2 1-8
+docs/persona-criteria.md
+  s_68cd0db0a8fc3a::t_260be108aa98a5 14,18
+  s_68cd0db0a8fc3a::t_853caf1088eec6 3,5,16,39
+  s_68cd0db0a8fc3a::t_ac03be4e0f5df9 23
+  s_68cd0db0a8fc3a::t_8b8f383fa597f4 7,9-13,20-21,25,27,29,31,35
+  s_68cd0db0a8fc3a::t_c07d14481ad213 33
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 37
+src/code_reviewer/flows/agent_personas/criteria/code-quality.md
+  s_68cd0db0a8fc3a::t_bfc4a96a63b169 3
+  s_68cd0db0a8fc3a::t_e117b08b80a0e4 1-2,4-19
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 24,131,133,136-137
+  s_68cd0db0a8fc3a::t_b6ebb7b4c0cabe 1-23,25-130,132,134-135
+src/code_reviewer/progress.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 54,57-60
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 55-56
+  s_68cd0db0a8fc3a::t_68d8894751022e 48-49
+  s_68cd0db0a8fc3a::t_f66851d545752d 50-51
+src/code_reviewer/shared/review_inputs.py
+  s_68cd0db0a8fc3a::t_ef7d4b56113335 3
+src/code_reviewer/flows/agent_personas/criteria/production-safety.md
+  s_68cd0db0a8fc3a::t_bfc4a96a63b169 3,9,11
+  s_68cd0db0a8fc3a::t_19080438e15c5b 36-43
+  s_68cd0db0a8fc3a::t_e117b08b80a0e4 1-2,4-8,10,12-35
+src/code_reviewer/flows/agent_personas/models.py
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 58
+  s_68cd0db0a8fc3a::t_0b95bb42fb2594 8-12,25-26,28-30,34,52,54
+  s_68cd0db0a8fc3a::t_4daffbfb0130e1 1-7,13-24,27,31-33,35-51,53,55-57
+  s_68cd0db0a8fc3a::t_d5bb438ae8f8f5 59-60
+review.example.toml
+  s_68cd0db0a8fc3a::t_853caf1088eec6 15-16,40
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 4,7-8,11,28
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 9-10,32,58
+docs/HANDOVER.md
+  s_68cd0db0a8fc3a::t_8836c80519acdb 5
+  s_68cd0db0a8fc3a::t_ed3c06d077ecdd 22-23,26,31,44,59,64,82,109,169
+  s_68cd0db0a8fc3a::t_bbfe930561c354 16-17
+  s_68cd0db0a8fc3a::t_f48c539ca137b3 20-21
+  s_68cd0db0a8fc3a::t_e279afeb68ef1f 18-19
+  s_68cd0db0a8fc3a::t_5ec6e29c137fb8 116-117,119-121,123-125
+  s_68cd0db0a8fc3a::t_f5bddba6db31fe 33-34
+  s_68cd0db0a8fc3a::t_29de0a401aea89 24-25
+  s_68cd0db0a8fc3a::t_219b2c4734d982 29-30
+  s_68cd0db0a8fc3a::t_37da525b482403 35-37,80,92,104-108,111-112,114-115
+  s_68cd0db0a8fc3a::t_5a75e2eba59d16 39-43,45-58,60-63,65-69,136,163
+  s_68cd0db0a8fc3a::t_b7acb88866aeff 3,27-28,78,184
+  s_68cd0db0a8fc3a::t_c07d14481ad213 99,102-103
+  s_68cd0db0a8fc3a::t_06f01ca7765c41 113
+  s_68cd0db0a8fc3a::t_bb2d3430082d89 32
+  s_68cd0db0a8fc3a::t_4ba68169880009 118,122,178
+  s_68cd0db0a8fc3a::t_c0706760867511 7-15,38,70,90,110,170
+src/code_reviewer/flows/agent_personas/prompt_contract.py
+  s_68cd0db0a8fc3a::t_4daffbfb0130e1 1-32
+src/code_reviewer/flows/agent_personas/criteria/test-quality.md
+  s_68cd0db0a8fc3a::t_e117b08b80a0e4 1-2,4-27
+  s_68cd0db0a8fc3a::t_bfc4a96a63b169 3
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 7
+  s_68cd0db0a8fc3a::t_b7acb88866aeff 847
+tests/test_review_banner.py
+  s_68cd0db0a8fc3a::t_f0ae68a8598755 44-48
+AGENTS.md
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 60
+  s_68cd0db0a8fc3a::t_853caf1088eec6 58-59
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 41
+  s_68cd0db0a8fc3a::t_b7acb88866aeff 17-20,52
+tests/test_options.py
+  s_68cd0db0a8fc3a::t_f0ae68a8598755 94-103
+src/code_reviewer/flows/agent_personas/prompts/reviewer.system.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-83
+src/code_reviewer/flows/agent_personas/personas.json
+  s_68cd0db0a8fc3a::t_e117b08b80a0e4 1-36,38-42,44-48
+  s_68cd0db0a8fc3a::t_260be108aa98a5 37,43
+prompts/README.md
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 25,29,86-87
+  s_68cd0db0a8fc3a::t_b7acb88866aeff 15
+  s_68cd0db0a8fc3a::t_4ba68169880009 56-58,60
+  s_68cd0db0a8fc3a::t_06f01ca7765c41 23
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 49
+  s_68cd0db0a8fc3a::t_e279afeb68ef1f 76-77
+  s_68cd0db0a8fc3a::t_853caf1088eec6 13,17-22,27,30-33
+README.md
+  s_68cd0db0a8fc3a::t_e279afeb68ef1f 46
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 53,73-74,106
+  s_68cd0db0a8fc3a::t_8b3483e317bcc8 3,5,7,9,11,18,20,23,25,27,30-31,33-34,36-37,40,42,44,48,50,52,55,57-64,67,69,72,77,81-82,94-95,97-101,108,110,114,116,118-123,125,127,129-136,139,141,143,147,149,151,153,155,157,159,162,165,169,171,173-180
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 83-93,96,104,112,145,167
+src/code_reviewer/shared/git_ops.py
+  s_68cd0db0a8fc3a::t_7b1c5346d463c4 140-141,143
+src/code_reviewer/presentation.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 1-36
+src/code_reviewer/flows/agent_personas/prompts/verifier.user.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-14
+docs/development.md
+  s_68cd0db0a8fc3a::t_b6ebb7b4c0cabe 1-37,40-92,94-97
+  s_68cd0db0a8fc3a::t_bbfe930561c354 38
+  s_68cd0db0a8fc3a::t_dd0152fbae13ed 93
+  s_68cd0db0a8fc3a::t_29de0a401aea89 39
+src/code_reviewer/flows/agent_personas/prompts/reviewer.user.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-33
+src/code_reviewer/flows/agent_personas/prompts/classifier.system.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1
+src/code_reviewer/flows/agent_personas/prompts/verifier.system.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-5
+src/code_reviewer/flows/agent_personas/criteria.py
+  s_68cd0db0a8fc3a::t_c57cce1f359a60 9,42
+  s_68cd0db0a8fc3a::t_ad5d35d120dec3 21-22,43-47,58,67,70
+  s_68cd0db0a8fc3a::t_4daffbfb0130e1 1-8,10-20,23-41,48-57,59-66,68-69,71-83
+src/code_reviewer/doctor.py
+  s_68cd0db0a8fc3a::t_5d9e8206e63699 109-127
+src/code_reviewer/flows/agent_personas/README.md
+  s_68cd0db0a8fc3a::t_853caf1088eec6 1,5-6,12,17-18
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 3,25-26
+  s_68cd0db0a8fc3a::t_ef7d4b56113335 7,20
+  s_68cd0db0a8fc3a::t_8b8f383fa597f4 8-11,13-15,19,21,23-24
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 22
+  s_68cd0db0a8fc3a::t_260be108aa98a5 16
+tests/test_engine.py
+  s_68cd0db0a8fc3a::t_7ee5c4039c0d4a 221-263
+src/code_reviewer/flows/agent_personas/budget.py
+  s_68cd0db0a8fc3a::t_ab55c2550a5d88 1-63,72
+  s_68cd0db0a8fc3a::t_cf16c0d15393bc 64-71,73
+src/code_reviewer/flows/agent_personas/prompts/schemas/resolver.schema.json
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-44
+src/code_reviewer/flows/agent_personas/prompts/schemas/verifier.schema.json
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-92
+tests/test_persona_flow.py
+  s_68cd0db0a8fc3a::t_0474bdabd4405e 208-209
+  s_68cd0db0a8fc3a::t_f0ae68a8598755 96-133,135-142,262-265,434,439-441
+  s_68cd0db0a8fc3a::t_2d714e9720f24b 219,234-235
+  s_68cd0db0a8fc3a::t_8ff649ccca4fae 181,190,257,353,366-367,369-374,381-392,394-433,435-438,442-444,446
+  s_68cd0db0a8fc3a::t_5d9e8206e63699 78,189,260,266,275,277,358-359,362,365,451-483
+  s_68cd0db0a8fc3a::t_0131a256a49caf 213-218,220-233,236-251
+  s_68cd0db0a8fc3a::t_b668f56c693b18 165-166,170,175,177,304,314,331,344,505-513
+  s_68cd0db0a8fc3a::t_fba1a5aa631a51 79,145,191,198,206,254,320,323,334,351,484-493
+  s_68cd0db0a8fc3a::t_06f01ca7765c41 494-504
+  s_68cd0db0a8fc3a::t_a726f23e859218 1-77,80-95,134,143-144,146-164,167-169,171-174,176,178-180,182-188,192-197,199-205,207,210-212,252-253,255-256,258-259,261,267-274,276,278-303,305-313,315-319,321-322,324-330,332-333,335-343,345-350,352,354-357,360-361,363-364,368,375-380,393,445,447-450
+src/code_reviewer/flows/agent_personas/prompts/resolver.system.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-16
+src/code_reviewer/cli.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 13,18,107
+src/code_reviewer/flows/agent_personas/report.py
+  s_68cd0db0a8fc3a::t_f09ce5cba3a18a 5,14
+  s_68cd0db0a8fc3a::t_c9ee8540e3efaa 4,50
+  s_68cd0db0a8fc3a::t_0131a256a49caf 87-88,90-91,93
+  s_68cd0db0a8fc3a::t_3543bc89af5016 92
+  s_68cd0db0a8fc3a::t_054311e8a34e60 1-3,6-13,15-40,43-49,51-70,72-86,89,94-95,97-106,110-112
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 41-42,71,107-108
+  s_68cd0db0a8fc3a::t_9704f29cd76942 96,109
+src/code_reviewer/flows/agent_personas/criteria/correctness.md
+  s_68cd0db0a8fc3a::t_e117b08b80a0e4 1-2,4-27
+  s_68cd0db0a8fc3a::t_bfc4a96a63b169 3
+src/code_reviewer/flows/agent_personas/prompts/comparator.user.md
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-9
+src/code_reviewer/replay.py
+  s_68cd0db0a8fc3a::t_68d8894751022e 121-131
+src/code_reviewer/flows/agent_personas/prompts/schemas/reviewer.schema.json
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-48
+src/code_reviewer/engine.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 26,29
+docs/usage.md
+  s_68cd0db0a8fc3a::t_e279afeb68ef1f 239
+  s_68cd0db0a8fc3a::t_bb2d3430082d89 233
+  s_68cd0db0a8fc3a::t_b6ebb7b4c0cabe 1-51,54-63,65,67-94,96-122,125-155,160-165,167-173,175-181,183,192-195,197-209,211-218,220-232,235-238,240-244,246-248
+  s_68cd0db0a8fc3a::t_2a4e9563cb3a48 66,95,156,159,234
+  s_68cd0db0a8fc3a::t_dd0152fbae13ed 182,196,219,245
+  s_68cd0db0a8fc3a::t_41d637c7f5e898 64,158,166,174,184-191,210
+  s_68cd0db0a8fc3a::t_b7acb88866aeff 52-53,123-124,157
+src/code_reviewer/flows/agent_personas/prompts/schemas/comparator.schema.json
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-75
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_054311e8a34e60 27-28
+tests/test_flow_selection.py
+  s_68cd0db0a8fc3a::t_f0ae68a8598755 80-81,83,85,89,91,93,95-99,102-115
+  s_68cd0db0a8fc3a::t_f09ce5cba3a18a 22,45,49,51-53,58,61,64,66-68,71,73-77
+  s_68cd0db0a8fc3a::t_bb2d3430082d89 82,84,86-88,90,92,94,100-101,116
+src/code_reviewer/flows/agent_personas/master.py
+  s_68cd0db0a8fc3a::t_e3184a310f72cd 1-71
+src/code_reviewer/flows/agent_personas/runner.py
+  s_68cd0db0a8fc3a::t_75761e05c11f22 1-57
+src/code_reviewer/flows/agent_personas/prompts/schemas/classifier.schema.json
+  s_68cd0db0a8fc3a::t_03705cec9aed18 1-43
+src/code_reviewer/flows/agent_personas/__init__.py
+  s_68cd0db0a8fc3a::t_0b95bb42fb2594 1
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_ad5d35d120dec3 116-117
+  s_68cd0db0a8fc3a::t_ab55c2550a5d88 109,112-113
+  s_68cd0db0a8fc3a::t_aa1b48e146c5a2 106-107,118-119
+  s_68cd0db0a8fc3a::t_afa8f4709a88c9 108,114-115
+src/code_reviewer/flows/agent_personas/caller.py
+  s_68cd0db0a8fc3a::t_4daffbfb0130e1 1-10,12-14,16,18-21,23-25,27,41-43,48-51,53-67
+  s_68cd0db0a8fc3a::t_7aac669c274915 26
+  s_68cd0db0a8fc3a::t_ad5d35d120dec3 28-29
+  s_68cd0db0a8fc3a::t_ab55c2550a5d88 11,15,17,22,30-40,44-47,52
+  s_68cd0db0a8fc3a::t_52cc085ce74d7a 68-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "6d368c85b35c241690cbfb1c319e8d03d4de608b",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
