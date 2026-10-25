@@ -1,0 +1,29 @@
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_3612905854cf4a 250-259
+  s_68cd0db0a8fc3a::t_1349f352910033 35-47
+  s_68cd0db0a8fc3a::t_f15c1cc85fa747 260-272
+docs/HANDOVER.md
+  s_68cd0db0a8fc3a::t_e4db92322a9822 7-8
+  s_68cd0db0a8fc3a::t_1349f352910033 5-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "118845523e2b988810050cd0a1613d74f464d3b3",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
