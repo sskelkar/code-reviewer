@@ -32,7 +32,19 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
-**Build next, in this order**
+**Current focus: security (2026-10-25)**
+- [ ] Audit trusted/private and untrusted/public review threat models against current primary security guidance; distinguish model permissions from OS enforcement, and record gaps before choosing hardening changes
+- [ ] Define fail-closed isolation, credential/network boundaries and adversarial acceptance tests for untrusted repositories
+
+**Report improvement TODOs (recorded; details in §10.2)**
+- [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
+- [ ] Distinguish supported defects from unverified suggested remedies
+- [ ] Link related implementation findings and regression-test gaps without automatically merging them
+- [ ] Investigate missing criterion citations and distinguish out-of-focus findings from attribution failures
+- [ ] Preserve source authority, scope and unresolved instruction conflicts in project context
+- [ ] Assess persona specialization and Verifier budget headroom across manual comparisons
+
+**Feature backlog after the security focus**
 - [ ] Manually compare the implemented persona mode (§12) with single-agent on authorized real PRs; no persona quality result exists yet
 - [ ] Project context pack (§12): documentation passages about the identifiers the diff touches, supplied as reference material
 - [ ] Broader Verifier (§12): consider extending verification beyond flagged conflicts after learning from the initial advisory implementation
@@ -234,6 +246,29 @@ Validation for the stdin/cost-certainty fix: **296 tests pass** on Python 3.9.6 
 | P4 | Inline PR comments; MCP server / `/review-pr` skill |
 | P5 | Provider-agnostic backend (raw API); optional LLM executive summary |
 | Anytime | Security hardening (§5 and the checklist: sandboxed checkouts, prompt-injection safeguards) before any use beyond a controlled environment |
+
+### 10.1 Possible future improvement: pluggable review skills
+
+**Idea recorded 2026-10-21; exploratory, not an implementation commitment or a change in priorities.** Separate reusable review expertise from reviewer execution. Package focus, criteria, investigation procedures and supporting references as review skills; keep fresh sessions, pass counts, parallel rounds, budgets, validation, consolidation and agreement under the Python harness. The current four personas remain the default configuration.
+
+Projects could attach skills to existing personas—for example, PostgreSQL migration/transaction checks to production safety, or project-specific API/event contract guidance to correctness. Private project skills could stay in that project's repository. A later extension could let a project request a dedicated reviewer for a skill, with its own passes and budget. Attaching expertise should not automatically create another reviewer: additional sessions increase cost and overlapping findings. Skills should describe how to investigate and what constitutes evidence, beyond listing criteria.
+
+Prefer explicit project configuration and deterministic harness loading of selected skills over relying on model-triggered discovery for required coverage. Freeze/log the actual skill instructions, references and versions/hashes used by each reviewer; retain complete project-rule assignment, stable rule identities, common finding schemas and read-only permissions. Native skill scripts, hooks or tools must not implicitly expand execution privileges. Whether to adopt the standard `SKILL.md` format or a narrower review-specific format remains open.
+
+Suggested sequence if pursued: first attach skills to the existing four personas; then consider configurable reviewer definitions. The latter requires generalizing the four IDs currently embedded in routing, scheduling, budget allocation, categories and validation. Compare review quality, coverage and cost before replacing the existing defaults. This could complement the project context pack; it does not replace that work.
+
+### 10.2 Review-report follow-ups: qualifications and criteria traceability
+
+**Recorded 2026-10-25 at the user's request; improvement backlog, not implemented.** Report-level inspection of a user-run review suggested the following generic improvements. These observations do not independently establish the underlying findings' correctness; production code, identifiers, findings and run paths must remain outside this repository.
+
+- **Make verification qualifications visible beside findings.** Show each applicable claim status (such as supported, conditional or refuted) with a link to its conflict annotation in both full reports and shareable summaries. An unconditional finding should not hide a later qualification. Preserve all applicable annotations without changing finding text, severity, votes or suppressing claims; distinguish an unverified finding from a verified one.
+- **Separate defect support from remedy support.** A Verifier can support the failure sequence while finding a proposed fix unverified. Make that distinction apparent rather than presenting the suggested fix as established. Schema/prompt changes, if needed, require separate design and evaluation.
+- **Link related defects and regression-test gaps.** Keep distinct concerns available, but help readers see when a test-gap finding covers the same failure as an implementation finding. Related findings are not automatically duplicates, and their count is not independent evidence of review breadth. Suggested tests must check intended recovery, not merely preserve the defective behavior being reported elsewhere.
+- **Improve criterion attribution.** Investigate missing rule citations even when a finding invokes project conventions. Distinguish omitted/incorrect IDs, unavailable assigned rules and legitimate findings outside a persona's focus. Improve traceability without inventing rule matches or dropping otherwise evidenced findings.
+- **Represent authority, scope and conflicting instructions in context.** The project context pack should distinguish repository contracts/conventions from planning claims and retain source paths and applicability. Do not treat conflicting general/specific guidance as an arbitrary strategy choice, or invent precedence when the repository does not establish it. Record unresolved ambiguity visibly.
+- **Measure specialization and verification cost.** Track discovery persona separately from finding category; cross-focus findings are allowed, but do not by themselves prove specialization helps. Watch Verifier pool headroom across further runs before changing allocations. Compare useful findings, false positives and cost rather than raw finding counts alone.
+
+Suggested immediate follow-up: make existing verification qualifications visible at each finding, then investigate criteria/context traceability. Continue manual quality comparisons; the project context pack remains the next substantial feature. Pluggable skills (§10.1), broader verification and the parked eval harness are not prerequisites. This entry records work to revisit; it does not authorize prompt changes, new paid reviews or automatic finding suppression.
 
 ## 11. Assumptions and open questions
 
