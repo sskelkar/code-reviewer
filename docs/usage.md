@@ -246,3 +246,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | Every pass reports only one finding, or findings are all Low | Passes may stop early or pick a different issue each time. Check `notes` in each `pass-NN/findings.json` for what the pass verified and what it left "unverified", and compare the number of findings per pass in the report's appendix. See [Reading the report](#reading-the-report) |
 | No findings at all | May be correct. Check `notes` in `pass-NN/findings.json` and compare with the diff. Try `--model sonnet` |
 | `post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |
+
+## Sandbox prototype status
+
+Normal `reviewer` commands still run without VM isolation. The separate [offline sandbox prototype](../sandbox/README.md) accepts no real PR or credentials and uses fake Claude for the review smoke. A separate [real-runtime startup check](sandbox-runtime-auth.md) uses no credentials or network. An [OpenAI adapter](sandbox-openai.md) is available for offline experiments with simulated API replies; the planned [controlled personal-repository pilot](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) requires bounded inputs/reports, external egress restrictions and a disposable runtime key. The custom relay is deferred, and the regular command remains Claude-backed. No live sandbox command is available yet. Follow the [one-VM architecture](sandbox-architecture.md) and remaining gates before a real-review sandbox command is introduced.

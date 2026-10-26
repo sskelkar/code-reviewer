@@ -85,3 +85,11 @@ The system prompt continues to define change scope, concrete consequences, evide
 - Keep all templates language-agnostic. Language- or project-specific guidance belongs in the criteria, not in these prompts.
 
 Persona pool ratios and exhaustion/accounting behavior are specified in the [usage reference](../docs/usage.md#persona-budget-pools). A persona can exhaust its pool without stopping the others. Criteria fallback, comparator exhaustion and verifier exhaustion have distinct handling; none creates votes from unconsolidated output. Cancellation waits for active subprocess groups before checkout cleanup. Model-facing templates are unchanged by parallel scheduling.
+
+## Offline VM deployment prototype
+
+The [sandbox prototype](../docs/sandbox-architecture.md) packages these same assets and exercises both flows with synthetic code and fake headless Claude inside one guest. It changes neither model-facing prompts nor the regular invocation path. The separate real-runtime probe starts the pinned native CLI offline and confirms an unauthenticated refusal using the harness command builder. Connected authentication/inference and OS/network enforcement are not qualified yet.
+
+The [experimental OpenAI backend](../docs/sandbox-openai.md) reuses these prompts for synthetic sandbox tests. It translates output schemas into the provider's closed/required-field format without mutating common assets; bounded local function definitions supply Read/Grep/Glob. No model-facing prose or production provider selection changes. Offline protocol/guest tests are evidence of plumbing, not live model quality or schema acceptance.
+
+For the planned [personal-repository OpenAI pilot](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented), reuse the existing prompts and validators. Synthetic fixed replies/finding counts belong only to offline tests; a live review may find no issues. The confirmed design uses external egress restrictions and a disposable key inside the guest, deferring a custom relay. No connected workload or prompt changes are implemented by this plan update; production remains Claude-only.

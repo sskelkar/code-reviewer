@@ -17,6 +17,8 @@ class ParallelRunner:
     def run(self, **kwargs):
         if self.budget.cancelled.is_set():
             raise KeyboardInterrupt
+        if hasattr(self.runner, 'run_cancellable'):
+            return self.runner.run_cancellable(self.budget.cancelled, **kwargs)
         if not isinstance(self.runner, ClaudeRunner):
             return self.runner.run(**kwargs)
         cmd = build_command(self.runner.claude_bin, system_prompt=kwargs['system_prompt'], schema=kwargs['schema'],

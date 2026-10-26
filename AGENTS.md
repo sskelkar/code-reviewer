@@ -13,6 +13,10 @@ Guidance for AI agents working on this repository. Start here, then read [`docs/
 | Need | File |
 |---|---|
 | Current state, decisions, next steps | [`docs/HANDOVER.md`](docs/HANDOVER.md) |
+| One-VM-per-review design, lifecycle and offline prototype | [`docs/sandbox-architecture.md`](docs/sandbox-architecture.md) |
+| OpenAI adapter and personal-repo sandbox pilot; production stays Claude-only | [`docs/sandbox-openai.md`](docs/sandbox-openai.md) |
+| Real Claude guest startup, authentication choices and connected-test gates | [`docs/sandbox-runtime-auth.md`](docs/sandbox-runtime-auth.md) |
+| Strict production security plan, effort estimates and release gates | [`docs/security-roadmap.md`](docs/security-roadmap.md) |
 | Design reasoning, roadmap, experiment results | [`docs/proposal.md`](docs/proposal.md) |
 | Quick start and both review flows | [`README.md`](README.md) |
 | Commands, configuration, reports and troubleshooting | [`docs/usage.md`](docs/usage.md) |
@@ -58,3 +62,7 @@ python3 -m unittest discover -s tests -t .
 Single-agent model roles are the **Criteria Resolver** (picks the project's criteria files from `AGENTS.md`), the **Reviewer** (one fresh session per pass, blind to other passes) and the **Comparator** (maps each pass's findings onto a master list). The harness decides everything else: grounding checks, rule IDs, confidence tiers, when to stop, what is posted.
 
 Persona mode additionally classifies project rules (Resolver model setting), extends its own Comparator to categories/conflict flags, and runs a targeted annotation-only Verifier (`model_verifier`) on flagged groups. No quiet-pass stopping in persona mode: `persona_passes` slots per persona (default 3), overridden per run by `--passes N`. Agreement stays per discovering persona; annotations never suppress findings or change votes/severity. Persona Reviewers run concurrently within each round (`persona_parallel`, default 4, range 1–4), then consolidate serially in fixed persona order. Calls/retries reserve from independent pools: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder equally among personas. Budget/failure limits are per persona; shared Comparator exhaustion stops new review work. No borrowing; unknown cost consumes the reserved allowance conservatively. Cancel and join workers before checkout cleanup. Tests use synthetic code/FakeRunners, never production material or real model calls.
+
+## Current sandbox planning boundary (2026-10-26)
+
+Follow the [agreed connected-pilot plan](docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented). One VM, externally restricted OpenAI HTTPS access, and a disposable test key supplied privately into the guest at runtime; the custom API relay/credential broker is deferred. The user will select a non-sensitive personal repository for the live review; keep synthetic code only for automated regressions/canaries, not as a mandatory new sample project. Guest compromise can expose that test key, which must be revoked afterward. Production stays Claude-only. Current code is offline-only; fix the recorded builder-status and scan-IO issues before connected implementation. Do not treat this planning/docs review as authorization to run a VM, inspect another repo, call a live model, or commit/push.

@@ -8,6 +8,10 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. Every call is a fresh headless Claude session. Models propose; Python validates, accounts and writes state.
 
+## Sandbox deployment
+
+The agreed [sandbox architecture](sandbox-architecture.md) runs the whole Python harness and all fresh Claude processes inside one disposable VM per review. Its offline prototype lives in `code_reviewer.sandbox` and is not selected by `Engine` or the regular CLI. It exercises both current flows with synthetic code/fake Claude only; the real native runtime also passes an offline startup/auth-refusal probe. Connected authentication, network policy and the PR input/output path remain separate gates. The optional [OpenAI Responses adapter](sandbox-openai.md) is currently exercised only by offline fixtures; the agreed next pilot uses a user-selected non-sensitive personal repository, external destination enforcement and a disposable guest key, with no custom API relay. Those connected input/network/key/export pieces are not implemented; the ordinary CLI still selects Claude. See the [runbook](../sandbox/README.md).
+
 ## Code map
 
 Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/flow.py): `SingleAgentFlow.review` is the composition root. [engine.py](../src/code_reviewer/engine.py) only delegates to the selected flow.

@@ -35,6 +35,8 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
 | `test_evals`, `test_eval_grading` | Pinned evals, no-call plans, fake-model matrices, isolation/failures/budgets, local labels/rekey/combined reports and deterministic rubric metrics |
 | `test_persona_criteria` | Static assignment coverage, unique/shared rule identities, reporting sections and shared-parser rendering/disabling |
+| `test_openai_backend` | Simulated Responses continuations, reasoning/tool items, costs/refusals/unknown usage/cancellation, bounded local read-tool authority, fixed HTTP endpoint and both full flows |
+| `test_sandbox_prototype` | Stable bounded trusted-source bundles, artifact digests, no-network boot config, both real flows using fake headless processes, result framing, output limits, child-process timeout cleanup, fresh runtime-probe environments and rejection of unexpected authentication |
 | `test_persona_parallel` | Overlapping Reviewer calls, concurrency limits, round barriers and ordered merges, isolated budget pools, proportional allocations, large-prompt delivery to slow stdin readers, and subprocess-group cancellation |
 | `test_persona_flow` | Configured round-robin counts, independent frozen prompts, classification/fallback, source-aware agreement, conflicts/remapping, advisory verification/grounding, budgets/failures/cancellation, CLI/REPL and dry runs |
 | `test_flow_selection` | Default/explicit mode selection, asset isolation, compatibility imports, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
@@ -95,3 +97,9 @@ The offline tests cannot prove how Claude Code behaves. After upgrading Claude C
 ## Parked evals
 
 The offline eval harness remains deliberately parked. Do not run, extend or build on it until explicitly resumed. No model-quality result exists from it. Its retained commands, eight public cases and provisional rubric are documented in the [eval guide](../evals/README.md); current priorities are in the [proposal](proposal.md#checklist).
+
+## Offline VM prototype
+
+The [sandbox runbook](../sandbox/README.md) separates ordinary offline unit tests from explicit Linux/KVM deployment checks. No VM boots, infrastructure changes or paid calls are part of `unittest discover`. The [architecture](sandbox-architecture.md) records the agreed one-VM-per-review boundaries and remaining security gates.
+
+The [current connected-pilot plan and review findings](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) distinguish the operator's personal-repository live review from synthetic automated tests/canaries. The live pilot needs no authored sample project. Fix the recorded builder-status and scan-IO defects first; retain no target code, identifiers, keys or findings as test fixtures. This documentation review does not boot a VM or authorize a live call.

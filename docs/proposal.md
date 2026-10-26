@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented and being tried on real pull requests; optional four-persona review with conflict annotations implemented and offline-tested; next: manual quality comparisons (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** v0 implemented and being tried on real pull requests; optional four-persona review with conflict annotations implemented and offline-tested; next: one-VM sandbox runtime/auth feasibility (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -32,9 +32,24 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
-**Current focus: security (2026-10-25)**
-- [ ] Audit trusted/private and untrusted/public review threat models against current primary security guidance; distinguish model permissions from OS enforcement, and record gaps before choosing hardening changes
-- [ ] Define fail-closed isolation, credential/network boundaries and adversarial acceptance tests for untrusted repositories
+**Current focus: one VM per review; controlled personal-repository pilot (confirmed 2026-10-26)**
+
+The [sandbox architecture](sandbox-architecture.md) is the canonical design; the [security roadmap](security-roadmap.md) tracks the small single-operator implementation and gates. It supersedes the earlier controller/supervisor-service/per-invocation-VM plan. Python and all Claude calls run in the same disposable guest; the existing flow internals stay intact.
+
+- [x] Verify local nested KVM and a synthetic Firecracker boot on M4/macOS
+- [x] Run both existing flows entirely inside the offline guest with synthetic code/fake Claude; record deployment evidence
+- [x] Verify the signed real Claude binary starts in the no-network guest and refuses an unauthenticated headless invocation
+- [x] Add an explicitly injected OpenAI Responses backend and bounded read-only tools; verify both flows with simulated API responses in a no-network guest
+- [ ] Fix the two [pre-implementation review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26): archive pipeline failures and skipped-file scan IO accounting
+- [ ] Add bounded personal-repository base/head admission and safe report export, without target execution, host mounts or repository-selected security configuration
+- [ ] Enforce external default-deny networking allowing the required OpenAI HTTPS destination; verify bypass refusal before releasing the runtime test key
+- [ ] Deliver a dedicated disposable API key privately into guest memory/environment; keep it out of images, arguments, logs and Git; revoke after testing
+- [ ] Run harmless boundary/cleanup probes, then one small review of the selected non-sensitive personal repository using an explicit OpenAI model/rates/budget
+- [ ] Complete production jailer, unprivileged execution, immutable runtime/snapshot, guest execution/syscall and bounded scratch/resource enforcement
+- [ ] Qualify Claude authentication/native tools and egress separately before the Claude-only production pilot ([runtime/auth record](sandbox-runtime-auth.md))
+- [ ] Conduct an authorized Claude-only production pilot after those gates pass; keep guest publishing disabled
+
+The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) is authoritative. No custom API relay/credential broker, per-persona VM or extra orchestration service is required. The controlled test accepts that a compromised guest can steal/reuse its disposable key and bypass the Python budget. The live review uses the operator's personal repository; synthetic fixtures remain automated tests/probes, not a project we must author. This plan is not yet implemented, and the current CLI is not sandboxed.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
@@ -52,8 +67,8 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Record the tool calls each pass made (closes the "what did it search?" blind spot)
 - [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
 
-**Mature later: safety (the §5 backlog)**
-- [ ] **Sandbox the checkouts:** run the Reviewer inside an OS-level sandbox (container or `sandbox-exec`): checkout mounted read-only, no network, no access to the home directory or credentials. Today only Claude Code's own restrictions plus a temporary directory protect it
+**Security backlog (promoted to current work; roadmap determines order)**
+- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; ordinary reviews still rely on Claude Code restrictions and a temporary checkout
 - [ ] **Prompt-injection safeguards for text coming from the code under review:** randomized delimiters, warnings when the PR or files contain instruction-like text, a test suite that plants instructions in the diff, PR text and repository files and checks they are ignored, sanitizing text posted to the PR (links, images, HTML, @mentions), and a capability split so the component that reads untrusted code cannot post
 - [ ] Secret scanning and removing `.env*`, key files and `.git` from the checkout; read-only permissions
 - [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; re-run `doctor --live` after every Claude Code upgrade
@@ -136,6 +151,8 @@ Failures become `ungrounded`: excluded, logged, counted. This catches fabricated
 **Master finding:** canonical text (highest severity seen) · `seen_in_passes` · `rejected_in_passes` (with reasons, never deleted) · wording variants. A finding only ever rejected is kept but not scored.
 
 ## 5. Safety (v0 baseline)
+
+**Production hardening is now the priority.** The [sandbox architecture](sandbox-architecture.md) and [security roadmap](security-roadmap.md) describe the agreed one-job-VM design and remaining release gates. This section describes today's controlled-environment baseline; none of the planned isolation controls is active yet. Older backlog sketches are superseded by the roadmap where they differ, including stage-specific network access for inference and whole-process isolation.
 
 Reviewer invocation (simplified; the user prompt is sent on stdin, system text via `--append-system-prompt`; verify per §9):
 
