@@ -4,7 +4,7 @@ This guide is for an experienced Java programmer who has never written Python an
 
 Code samples are copied from this repository (some are abridged, marked with `...` or "simplified"); a few short samples are written purely to illustrate a language feature and are not from the repo (they are in sections 5, 8 and 15). The claims about this project were checked against the code. File links are relative to this `docs/` directory.
 
-**Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The separate `agent_personas/flow.py` implements the optional configured parallel-round workflow (three rounds by default, `persona_passes` or `--passes N` to change it), loading `personas.json`, common review instructions and thirteen criteria. It owns its contracts, master/result, budget guard and report. Reviewer calls run concurrently within each round; consolidation is serial in fixed order, with proportional role/persona pools and cancellation-aware subprocesses. Frontends dispatch presentation through `presentation.py`; shared code imports neither workflow. Persona behavior is offline-tested, not live-validated. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
+**Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The separate `agent_personas/flow.py` implements the optional configured parallel-round workflow (three rounds by default, `persona_passes` or `--passes N` to change it), loading `personas.json`, common review instructions and thirteen criteria. It owns its contracts, master/result, budget guard and report. Reviewer calls run concurrently within each round; consolidation is serial in fixed order, with proportional role/persona pools and cancellation-aware subprocesses. Frontends dispatch presentation through `presentation.py`; shared code imports neither workflow. Persona behavior is offline-tested and has a successful user-run execution check; finding quality remains unmeasured. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
 
 **How to use this guide**
 
@@ -83,13 +83,13 @@ if __name__ == "__main__":
 | `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
 | `reviewer doctor` | `cli.main` | [`doctor.run_doctor`](../src/code_reviewer/doctor.py): environment checks |
 
-Both review paths go through `review_flow.run_review` and end in the same place: **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the heart of the project, and the best first file to read.
+Both normal review entry points go through `review_flow.run_review`, then `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
 
 ### 2.3 Tests
 
 `python3 -m unittest discover -s tests -t .` is the "run all tests" command (like `mvn test`). See [12](#12-tests).
 
-### 2.4 One review, as a call stack
+### 2.4 A normal single-agent review, as a call stack
 
 ```
 reviewer review <url>
@@ -115,6 +115,23 @@ reviewer review <url>
           ├─ report.render_report          -> report.md (the detailed report)
           └─ summary.render_summary        -> summary.md (the shareable summary, also printed)
 ```
+
+### 2.5 Persona mode uses its own composition root
+
+`AgentPersonasFlow.review` shares input discovery, grounding, Git/storage helpers and the injected runner interface with single-agent mode. It owns scheduling and consolidation independently:
+
+```text
+Engine.review -> AgentPersonasFlow.review
+  resolve criteria from base -> classify project rules -> freeze four prompts
+  _passes: for each configured round
+    ThreadPoolExecutor: fresh Reviewer call for each enabled persona
+    barrier: collect every result in the round
+    fixed persona order: validate findings -> Comparator -> staged master update
+  _verify: fresh Verifier per flagged group, while run status/budget permits
+  save report, summary, stats and master -> clean up checkout
+```
+
+This is like an `ExecutorService` batch followed by one writer: Reviewer workers never mutate the master. Each persona has independent caller/log state and a budget pool; shared criteria, Comparator and Verifier have reserved pools. A persona's exhaustion disables only its later slots; shared Comparator exhaustion stops further review work. Cancellation signals workers, joins them, then allows checkout cleanup. Agreement uses successful passes for each discovering persona, and Verifier annotations do not change votes or severity. Read the [architecture](architecture.md#persona-implementation) for the full contract.
 
 ---
 
@@ -750,7 +767,7 @@ and `criteria.resolve_project` simply accepts "a function that takes (list, str)
 
 ### 11.5 `ClaudeRunner`: talking to an external process
 
-[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. Note it runs one-shot processes; there is no server and no network client in this code.
+[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. This normal CLI path runs one-shot Claude processes. Persona mode uses `flows/agent_personas/runner.py` to supply stdin through a temporary file, poll cancellation and terminate process groups. The separate OpenAI sandbox backend uses a Python HTTPS client instead of Claude subprocesses.
 
 ### 11.6 Reading a regex
 
@@ -903,4 +920,14 @@ This part of the project was built and then set aside; the project now judges re
 
 ## Sandbox deployment status
 
-The [sandbox architecture](sandbox-architecture.md) describes one disposable VM around the whole reviewer. Existing code is an offline prototype; the normal CLI remains unsandboxed. The next controlled pilot uses a non-sensitive personal repository with OpenAI, external destination restrictions and a disposable runtime key inside the guest; the custom API relay is deferred. Input transfer, live networking, key bootstrap and report export still need implementation. Synthetic fixtures remain offline tests rather than a required live review project. Production stays Claude-only after its stronger security/authentication gates pass.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. Normal `reviewer` CLI/REPL commands remain unsandboxed and Claude-backed. The separate [connected Linux entry point](sandbox-connected.md) injects an OpenAI runner into the same `Engine` and existing flows; it does not duplicate the review algorithm.
+
+Follow the boundary by module:
+
+1. On the workstation, `sandbox/capsule.py` reads bounded Git object files and pinned base/head metadata. It invokes no Git and copies no target config/hooks. The capsule may include other history from that object store; only use the selected non-sensitive repository.
+2. On the dedicated Linux/KVM worker (a mountless Lima VM on compatible Macs), `sandbox/connected.py` selects trusted artifacts/settings, installs `network.py`'s TAP/nftables/standard Squid policy and starts one unprivileged VMM with an external deadline. No host home or target directory is mounted.
+3. Inside the guest, `guest.py` drops privileges and receives the capsule over `wire.py`'s bounded vsock frames. `git_input.py` reconstructs clean Git state, admits base/head/merge-base and substitutes a bounded head exporter. Boundary probes run before the host prompts privately for the disposable key.
+4. `guest.py` constructs `Config` from explicit operator settings and calls `Engine(cfg, OpenAIRunner(...)).review(ctx)`. In Java terms, the runner is an injected implementation behind the existing duck-typed interface. No target `review.toml` is loaded. Each call starts a new local conversation; Read/Grep/Glob use `backends/read_tools.py`, and verified TLS reaches OpenAI through the mandatory external proxy.
+5. The existing flow writes reports in private guest scratch. The guest returns only fixed bounded report artifacts; the host validates and writes private files. Raw prompts stay in the disposable VM. Success, failure, cancellation and deadlines trigger process/network/scratch cleanup; stale policy after a hard crash blocks a new job.
+
+The connected command defaults to one pass and one persona worker for a small pilot, separately from normal CLI defaults (single-agent up to six attempts, personas three rounds/four workers). Automated tests simulate inference in both flows, and actual VM checks pass the listed no-key network/admission/cleanup probes. No authenticated model call or personal-repository review has run yet. The first live test needs selected inputs, an accessible OpenAI model, explicit token prices and a disposable key entered locally. Production remains Claude-only after its jailer, stronger filesystem/execution/syscall and authentication/tool gates pass. A compromised pilot guest can steal its key and corrupt its reports/accounting; local cost estimates do not enforce provider spending.

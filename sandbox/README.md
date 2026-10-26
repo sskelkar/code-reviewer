@@ -1,6 +1,6 @@
 # Offline Firecracker prototype
 
-This is the first implementation slice of the [one-VM-per-review architecture](../docs/sandbox-architecture.md). It supports a synthetic fake-Claude smoke and a separate **real-Claude startup probe without credentials or network**, and an **offline OpenAI adapter smoke**. Normal `reviewer` commands are unchanged; there is no production sandbox mode yet.
+This is the first implementation slice of the [one-VM-per-review architecture](../docs/sandbox-architecture.md). It supports a synthetic fake-Claude smoke and a separate **real-Claude startup probe without credentials or network**, and an **offline OpenAI adapter smoke**. Normal `reviewer` commands are unchanged; the separate [controlled connected pilot](../docs/sandbox-connected.md) now has its own Linux launcher, while production qualification remains pending.
 
 The whole Python review harness and its fresh headless subprocesses run inside one Firecracker guest. Both flows exercise grounded findings and consolidation, including a four-persona parallel round. The first smoke does not fetch GitHub, authenticate to Claude, contact a provider, publish anything or accept a target repository.
 
@@ -42,7 +42,7 @@ python3 -m code_reviewer.sandbox.launch \
 
 Replace all three digest placeholders with lowercase 64-character SHA-256 values. Calculating a digest from an arbitrary downloaded file and passing it to the launcher does **not** establish the file's provenance; establish trust during artifact acquisition. The launcher detects artifact mismatches but is not a signing/attestation system.
 
-Success returns a synthetic JSON summary with two completed single-agent passes, four completed persona passes, and one consolidated finding per mode. The fake executable is invoked three times in single-agent mode and eight times in persona mode. Reports are generated and checked inside the guest, then discarded; full report export is not implemented yet.
+Success returns a synthetic JSON summary with two completed single-agent passes, four completed persona passes, and one consolidated finding per mode. The fake executable is invoked three times in single-agent mode and eight times in persona mode. These offline workloads generate/check reports inside the guest and discard them. The separate [connected launcher](../docs/sandbox-connected.md) exports bounded reports.
 
 The VMM is terminated/reaped on cancellation, deadline or output overflow. The guest has no network interface or attached disk. Stop the outer build/test VM after manual checks. The scripts do not create, start, repair or delete Lima/Colima profiles themselves.
 
@@ -80,8 +80,12 @@ python -m code_reviewer.sandbox.openai_smoke
 sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-openai-guest openai-offline
 ```
 
-Launch that image with the usual verified artifact paths/digests and `--workload openai-offline`. It uses 1024 MiB, no NIC/disks and simulated Responses API replies; no real key is read or transmitted. Both flows exercise the actual adapter and bounded local Read tool. The [connected-pilot plan](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) adds bounded personal-repository inputs/reports, external destination restrictions and private delivery of a disposable key into the guest. It defers a custom relay and accepts key exposure if that test guest is compromised. None is implemented here yet; these commands still accept no key or target repo. Do not supply a key yet.
+Launch that image with the usual verified artifact paths/digests and `--workload openai-offline`. It uses 1024 MiB, no NIC/disks and simulated Responses API replies; no real key is read or transmitted. Both flows exercise the actual adapter and bounded local Read tool. The [connected-pilot plan](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26) adds bounded personal-repository inputs/reports, external destination restrictions and private delivery of a disposable key into the guest. It defers a custom relay and accepts key exposure if that test guest is compromised. That path is now implemented in a separate [connected Linux command](../docs/sandbox-connected.md); these offline commands still accept no key or target repo.
 
 ## Review before connected implementation
 
-The [2026-10-26 review](../docs/sandbox-architecture.md#review-before-connected-implementation-2026-10-26) records two current issues: archive pipeline failures can be hidden by the final compression status, and skipped scan files consume IO without charging the decoded-text budget. Correct these with regressions before extending the prototype to the personal-repository pilot. This runbook describes existing offline commands; it provides no live workaround.
+The [2026-10-26 review](../docs/sandbox-architecture.md#review-before-connected-implementation-2026-10-26) records two historical issues: archive pipeline failures can be hidden by the final compression status, and skipped scan files consume IO without charging the decoded-text budget. Both defects are now corrected with regression tests: checked archive stages and raw IO accounting on skipped files. This runbook describes existing offline commands; it provides no live workaround.
+
+## Controlled connected pilot
+
+Use the [dedicated connected runbook](../docs/sandbox-connected.md) for `capsule` input preparation, the builder's `connected` option, no-key boundary probes and the separate Linux `connected` launcher. The normal reviewer and all offline workloads keep their existing interfaces. No personal repository/key has been used during implementation checks; the first actual review needs the operator's selected inputs/model/rates and local disposable key.

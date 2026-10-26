@@ -6,11 +6,11 @@ if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != aarch64 ]; then
     exit 2
 fi
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
-    echo 'usage: build-offline-guest.sh trusted-source.tar output-directory [openai-offline | verified-claude-binary expected-sha256]' >&2
+    echo 'usage: build-offline-guest.sh trusted-source.tar output-directory [openai-offline | connected | verified-claude-binary expected-sha256]' >&2
     exit 2
 fi
-if [ "$#" -eq 3 ] && [ "$3" != openai-offline ]; then
-    echo 'The third argument must be openai-offline.' >&2
+if [ "$#" -eq 3 ] && [ "$3" != openai-offline ] && [ "$3" != connected ]; then
+    echo 'The third argument must be openai-offline or connected.' >&2
     exit 2
 fi
 bundle=$(realpath "$1")
@@ -65,6 +65,7 @@ PYBUILD
 workload=smoke
 if [ "$#" -eq 3 ]; then
     workload=openai_smoke
+    if [ "$3" = connected ]; then workload=guest; fi
 fi
 if [ "$#" -eq 4 ]; then
     # This is a trusted operator artifact, never a repository-selected executable.
@@ -103,8 +104,32 @@ INIT
 if [ "$workload" != smoke ]; then
     sed -i "s/code_reviewer.sandbox.smoke/code_reviewer.sandbox.$workload/" "$root/init"
 fi
+if [ "$workload" = guest ]; then
+    mkdir -p "$root/etc/ssl/certs" "$root/work"
+    cp /etc/ssl/certs/ca-certificates.crt "$root/etc/ssl/certs/"
+    cat > "$root/init" <<'CONNECTED'
+#!/bin/sh
+set -eu
+trap '/bin/busybox poweroff -f' EXIT
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sysfs /sys
+/bin/busybox mount -t devtmpfs devtmpfs /dev
+/bin/busybox mount -t tmpfs -o size=512m,nosuid,nodev,noexec tmpfs /work
+/bin/busybox mkdir -p /work/home
+/bin/busybox chown -R 65534:65534 /work
+/bin/busybox mount --bind /work /tmp
+/bin/busybox ip link set lo up
+/bin/busybox ip addr add 192.0.2.2/30 dev eth0
+/bin/busybox ip link set eth0 up
+/bin/busybox ip route add default via 192.0.2.1 dev eth0
+/bin/busybox env -i PATH=/usr/bin:/bin HOME=/work/home TMPDIR=/work LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    PYTHONPATH=/opt/reviewer/src PYTHONDONTWRITEBYTECODE=1 GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_ATTR_NOSYSTEM=1 SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    /usr/bin/python3 -m code_reviewer.sandbox.guest
+CONNECTED
+fi
 chmod 755 "$root/init"
-(cd "$root" && find . -print0 | cpio --null -o --format=newc --owner=0:0 --reproducible 2>/dev/null | gzip -n -1) > "$output/initrd.cpio.gz"
+PYTHONPATH="$root/opt/reviewer/src" python3 -m code_reviewer.sandbox.image "$root" "$output/initrd.cpio.gz"
 python3 --version > "$output/runtime-versions.txt"
 git --version >> "$output/runtime-versions.txt"
 uname -srmo >> "$output/runtime-versions.txt"

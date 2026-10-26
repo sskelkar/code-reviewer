@@ -1,6 +1,6 @@
 # Sandbox architecture: one VM per review
 
-Current decision: **one disposable VM contains the entire review job**, including Python orchestration and every fresh Claude process. Agreed 2026-10-25; the simpler connected-pilot scope below was confirmed 2026-10-26. This replaces the earlier proposal for a controller container, a supervisor service and a microVM per model invocation. [Security roadmap](security-roadmap.md) tracks the remaining controls; [architecture](architecture.md) describes the existing reviewer internals.
+Current decision: **one disposable VM contains the entire review job**, including Python orchestration and every model/tool call. The implemented connected pilot uses OpenAI; Claude production integration remains pending. Agreed 2026-10-25; the simpler connected-pilot scope below was confirmed 2026-10-26. This replaces the earlier proposal for a controller container, a supervisor service and a microVM per model invocation. [Security roadmap](security-roadmap.md) tracks the remaining controls; [architecture](architecture.md) describes the existing reviewer internals.
 
 ## Implementation status
 
@@ -12,42 +12,51 @@ Current decision: **one disposable VM contains the entire review job**, includin
 | Whole-harness smoke inside a Firecracker guest | Passed: 2 single-agent passes / 4 persona slots; 3 / 8 fake calls |
 | Real Claude binary: offline startup / unauthenticated headless refusal | Passed for pinned native ARM64 2.1.301; [runtime/auth record](sandbox-runtime-auth.md) |
 | OpenAI backend for controlled sandbox testing | Implemented and offline guest-tested; [provider/tool boundaries](sandbox-openai.md) |
-| Authentication, permitted inference egress and real model calls | Not implemented or qualified |
-| Real PR admission/fetch, read-only guest runtime/snapshot, non-root enforcement and production jailer | Not implemented or qualified |
-| Publishing or exporting real report artifacts | Not exposed by the prototype |
+| Connected OpenAI pilot launcher/input/network/key/export path | Implemented; no-key real boundary/cleanup probes pass; [runbook](sandbox-connected.md) |
+| Actual authenticated OpenAI inference and personal-repo review | Not run: no key/model/repo was supplied |
+| Bounded local pinned input, non-root worker and resource limits | Implemented for the controlled pilot; no GitHub fetch |
+| Read-only snapshot against native compromise, syscall policy and production jailer | Still pending production qualification |
+| Bounded report export | Implemented with fixed artifact names, byte limits and private files; publishing stays disabled |
 
-The normal `reviewer` CLI/REPL still runs as before. It does not silently use this prototype and must not be described as sandboxed. The implemented prototype has three offline workloads: fake-Claude review, real-Claude unauthenticated startup, and simulated-OpenAI review. All currently use synthetic inputs; the planned connected pilot will use a user-selected non-sensitive personal repository. No paid calls, host credential mounts or target repositories are part of it.
+The normal `reviewer` CLI/REPL still runs as before. It does not silently use this prototype and must not be described as sandboxed. The implemented prototype has three offline workloads: fake-Claude review, real-Claude unauthenticated startup, and simulated-OpenAI review. Those offline workloads use synthetic inputs. The separate connected pilot accepts a bounded capsule from a user-selected non-sensitive personal repository; only harmless fixtures have been used in deployment checks so far. Implementation checks used no paid calls, personal target repositories or host credential mounts.
 
 ## Boundaries and process placement
+
+This diagram shows the **implemented connected OpenAI pilot**. Production controls that remain pending are listed separately below.
 
 ```mermaid
 flowchart TB
     subgraph MAC["Mac workstation"]
-        CLIENT["Terminal / thin launcher"]
-        subgraph LINUX["Dedicated Lima Linux VM — local compatibility layer"]
-            FC["Firecracker process + production jailer / bounded launcher"]
-            subgraph JOB["One disposable review microVM — separate Linux kernel"]
-                PY["Python reviewer: criteria, passes, merging, budgets, reports"]
-                CC["Model sessions — Claude for production; OpenAI for personal-repo testing"]
-                INPUT["Read-only admitted snapshot and trusted runtime — target design"]
-                SCRATCH["Bounded per-job scratch"]
-                PY --> CC
-                CC --> INPUT
+        INPUT["File-only capsule: pinned base/head and Git objects"]
+        subgraph LINUX["Dedicated mountless Lima Linux VM: KVM worker"]
+            HOST["Trusted Python supervisor: settings, admission gate, cleanup"]
+            VMM["Unprivileged Firecracker + independent deadline"]
+            PROXY["Standard Squid CONNECT proxy<br/>External nftables TAP and proxy-UID policy"]
+            subgraph JOB["Disposable review VM: separate Linux kernel"]
+                PY["Unprivileged Python: selected review flow + OpenAI runner"]
+                TREE["Clean Git input and bounded head checkout"]
+                TOOLS["Read / literal Grep / Glob"]
+                SCRATCH["512 MiB scratch: runs and temporary files"]
+                PY --> TOOLS --> TREE
                 PY --> SCRATCH
             end
-            NET["Externally enforced egress policy — future gate"]
-            FC --> JOB
-            JOB --> NET
+            HOST --> VMM --> JOB
+            HOST -->|"Private vsock: inputs, then key after probes"| PY
+            PY -->|"Bounded fixed report artifacts over vsock"| HOST
+            PY -->|"Provider TLS through CONNECT"| PROXY
+            KEY["Operator enters disposable key locally"] --> HOST
         end
-        CLIENT --> FC
-        FC -->|"Bounded job result"| CLIENT
+        INPUT -->|"Explicit file transfer; no shared mounts"| HOST
+        HOST -->|"Private result files"| OUTPUT["Local inspection; no automatic publication"]
     end
-    NET -->|"Only approved inference traffic during review"| PROVIDER["Model provider"]
+    PROXY -->|"Only api.openai.com:443 CONNECT authority"| PROVIDER["OpenAI"]
 ```
 
-The diagram is the intended real-review layout. All three offline workloads have **no network interface or attached disks** and use an in-memory filesystem assembled from trusted artifacts. The review workloads use fake Claude or simulated OpenAI responses; the runtime-probe guest adds the verified native Claude binary but no credentials. It does not yet implement the read-only/non-root target shown above.
+On native Linux/KVM the outer Lima layer disappears. The host supervisor is separate from the Python reviewer inside the job: it only enforces lifecycle and transfers bounded inputs/results. No host directories or credential sockets are shared into the guest. The provider connection keeps end-to-end TLS; the standard proxy does not see the key or inspect encrypted HTTP content. See the [runbook](sandbox-connected.md) for network-policy limitations, including provider/CDN behavior and the disposable-key tradeoff.
 
-On a native Linux/KVM worker, the outer Lima VM disappears. Python and Claude remain together inside the review microVM. The Mac setup needs nested virtualization because Firecracker uses Linux KVM; the outer VM is a compatibility layer, not another agent or orchestrator. No host directories or credential sockets should be shared into it for review jobs.
+The connected guest worker is non-root; exported files have read-only permissions but the owning guest user could change those permissions after native compromise. Immutable runtime/snapshot qualification, a production jailer and guest execution/syscall allow-listing remain future gates. Claude authentication/native tools are a separate qualification. None is represented as implemented by this diagram.
+
+The three offline workloads have **no network interface or attached disks** and run their synthetic/startup checks as guest root. Their writable in-memory runtime and console summary interface are distinct from the connected pilot's unprivileged worker and private framed channel.
 
 ## Why Python is inside the job
 
@@ -97,7 +106,9 @@ See [the runbook](../sandbox/README.md) for bundle/build/launch commands. The ho
 
 The ordinary `reviewer` installation is unchanged; do not add `--sandbox` examples until that user interface and real-review path exist. Keep generated images, archives, logs and VM disks outside the repository. Never mount the user's home directory just to supply packages or authentication.
 
-## Agreed connected pilot (2026-10-26; not implemented)
+## Agreed connected pilot (2026-10-26)
+
+**Implementation update:** the controlled pilot path below is now implemented. Actual key/inference/personal-repo validation remains pending. Use the [connected runbook](sandbox-connected.md).
 
 The next live review uses the operator's **non-sensitive personal repository and an OpenAI test key**. There is no requirement to write a new example project. The existing synthetic fixtures remain offline regressions and containment probes; they are not the required live review input. The operator will select the repository, a pinned base/head change, model, token rates and run budget before a live run. No production repository, saved production run or identifiers belong in this project. Production reviews remain Claude-only.
 
@@ -105,7 +116,7 @@ Keep this pilot small:
 
 - One disposable Firecracker review VM contains the whole Python flow and model/tool loop. The dedicated mountless outer Lima VM remains the Mac compatibility layer.
 - A network interface is enabled only after **external default-deny rules** are installed and checked. During review, allow only the required OpenAI HTTPS destination; block other destinations and any direct/proxy, IPv6, DNS, private-network or metadata bypass. The guest cannot edit the enforcing policy. An API hostname hard-coded in Python is not this boundary.
-- Supply a dedicated disposable test key privately **at runtime into the guest**. The key is not baked into an image/archive, put in command arguments or logs, or obtained through a shared home/keychain mount. Use a bounded per-job bootstrap channel to deliver it to worker memory/environment outside the reviewed tree; its exact transport is an implementation detail, not an inference service. Close that channel after startup.
+- Supply a dedicated disposable test key privately **at runtime into the guest**. The key is not baked into an image/archive, put in command arguments or logs, or obtained through a shared home/keychain mount. Use a bounded per-job bootstrap channel to deliver it to worker memory/environment outside the reviewed tree; the implementation uses a one-shot host-initiated vsock channel, not an inference service. Reuse that single private connection for the bounded result, then close it at job completion; it exposes no general command interface.
 - On completion, error or cancellation, terminate the guest and remove per-job network rules, channels and scratch. Revoke the test key after the test; VM destruction and deleting an environment variable do not revoke it.
 - **Defer the custom API relay, host-held credential broker, per-persona VMs and extra orchestration services.** They are not prerequisites for this controlled pilot. If a standard network proxy is needed for destination enforcement, it is network plumbing, not a custom inference/credential relay.
 
@@ -113,33 +124,43 @@ Accepted tradeoff: **a compromised guest could steal and reuse the test key**, c
 
 ### Connected implementation sequence
 
-1. **Correct the recorded prototype defects.** Resolve the builder failure-status and scan-accounting findings below with regression tests. Keep the ordinary Claude command and both review flows stable.
-2. **Wire a bounded personal-repository input and report path.** Admit only the selected base/head material and metadata without executing target code or inheriting target Git/config authority. Use bounded, validated input transfer; no host checkout mount or target scripts/builds/hooks. For the first pilot, admit prepared inputs before review so inference-stage egress need not include GitHub or a GitHub credential. Export only bounded expected regular report files. Never use the trusted-runtime bundle builder to import the target repository.
-3. **Add external network policy and private runtime key delivery.** Install and verify policy before releasing the key or starting model calls; refuse missing/unsupported enforcement. A hostname policy must account for DNS changes/shared addresses rather than relying on a one-time IP lookup. Reuse existing network tooling; if a mandatory proxy is chosen, add explicit trusted proxy support because the current OpenAI transport ignores proxy environment variables. Keep verified HTTPS and reject redirects; never solve connectivity by opening general egress.
-4. **Verify the boundary with harmless probes.** Test denied model-tool reads outside the checkout, absence of write/execute tools, attempts to access the host outside admitted inputs, network bypasses, unsafe input/output paths, key absence from images/logs/reports, timeouts and cleanup. Native guest process/privilege/syscall probes belong to the stronger enforcement gate below. Keep generated canaries/fixtures for these probes; no new review sample project or review-quality eval harness is needed. Identify which controls the pilot actually enforces; do not claim deferred jailer/syscall restrictions have passed.
+1. **Correct the recorded prototype defects — complete.** Resolve the builder failure-status and scan-accounting findings below with regression tests. Keep the ordinary Claude command and both review flows stable.
+2. **Wire a bounded personal-repository input and report path — implemented.** Admit pinned base/head metadata and bounded Git objects (the selected clone's store can include other history) without executing target code or inheriting target Git/config authority. Use bounded, validated input transfer; no host checkout mount or target scripts/builds/hooks. For the first pilot, admit prepared inputs before review so inference-stage egress need not include GitHub or a GitHub credential. Export only bounded expected regular report files. Never use the trusted-runtime bundle builder to import the target repository.
+3. **Add external network policy and private runtime key delivery — implemented.** Install and verify policy before releasing the key or starting model calls; refuse missing/unsupported enforcement. A hostname policy must account for DNS changes/shared addresses rather than relying on a one-time IP lookup. Reuse existing network tooling; if a mandatory proxy is chosen, add explicit trusted proxy support because the current OpenAI transport ignores proxy environment variables. Keep verified HTTPS and reject redirects; never solve connectivity by opening general egress.
+4. **Verify the boundary with harmless probes — listed probes pass.** Test denied model-tool reads outside the checkout, absence of write/execute tools, attempts to access the host outside admitted inputs, network bypasses, unsafe input/output paths, key absence from images/logs/reports, timeouts and cleanup. Native guest process/privilege/syscall probes belong to the stronger enforcement gate below. Keep generated canaries/fixtures for these probes; no new review sample project or review-quality eval harness is needed. Identify which controls the pilot actually enforces; do not claim deferred jailer/syscall restrictions have passed.
 5. **Run one small controlled personal-repository review.** After inputs, model/rates and limits are supplied, start with limited passes/concurrency, inspect the report and accounting, and clean up/revoke the test key. A valid review can contain zero findings. The offline fixture's fixed finding/call counts are not live result requirements.
 6. **Return to production hardening and Claude qualification.** Complete jailer, non-root/read-only, execution/syscall and resource enforcement plus adversarial tests. Qualify Claude authentication/native tool restrictions separately before any authorized Claude-only production pilot. An OpenAI run does not qualify Claude's integrations or credentials.
 
-This turn updates plans and records a review; it authorizes no connected implementation, VM boot, target-repository access or paid call. No new `--sandbox` or live-key command is implemented yet.
+The user subsequently authorized implementation of this pilot. `python -m code_reviewer.sandbox.connected` now exposes it on the dedicated Linux worker; the regular CLI still has no `--sandbox` flag. No target repository, real key or paid inference has been used during implementation checks.
 
 ## Review before connected implementation (2026-10-26)
 
-The direction is appropriate for a controlled personal-project pilot. Existing code is offline scaffolding, not ready for a live personal-repository/key run. Two confirmed defects should be corrected as the first implementation work; they are **recorded, not fixed** in this documentation-only pass.
+The review identified two prototype defects; both are **now fixed with regression tests** in the subsequent implementation. The historical evidence below explains the changes. The controlled connected path is implemented and boundary-tested, but actual model/account/personal-repository compatibility is not yet measured.
 
 | Finding | Evidence and consequence | Required follow-up |
 |---|---|---|
-| P2: image creation can report success after archive failure | [Builder pipeline](../sandbox/firecracker/build-offline-guest.sh#L107) uses `find → cpio → gzip` under POSIX `sh`; `set -e` sees the final command status. A fake `cpio` exiting 23 produced an empty compressed archive with overall exit 0. Stderr is discarded and the builder can hash/announce a partial image. | Check every stage, retain bounded diagnostics, and publish an artifact only after successful archive construction; add a failure regression. The guest success marker still prevents this from becoming a successful review. |
-| P2: Grep scan accounting excludes bytes read from skipped files | [Scan loop](../src/code_reviewer/backends/read_tools.py#L119) counts bytes only after `_read` succeeds; binary/non-UTF-8 files are already read before being skipped. With a one-byte allowance, a 32-byte binary was read and returned empty results without a limit failure. The 16 MiB decoded-text cap does not bound total read IO across such files. | Charge actual bytes read, including skipped inputs, before allowing more reads; return a visible limit result and add binary/non-UTF-8 regressions. Per-file and entry limits still bound the current workload more loosely. |
+| Fixed P2: image creation could report success after archive failure | [Original builder pipeline](../sandbox/firecracker/build-offline-guest.sh) used `find → cpio → gzip` under POSIX `sh`; `set -e` sees the final command status. A fake `cpio` exiting 23 produced an empty compressed archive with overall exit 0. Stderr is discarded and the builder can hash/announce a partial image. | **Fixed:** `sandbox/image.py` checks each archive stage before publishing, with a failure regression. The guest success marker still prevents this from becoming a successful review. |
+| Fixed P2: Grep scan accounting excluded bytes read from skipped files | [Original scan loop](../src/code_reviewer/backends/read_tools.py) counted bytes only after `_read` succeeds; binary/non-UTF-8 files are already read before being skipped. With a one-byte allowance, a 32-byte binary was read and returned empty results without a limit failure. The 16 MiB decoded-text cap does not bound total read IO across such files. | **Fixed:** raw read bytes, including skipped inputs, consume the scan allowance; binary/non-UTF-8 regressions verify refusal. Per-file and entry limits still bound the current workload more loosely. |
 
-Other implementation gaps are expected, not newly claimed regressions: the launcher has no NIC/key/target-input/export path; shared Git export checks paths/types but has no per-file or aggregate byte cap, so it is not yet the bounded personal-input admission path; the OpenAI client bypasses ambient proxies; guest root/runtime remain writable; jailer and guest execution/syscall controls are absent; HTTP timeout/cancellation is not instantaneous; cleanup cannot survive a launcher SIGKILL by `finally` alone. Artifact hash checks identify trusted operator-selected bytes, not malicious-content safety or immutable files. The pilot must not be confused with production qualification.
+The previously absent connected input/network/bootstrap/export pieces now exist. `capsule.py` reads bounded objects without host Git execution; `git_input.py` reconstructs and bounds trees inside the guest. The client has an explicit trusted CONNECT route, with no ambient proxy inheritance. Guest UID/resource/scratch limits and signal/deadline cleanup are implemented. Remaining production gaps include a jailer, an immutable checkout against native compromise, a guest syscall allow-list, crash-state recovery and separate Claude qualification. The [connected runbook](sandbox-connected.md) describes exact controls and limits, including uninspected encrypted traffic and manual key revocation.
 
 ## Next implementation gates
 
 | Gate | Required evidence |
 |---|---|
 | 1. Offline whole-job smoke — passed | Both modes complete inside the guest with fake Claude, no network/credentials and bounded host collection |
-| 2. Controlled personal-repo OpenAI pilot — pending | Runtime startup passed offline. Bounded input/export, external destination policy, disposable runtime key, denial/cleanup probes and an authorized small live review remain pending |
+| 2. Controlled personal-repo OpenAI pilot — implemented, live test pending | Bounded input/export, external CONNECT policy, private key path and no-key denial/cleanup probes pass. Actual model/key/repository selection and review remain to be exercised |
 | 3. Enforcement | Production jailer, read-only runtime/snapshot, unprivileged processes, externally enforced egress and resource/deadline controls pass synthetic attack probes |
 | 4. Real PR pilot | Trusted configuration, bounded isolated fetching and safe artifact export work; host publishing remains manual and separate; staged private-data use is authorized |
 
 Do not add per-persona VMs, an orchestration service, a credential gateway we do not need, a controller container, signed publication tokens or multi-tenant audit infrastructure as prerequisites. A custom gateway remains deferred unless a later production requirement justifies it; the pilot accepts a disposable key inside its guest. Multi-tenant hosting, cross-invocation integrity and automatic publication require new decisions and tests.
+
+## Connected implementation map
+
+- `sandbox/capsule.py`: bounded private pinned input; no host-side target Git/config/hook execution.
+- `sandbox/git_input.py`: clean guest Git object reconstruction, tree admission and bounded checkout export.
+- `sandbox/network.py`: scoped TAP/nftables and foreground unprivileged standard Squid, with no broad NAT.
+- `sandbox/wire.py`: bounded one-shot private frames; `sandbox/probes.py`: harmless file/network checks.
+- `sandbox/guest.py`: unprivileged resource-limited flow execution and bounded report collection.
+- `sandbox/connected.py`: trusted root Linux supervisor, private runtime key prompt/FD, deadline/process/network cleanup and validated host export.
+- `sandbox/image.py`: checked archive stages; the image builder's `connected` option includes public CA material and the guest entry point, never a key or target.

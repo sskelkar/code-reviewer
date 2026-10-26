@@ -1,6 +1,6 @@
 # OpenAI backend for sandbox tests
 
-Updated 2026-10-26: test the sandbox using an OpenAI API key and the operator's selected **non-sensitive personal repository**. There is no requirement to author a sample project. Production reviews remain Claude-only; the normal `reviewer` CLI provider is unchanged. Existing synthetic inputs remain offline regressions and boundary probes. The [agreed connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) supersedes the earlier synthetic-only live-test scope.
+Updated 2026-10-26: test the sandbox using an OpenAI API key and the operator's selected **non-sensitive personal repository**. There is no requirement to author a sample project. Production reviews remain Claude-only; the normal `reviewer` CLI provider is unchanged. Existing synthetic inputs remain offline regressions and boundary probes. The [agreed connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) supersedes the earlier synthetic-only live-test scope.
 
 ## Implementation
 
@@ -24,9 +24,9 @@ An explicit model ID and operator-supplied input/cached-input/output USD-per-mil
 
 There is no Bash, code execution, write, web, MCP, skill or LSP tool. Each invocation exposes exactly the tool subset the role already allows; Comparator/Resolver-style calls with an empty tool set cannot acquire file tools by requesting them. Additional directories and provider/model changes in a call are rejected.
 
-POSIX directory-descriptor traversal and no-follow opens reject escaping paths, symlinks, hardlinked files and special files; `.git` is excluded. Reads are capped at 1 MiB per file; enumeration at 10,000 entries/32 directory levels; a text scan at 16 MiB; result rows at 100 and text at 16,000 characters. Grep skips binary, oversized and non-UTF-8 files. Rejected tool requests return a generic error without host paths. File/count limits can leave review evidence incomplete: this is an experimental bounded tool implementation, not feature parity with Claude Code.
+POSIX directory-descriptor traversal and no-follow opens reject escaping paths, symlinks, hardlinked files and special files; `.git` is excluded. Reads are capped at 1 MiB per file; enumeration at 10,000 entries/32 directory levels; a text scan at 16 MiB; result rows at 100 and text at 16,000 characters. Grep skips binary, oversized and non-UTF-8 files; raw bytes actually read from skipped files consume its scan allowance too. One-byte lookahead detects overflow and returns a refusal. Rejected tool requests return a generic error without host paths. File/count limits can leave review evidence incomplete: this is an experimental bounded tool implementation, not feature parity with Claude Code.
 
-These checks reduce tool authority; they do not contain arbitrary Python/native execution after guest compromise. A read-only admitted snapshot, immutable runtime, unprivileged processes and external restrictions remain separate architecture gates.
+These checks reduce tool authority; they do not contain arbitrary Python/native execution after guest compromise. The connected pilot adds an unprivileged guest worker and external restrictions. An immutable admitted snapshot/runtime and guest execution/syscall policy remain separate production gates.
 
 ## Cost, deadlines and cancellation
 
@@ -55,21 +55,21 @@ sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-openai-gue
 
 Launch with the three explicit artifact paths/digests from the [runbook](../sandbox/README.md), adding `--workload openai-offline`. This uses 2 vCPUs/1024 MiB and no NIC or attached disk. Host validation requires the offline OpenAI marker, both completed flows, expected fake call counts and one consolidated synthetic finding per mode. API round trips are internal to a runner call; the harness's call count is not an HTTP-request count.
 
-The default fake-Claude smoke and the real-Claude no-auth startup probe remain available separately. No CLI command currently connects the guest to OpenAI or accepts a real key.
+The default fake-Claude smoke and the real-Claude no-auth startup probe remain available separately. These offline commands accept no real key or connectivity; the separate [connected launcher](sandbox-connected.md) supports the controlled live pilot.
 
-## Connected test: agreed next work
+## Connected personal-repository pilot
 
-Follow the [canonical pilot sequence](sandbox-architecture.md#connected-implementation-sequence). It is planned, not implemented. No live-key or personal-repository command exists yet.
+The [connected runbook](sandbox-connected.md) documents the implemented Linux supervisor, private input/bootstrap, external network policy, runtime key prompt/descriptor and bounded report export. It follows the [agreed sequence](sandbox-architecture.md#connected-implementation-sequence). The ordinary `reviewer` CLI remains unchanged; this is a separate explicitly selected module.
 
-The first live review uses the operator-selected non-sensitive personal repository, a pinned change, explicit model/token rates and declared limits. Add a bounded input/report path instead of repurposing `openai_smoke.py`, whose fake replies and fixed finding counts are intentionally offline-only. A live review may validly find zero defects. Do not copy the target's names, code, PR metadata or resulting findings into this repository's tests/docs.
+Prepare a bounded capsule from the chosen non-sensitive personal clone and full base/head commit hashes. No Git/config/hooks execute on the host; clean Git reconstruction and tree admission happen inside the guest. The first live review does not require a new synthetic project. Keep the existing synthetic fixtures for automated regressions and no-key boundary tests only. A live review may validly find no defects; fixed smoke finding counts do not apply.
 
-Use externally enforced default-deny networking and permit the required OpenAI HTTPS destination during review. Admission happens before that review phase, so the first pilot need not add GitHub egress or credentials to the review guest. If existing network tooling requires an explicit proxy, adapt the current direct HTTPS transport through trusted configuration; it currently ignores ambient proxy variables. A fixed destination in code or a single DNS-to-IP lookup is not proof of the external hostname boundary.
+The connected client uses an explicit trusted CONNECT route through a standard Squid process outside the guest. The default backend still ignores ambient proxy variables; `proxy=('192.0.2.1',3128)` is explicitly injected only in the guest worker. TLS targets `api.openai.com`, verifies its certificate using the public CA bundle and never sends the API authorization header in the CONNECT request. External nftables rules block direct guest egress; the proxy permits only the approved CONNECT authority and denies private/reserved destinations, with an additional host packet guard on the proxy UID. This is not a custom inference relay or credential-injection gateway and does not inspect encrypted HTTP content or enforce API paths/model spending.
 
-Provide a dedicated disposable API key to the guest through a bounded private runtime bootstrap, then keep it only in worker memory/environment outside the checkout. No key in images, source bundles, command arguments, logs, shared homes/keychains or chat. Revoke it after testing and destroy the VM on success/error/cancellation. **Guest compromise can expose/reuse this key and bypass the Python cost ledger**; that tradeoff was explicitly accepted for the controlled pilot. This is not production credential isolation.
+A dedicated disposable key is requested only after admission and boundary probes pass. It is supplied privately to guest memory, outside the checkout, via one-shot vsock bootstrap; no image, command-line argument, host home/keychain or repo configuration carries it. **Guest compromise can expose/reuse the key and bypass the Python ledger.** The operator must revoke it after testing; VM cleanup does not revoke it.
 
-The custom API relay, host-held credential broker and extra orchestration services are deferred. Standard network enforcement tooling does not become a custom inference service and must not inject the API key or grant arbitrary destinations. No silent host fallback and no OpenAI production-code path. Keep production jailer/non-root/read-only/execution/syscall gates and later Claude qualification explicit.
+The two recorded prototype defects are fixed: image generation checks all archive stages; Grep charges raw read bytes even when a file is skipped. Seventeen new offline regressions cover the connected admission/policy/key/export path, plus actual no-key Firecracker boundary/cancellation/deadline checks in the dedicated worker. No real API key, model request or personal repository has been used during implementation checks. Account/model/schema compatibility and finding quality remain unmeasured.
 
-The [pre-implementation review](sandbox-architecture.md#review-before-connected-implementation-2026-10-26) records two current prototype defects to fix first: image pipeline status propagation and accounting for IO on skipped scan files. This documentation pass does not fix them or implement live access.
+The [production gates](security-roadmap.md) still include a jailer, immutable snapshot against native compromise, guest syscall enforcement, stronger crash recovery and Claude-specific qualification. OpenAI pilot success does not authorize or qualify production-code use.
 
 ## Official API references
 

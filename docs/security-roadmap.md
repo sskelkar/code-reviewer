@@ -16,9 +16,9 @@ The current ordinary reviewer is still a controlled-environment tool. Neither a 
 
 ## Controlled pilot scope
 
-The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) is authoritative: one VM, external default-deny access to the required OpenAI HTTPS endpoint, and a disposable test key privately supplied to guest memory/environment at runtime. Use the operator's non-sensitive personal repository; no authored review sample project is required. Keep synthetic fixtures for automated regressions and harmless denial probes. Defer the custom API relay/credential broker and extra orchestration. A compromised guest can steal/reuse its test key; accept that only for this controlled feasibility test, revoke afterward, and keep production Claude-only.
+The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) is authoritative: one VM, external default-deny access to the required OpenAI HTTPS endpoint, and a disposable test key privately supplied to guest memory/environment at runtime. Use the operator's non-sensitive personal repository; no authored review sample project is required. Keep synthetic fixtures for automated regressions and harmless denial probes. Defer the custom API relay/credential broker and extra orchestration. A compromised guest can steal/reuse its test key; accept that only for this controlled feasibility test, revoke afterward, and keep production Claude-only.
 
-This is not a relaxation of the eventual production gates below. Personal-repository admission/report export and externally enforced egress are needed for this pilot even though the existing prototype only accepts synthetic offline workloads. The two [confirmed review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26) must be fixed first. No new implementation, target access or paid run is part of the current documentation update.
+This is not a relaxation of the eventual production gates below. Personal-repository admission/report export and externally enforced egress are implemented in the connected pilot; the separate offline workloads retain synthetic inputs. The two [confirmed review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26) are now fixed with regressions. The user subsequently authorized implementation. The [connected launcher](sandbox-connected.md) and the two recorded fixes are implemented; actual key/model/personal-repository use remains pending. No target access or paid run was performed during implementation.
 
 ## Build next, in order
 
@@ -27,13 +27,13 @@ Effort bands are relative engineering estimates, not delivery commitments. Authe
 | Step | Work | Effort | Exit evidence |
 |---|---|---|---|
 | 1 | Offline whole-job and provider startup checks | Complete as scaffolding | Both flows pass with fake Claude/simulated OpenAI; real Claude refuses without auth |
-| 2 | Correct the two recorded prototype defects | Small | Archive-stage failure and skipped-file IO budget regressions pass |
-| 3 | Controlled personal-repo OpenAI pilot | Medium | Bounded base/head input and report export, external destination enforcement, private disposable runtime key, denial/cleanup probes, then one small user-selected review |
-| 4 | Production boundary and stronger enforcement | Larger | Jailer, immutable runtime/snapshot, non-root execution, guest execution/syscall/resource controls and independent cleanup pass hostile probes |
+| 2 | Correct the two recorded prototype defects — done | Small | Archive-stage failure and skipped-file IO budget regressions pass |
+| 3 | Controlled personal-repo OpenAI path — implemented; live run pending | Medium | Bounded base/head input and report export, external destination enforcement, private disposable runtime key, denial/cleanup probes, then one small user-selected review |
+| 4 | Production boundary and stronger enforcement | Larger | Jailer, immutable runtime/snapshot, non-root execution qualification, guest execution/syscall/resource controls and independent cleanup pass hostile probes |
 | 5 | Claude-specific authentication/tool qualification | Medium/uncertain | Supported login without host home/keychain exposure; Claude-specific file/integration policy and egress validated |
 | 6 | Authorized Claude-only production pilot | Ongoing validation | Production gates below pass; useful reviews complete with manual publishing and documented residual risks |
 
-Implement the personal-pilot input, egress and credential pieces together before a real key/repository run; do not turn the offline smoke into a live review by adding a key alone. Trusted configuration cannot come from the target. Missing enforcement must refuse startup; never widen egress, mount host credentials or silently execute on the host to repair a failed setup.
+The personal-pilot input, egress and credential pieces are implemented together; do not turn the offline smoke into a live review by adding a key alone. Trusted configuration cannot come from the target. Missing enforcement must refuse startup; never widen egress, mount host credentials or silently execute on the host to repair a failed setup.
 
 ## Minimum controls for the first real-review version
 
@@ -63,11 +63,11 @@ The ordinary CLI still implicitly loads current-directory `review.toml`, which c
 
 Official ARM64 Firecracker 1.17.0, checked against its release metadata digest, booted the official CI Linux 6.1.188 kernel with a locally constructed BusyBox initramfs, 1 vCPU and 256 MiB RAM. It emitted completion markers, had only loopback networking, powered off and exited 0. No repository, credentials, Claude, guest disk or NIC was supplied. Ubuntu image checksums were checked against the publisher's HTTPS listing. This is not independently verified production image provenance.
 
-The [OpenAI backend](sandbox-openai.md) is implemented for synthetic testing, with bounded local read tools; both flows also passed in a no-network guest with simulated API responses and no real key. Restricted connectivity/key handoff and actual inference remain pending. Production reviews remain Claude-only.
+The [OpenAI backend](sandbox-openai.md) is implemented for synthetic testing, with bounded local read tools; both flows also passed in a no-network guest with simulated API responses and no real key. Restricted connectivity/private key bootstrap and bounded input/report paths are now implemented with no-key real boundary checks; actual inference remains pending. Production reviews remain Claude-only.
 
 The [real native runtime probe](sandbox-runtime-auth.md) also passed offline: pinned Claude 2.1.301 starts and refuses the unauthenticated harness invocation in a 4 GiB guest. The outer VM was resized to 6 GiB for that probe. No credential or connected inference was tested.
 
-The whole-harness prototype also passed inside the guest: two single-agent passes (three fake calls) and one four-persona round (eight fake calls), with one consolidated synthetic finding per mode. Both flows generated reports inside the guest; only a bounded JSON summary was exported. Both boot tests use unprivileged Firecracker with a VM-local KVM ACL and default seccomp; the production jailer, read-only/non-root guest, auth/egress enforcement and hostile-input qualification remain gates. No-network boot configuration alone is not proof of an egress allow-list implementation.
+The whole-harness prototype also passed inside the guest: two single-agent passes (three fake calls) and one four-persona round (eight fake calls), with one consolidated synthetic finding per mode. Both flows generated reports inside the guest; only a bounded JSON summary was exported. Both boot tests use unprivileged Firecracker with a VM-local KVM ACL and default seccomp; the production jailer, immutable guest runtime/snapshot, stronger execution/syscall policy and Claude authentication/native-tool qualification remain gates. The separate connected pilot adds a non-root worker and external OpenAI egress policy, with no-key checks passing. No-network boot configuration alone is not proof of an egress allow-list implementation.
 
 ## Acceptance tests before untrusted real reviews
 

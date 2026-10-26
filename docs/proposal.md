@@ -1,17 +1,17 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented and being tried on real pull requests; optional four-persona review with conflict annotations implemented and offline-tested; next: one-VM sandbox runtime/auth feasibility (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** v0 implemented and being tried on real pull requests; optional four-persona review implemented with an execution check; connected OpenAI sandbox pilot implemented and boundary-tested; next: controlled personal-repository live validation (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
 
-A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by running **N independent review passes** with Claude (Haiku first) in headless mode. Each pass is a fresh context that never sees earlier results. A **Comparator** merges each pass into a master list. Findings get a **confidence score = share of passes that found them**. Output: a report with findings, token usage and cost. Optionally posted as a PR comment after your explicit confirmation.
+A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by running **N independent review passes** with Claude (Haiku first) in headless mode. Each pass is a fresh context that never sees earlier results. A **Comparator** merges each pass into a master list. Findings get a **confidence score = share of passes that found them**. Output: a report with findings, token usage and cost. Optionally posted as a PR comment through an explicit CLI `--post` flag or a confirmed REPL `post` command.
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
 **Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each by default (configurable with `--passes N`). The persona Comparator merges duplicates, categorizes findings and flags possible conflicts; a targeted Verifier annotates flagged groups only. Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
 
-**Not yet built:** project context pack; broader per-finding verification; inline PR comments; raw-API backend; security hardening beyond §5. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
+**Not yet built:** project context pack; broader per-finding verification; inline PR comments; production sandbox hardening and Claude qualification. An experimental OpenAI raw-API backend and separate connected personal-repository sandbox pilot are implemented; authenticated inference remains untested. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
 
 ## Checklist
 
@@ -21,7 +21,7 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [x] Thorough Reviewer prompt (reports every supported issue, not only the first)
 - [x] Ten default criteria, plus project criteria from the root `AGENTS.md`, plus nested `AGENTS.md` and `.claude/rules` files added by location
 - [x] Reports and the PR summary name the criterion and its source, never an internal ID
-- [x] Interactive REPL and one-shot CLI, summary posted only after confirmation, dry run, email redaction, `doctor --live` isolation checks
+- [x] Interactive REPL and one-shot CLI, summary posted only through explicit CLI authorization or REPL confirmation, dry run, email redaction, `doctor --live` isolation checks
 - [x] Comparator replay tool; README flow diagrams of a review
 - [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch (the initially unavailable persona boundary is now implemented)
 - [x] Define and load thirteen canonical persona defaults, static focus/assignments and common review instructions
@@ -34,22 +34,23 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Current focus: one VM per review; controlled personal-repository pilot (confirmed 2026-10-26)**
 
-The [sandbox architecture](sandbox-architecture.md) is the canonical design; the [security roadmap](security-roadmap.md) tracks the small single-operator implementation and gates. It supersedes the earlier controller/supervisor-service/per-invocation-VM plan. Python and all Claude calls run in the same disposable guest; the existing flow internals stay intact.
+The [sandbox architecture](sandbox-architecture.md) is the canonical design; the [security roadmap](security-roadmap.md) tracks the small single-operator implementation and gates. It supersedes the earlier controller/supervisor-service/per-invocation-VM plan. The whole job runs in the same disposable guest: the implemented connected pilot injects OpenAI, while authenticated Claude qualification remains pending; the existing flow internals stay intact.
 
 - [x] Verify local nested KVM and a synthetic Firecracker boot on M4/macOS
 - [x] Run both existing flows entirely inside the offline guest with synthetic code/fake Claude; record deployment evidence
 - [x] Verify the signed real Claude binary starts in the no-network guest and refuses an unauthenticated headless invocation
 - [x] Add an explicitly injected OpenAI Responses backend and bounded read-only tools; verify both flows with simulated API responses in a no-network guest
-- [ ] Fix the two [pre-implementation review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26): archive pipeline failures and skipped-file scan IO accounting
-- [ ] Add bounded personal-repository base/head admission and safe report export, without target execution, host mounts or repository-selected security configuration
-- [ ] Enforce external default-deny networking allowing the required OpenAI HTTPS destination; verify bypass refusal before releasing the runtime test key
-- [ ] Deliver a dedicated disposable API key privately into guest memory/environment; keep it out of images, arguments, logs and Git; revoke after testing
-- [ ] Run harmless boundary/cleanup probes, then one small review of the selected non-sensitive personal repository using an explicit OpenAI model/rates/budget
+- [x] Fix the two [pre-implementation review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26): archive pipeline failures and skipped-file scan IO accounting
+- [x] Add bounded personal-repository base/head admission and safe report export, without target execution, host mounts or repository-selected security configuration
+- [x] Enforce external default-deny networking allowing the required OpenAI HTTPS destination; verify bypass refusal before releasing the runtime test key
+- [x] Implement private delivery of a dedicated disposable API key privately into guest memory/environment; keep it out of images, arguments, logs and Git; revoke after testing
+- [x] Run harmless no-key boundary/cleanup probes against the actual VM/network stack
+- [ ] Run one small review of the selected non-sensitive personal repository using an explicit OpenAI model/rates/budget
 - [ ] Complete production jailer, unprivileged execution, immutable runtime/snapshot, guest execution/syscall and bounded scratch/resource enforcement
 - [ ] Qualify Claude authentication/native tools and egress separately before the Claude-only production pilot ([runtime/auth record](sandbox-runtime-auth.md))
 - [ ] Conduct an authorized Claude-only production pilot after those gates pass; keep guest publishing disabled
 
-The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented) is authoritative. No custom API relay/credential broker, per-persona VM or extra orchestration service is required. The controlled test accepts that a compromised guest can steal/reuse its disposable key and bypass the Python budget. The live review uses the operator's personal repository; synthetic fixtures remain automated tests/probes, not a project we must author. This plan is not yet implemented, and the current CLI is not sandboxed.
+The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) is authoritative. No custom API relay/credential broker, per-persona VM or extra orchestration service is required. The controlled test accepts that a compromised guest can steal/reuse its disposable key and bypass the Python budget. The live review uses the operator's personal repository; synthetic fixtures remain automated tests/probes, not a project we must author. The controlled connected path is implemented through the [Linux runbook](sandbox-connected.md), with no-key deployment probes passing. No real key/model request or personal-repository run has been made; the ordinary CLI is still not sandboxed.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries

@@ -42,7 +42,7 @@ Select the method explicitly; never silently switch billing/provider or reuse wh
 | Anthropic Console billing | `ANTHROPIC_API_KEY` | Separate API billing; do not assume a subscription covers these requests |
 | Bedrock/Vertex/Foundry | The provider's supported guest credentials | Separate integration and endpoint requirements; not selected implicitly |
 
-Anthropic documents `setup-token` for scripts and CI, with a one-year token. It is a long-lived credential, **not a job-scoped or harmless token**. Organization restrictions still matter; setup-token does not itself establish that a token belongs to the required organization. For a first subscription feasibility test, the operator must create a dedicated token using the supported flow and retain control of it. Do not paste it into chat, commit it, pass it as a process argument, bake it into an image or mount the entire home/keychain to supply it. A token transfer/expiry/revocation design is still pending; the current launcher deliberately has no credential input.
+Anthropic documents `setup-token` for scripts and CI, with a one-year token. It is a long-lived credential, **not a job-scoped or harmless token**. Organization restrictions still matter; setup-token does not itself establish that a token belongs to the required organization. For a first subscription feasibility test, the operator must create a dedicated token using the supported flow and retain control of it. Do not paste it into chat, commit it, pass it as a process argument, bake it into an image or mount the entire home/keychain to supply it. Claude token transfer/expiry/revocation qualification is still pending; the connected OpenAI key path must not be repurposed for Claude without that work.
 
 A fresh manual login is another supported path. The documentation supports pasting a returned authorization code when a browser cannot reach the CLI's callback server, as with SSH or containers. It requires authentication-network access and produces guest credentials; it has not been exercised here. Do not solve the callback problem by broadly exposing guest ports to the host.
 
@@ -52,7 +52,7 @@ Environment switches disabling updates, nonessential traffic and cloud connector
 
 ## Network and credentials: next connected test
 
-The current Firecracker launcher has no NIC, so it cannot authenticate or make an inference request. Before introducing a real credential:
+The offline Claude probe still has no NIC or credentials. The separate [connected OpenAI launcher](sandbox-connected.md) now has a scoped external network policy and private disposable-key bootstrap; it does not implement Claude authentication. Before introducing a real credential:
 
 1. Select the intended authentication/billing method with the operator. For Claude-specific authentication qualification, use a minimal harmless prompt and a dedicated credential, not production code or an existing host login file. The earlier OpenAI review pilot uses the selected non-sensitive personal repository.
 2. Implement external default-deny networking for the guest. Allow only the explicitly selected inference/auth endpoints, with mandatory TLS verification; install only approved public CA material if required. A proxy environment variable alone is insufficient because the guest could bypass it.

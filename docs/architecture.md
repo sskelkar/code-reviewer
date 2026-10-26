@@ -6,11 +6,13 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 `Engine` selects one flow before PR preparation and asset loading. Each flow owns orchestration, model contracts, master/result types and presentation. `shared/` owns transport, git/diff handling, criteria discovery, grounding, storage and accounting; it imports neither flow. Frontends dispatch rendering through `presentation.py`.
 
-Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. Every call is a fresh headless Claude session. Models propose; Python validates, accounts and writes state.
+Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. For normal CLI reviews, every call is a fresh headless Claude session. The connected pilot injects an OpenAI runner with fresh per-call conversation state instead. Models propose; Python validates, accounts and writes state.
 
 ## Sandbox deployment
 
-The agreed [sandbox architecture](sandbox-architecture.md) runs the whole Python harness and all fresh Claude processes inside one disposable VM per review. Its offline prototype lives in `code_reviewer.sandbox` and is not selected by `Engine` or the regular CLI. It exercises both current flows with synthetic code/fake Claude only; the real native runtime also passes an offline startup/auth-refusal probe. Connected authentication, network policy and the PR input/output path remain separate gates. The optional [OpenAI Responses adapter](sandbox-openai.md) is currently exercised only by offline fixtures; the agreed next pilot uses a user-selected non-sensitive personal repository, external destination enforcement and a disposable guest key, with no custom API relay. Those connected input/network/key/export pieces are not implemented; the ordinary CLI still selects Claude. See the [runbook](../sandbox/README.md).
+The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [connected pilot](sandbox-connected.md) is a separate Linux-only entry point: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. Only after admission and boundary checks does the host request and deliver the disposable key. Fixed bounded report files return over vsock. The regular CLI still constructs `ClaudeRunner` and does not select the sandbox.
+
+Three separate offline workloads exercise fake-Claude review, simulated-OpenAI review, and real-Claude startup/auth refusal. No-key connected deployment checks also pass; actual authenticated inference and personal-repository compatibility remain pending. Production jailer, immutable snapshot, guest execution/syscall policy and authenticated Claude qualification remain future gates. See the [offline runbook](../sandbox/README.md) and connected runbook for their distinct interfaces.
 
 ## Code map
 
@@ -32,6 +34,10 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
 | `cli.py`, `repl.py`, `review_flow.py`, `presentation.py`, `review_options.py`, `repl_help.py` | User entry points, common launch sequence, options and help |
 | `progress.py`, `post.py`, `doctor.py`, `replay.py` | Progress, confirmed posting, environment checks and Comparator replay |
+| `backends/openai.py`, `backends/read_tools.py` | Optional stdlib Responses adapter and bounded descriptor-based Read/Grep/Glob; injected only by separate sandbox workloads |
+| `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
+| `sandbox/capsule.py`, `git_input.py`, `network.py`, `probes.py` | File-only target transfer, in-guest Git admission/export, external network enforcement and harmless probes |
+| `sandbox/bundle.py`, `image.py`, `launch.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
 | Legacy package-root modules | Small compatibility exports; edit canonical flow/shared files instead |
 
 Shared code imports no workflow. Flow-owned result types stay inside the flow; `code_reviewer.models.RunResult` remains a compatibility export of the single-agent result.
@@ -70,7 +76,7 @@ flowchart TD
         direction TB
         SP1["<b>StopPolicy.before_pass</b><br/>budget, max passes, failures?"]
         PASS["<b>PassRunner.run</b><br/>one pass, see next diagram"]
-        SP2["<b>StopPolicy.after_success</b><br/>stop after K quiet passes<br/>(min 3, max 6)"]
+        SP2["<b>StopPolicy.after_success</b><br/>stop after K quiet passes<br/>(defaults: min 3 completions,<br/>max 6 scheduled attempts)"]
         SP1 -->|continue| PASS --> SP2 -->|more passes| SP1
     end
 
@@ -90,7 +96,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["<b>Reviewer</b> (model, fresh session)<br/>tools: Read, Grep, Glob in the checkout only<br/>input: PR text, diff, criteria. Returns findings as JSON<br/>(each marked confirmed or rejected by its own self-check)"]
-    B["<b>FindingsPreparer</b> (findings.py)<br/>shape check; quote must exist in the code<br/>(or anchor over a changed hunk); fix rule ID;<br/>bad findings are counted, not scored"]
+    B["<b>FindingsPreparer</b> (findings.py)<br/>shape check; normalized quote substrings must match code<br/>(or anchor over a changed hunk); fix rule ID;<br/>bad findings are counted, not scored"]
     C["<b>MasterList.candidates</b><br/>earlier findings that might be the same issue"]
     D{"Anything to compare<br/>with?"}
     E["<b>Comparator</b> (model, no tools)<br/>for each new finding: same as F-nnn, or new"]
@@ -111,7 +117,7 @@ What is checked, and by whom, today:
 
 | Check | Done by | Where |
 |---|---|---|
-| The finding's quote exists in the code (or its anchor covers a changed hunk) | Harness, deterministic | `findings.FindingsPreparer` |
+| The whitespace-normalized quote matches code substrings (or its anchor covers a changed hunk) | Harness, deterministic | `findings.FindingsPreparer` |
 | The cited rule is a real one (formatting is repaired; unknown becomes "none") | Harness | `findings.resolve_rule_id` |
 | The Reviewer tries to refute its own finding after writing it (**self-check**) | The Reviewer model, in the same session | second phase of `src/code_reviewer/flows/single_agent/prompts/reviewer.system.md` |
 | Are two findings the same issue? (finding vs. earlier findings; text only, no code access) | Comparator model, answer validated by the harness | `roles.Comparator` |

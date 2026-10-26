@@ -57,13 +57,19 @@ def strict_schema(schema):
     return result
 
 
-def request_response(payload, key, timeout):
+def request_response(payload, key, timeout, *, proxy=None):
     """Fixed TLS endpoint; ignore ambient proxy/base-URL settings and refuse redirects."""
     body = json.dumps(payload).encode('utf-8')
     if len(body) > MAX_REQUEST:
         raise ProviderError('OpenAI request size limit exceeded')
     started = time.monotonic()
-    connection = http.client.HTTPSConnection('api.openai.com', timeout=min(timeout, 30))
+    if proxy is None:
+        connection = http.client.HTTPSConnection('api.openai.com', timeout=min(timeout, 30))
+    else:
+        if proxy != ('192.0.2.1', 3128):
+            raise ProviderError('unsupported trusted proxy route')
+        connection = http.client.HTTPSConnection(proxy[0], proxy[1], timeout=min(timeout, 30))
+        connection.set_tunnel('api.openai.com', 443)
     try:
         connection.request('POST', '/v1/responses', body,
                            {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})

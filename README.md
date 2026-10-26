@@ -2,7 +2,7 @@
 
 A pull request review agent built on Claude Code. It runs independent review passes, merges their findings and reports how often each issue was found. You can review the results locally or explicitly post a summary to GitHub.
 
-**Status:** v0, for a controlled learning environment. Single-agent reviews have been used on real PRs. The optional persona flow is implemented and tested offline; its live behavior and review quality still need validation. Posting has not been exercised live.
+**Status:** v0, for a controlled learning environment. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
 
 [Quick start](#quick-start) · [Review flows](#review-flows) · [Results](#reading-the-results) · [Configuration](#configuration) · [Documentation](#documentation)
 
@@ -150,9 +150,11 @@ Project criteria come from the **base commit**, so a PR cannot change the rules 
 
 Reviewers and the persona Verifier have Read/Grep/Glob in a temporary checkout; they do not execute tests, linters or builds. Other model roles have no code tools. The checkout is outside saved-run storage and is deleted afterward unless you pass `--keep-checkout`.
 
-PR metadata, diff, criteria and files read during review are sent through your Claude Code login. Email redaction covers PR text only; repository files and diffs are not redacted. Saved runs contain code and must be treated accordingly. Use only repositories permitted by your organization's policy.
+For normal CLI reviews, PR metadata, diff, criteria and files read during review are sent through your Claude Code login. Email redaction covers PR text only; repository files and diffs are not redacted. Saved runs contain code and must be treated accordingly. Use only repositories permitted by your organization's policy.
 
-This remains a controlled-environment tool. Isolation relies on Claude Code restrictions, not an OS sandbox; secret scanning and stronger prompt-injection/posting safeguards are unfinished. The [sandbox architecture](docs/sandbox-architecture.md) places Python and Claude together in one disposable VM. An [offline prototype](sandbox/README.md) exercises synthetic reviews with fake Claude, real-Claude startup without credentials, and an [OpenAI adapter](docs/sandbox-openai.md) for synthetic sandbox tests without network access; ordinary reviews are not sandboxed yet. The [security roadmap](docs/security-roadmap.md) tracks the remaining real-review gates. The regular frontend supports GitHub PRs, not local branches. Read [privacy and safety](docs/usage.md#privacy-and-safety) and the [hardening backlog](docs/proposal.md#5-safety-v0-baseline) before broader use.
+This remains a controlled-environment tool. Normal CLI isolation relies on Claude Code restrictions, with no whole-job OS sandbox. The separate [connected sandbox pilot](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
+
+The [security roadmap](docs/security-roadmap.md) tracks production jailer, filesystem/execution/syscall controls and Claude qualification. Production stays Claude-only. Secret scanning and stronger prompt-injection/posting safeguards remain unfinished. Read [privacy and safety](docs/usage.md#privacy-and-safety) and the [hardening backlog](docs/proposal.md#5-safety-v0-baseline) before broader use.
 
 ## Development and roadmap
 
@@ -164,13 +166,14 @@ python3 -m unittest discover -s tests -t .
 
 Tests use fake models and temporary repositories, with no network or paid calls. Supported Python is 3.9+; contributors run the full suite on their oldest and newest available Python. Repository rules are in [AGENTS.md](AGENTS.md); code ownership, checks, debugging and replay are in the [development guide](docs/development.md) and [architecture guide](docs/architecture.md).
 
-Current priority: the [one-VM sandbox](docs/sandbox-architecture.md), with the offline whole-job smoke and real-Claude startup probe now passing. Next is the [controlled personal-repository pilot](docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26-not-implemented): bounded inputs/reports, externally restricted OpenAI access and a disposable runtime test key. The custom API relay is deferred. Production OS enforcement and Claude authentication/tool qualification follow; the pilot accepts key theft if its guest is compromised. Production reviews remain Claude-only. Review-quality comparisons, report improvements and the project context pack remain on the feature backlog; pluggable skills remain exploratory. Persona execution has a successful user-run check, but review quality is unmeasured. The automated eval harness is deliberately parked. See the [proposal checklist](docs/proposal.md#checklist) for the detailed roadmap and [handover](docs/HANDOVER.md) for current work.
+Current priority: the [one-VM sandbox](docs/sandbox-architecture.md), with the offline whole-job smoke and real-Claude startup probe now passing. The [controlled personal-repository pilot path](docs/sandbox-connected.md) is implemented: bounded pinned inputs/reports, external nftables plus standard CONNECT restrictions, and a privately supplied disposable runtime key. No-key real boundary/cleanup checks pass; the next user step is selecting the non-sensitive repo/change, accessible OpenAI model/rates and locally supplied key for the first actual review. The custom API relay is deferred. Production OS enforcement and Claude authentication/tool qualification follow; the pilot accepts key theft if its guest is compromised. Production reviews remain Claude-only. Review-quality comparisons, report improvements and the project context pack remain on the feature backlog; pluggable skills remain exploratory. Persona execution has a successful user-run check, but review quality is unmeasured. The automated eval harness is deliberately parked. See the [proposal checklist](docs/proposal.md#checklist) for the detailed roadmap and [handover](docs/HANDOVER.md) for current work.
 
 ## Documentation
 
 | Guide | Contents |
 |---|---|
 | [Usage reference](docs/usage.md) | CLI/REPL commands, reports, project criteria, all settings, storage and troubleshooting |
+| [Connected sandbox](docs/sandbox-connected.md) | Personal-repository pilot setup, boundary probes, private key entry and limitations |
 | [Architecture](docs/architecture.md) | Code map, flow ownership and detailed single-agent diagrams |
 | [Development](docs/development.md) | Setup, tests, common changes, saved-run debugging and Comparator replay |
 | [Prompt contracts](prompts/README.md) | Model inputs, outputs, tools and deterministic validation |
