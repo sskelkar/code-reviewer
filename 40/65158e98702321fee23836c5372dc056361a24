@@ -1,0 +1,53 @@
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_a55d5cff56a90b 13-14
+docs/sandbox-openai.md
+  s_68cd0db0a8fc3a::t_a55d5cff56a90b 3-5
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 1-42
+docs/security-roadmap.md
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 17,19,23,25-32,34
+  s_68cd0db0a8fc3a::t_c4cbc5a9074678 87
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 35-49
+AGENTS.md
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 71-74
+docs/sandbox-connected.md
+  s_68cd0db0a8fc3a::t_a26829a48fc235 18-23,25,27,29
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 1,3-5,24,26,28,54
+docs/HANDOVER.md
+  s_68cd0db0a8fc3a::t_a26829a48fc235 19-26
+  s_68cd0db0a8fc3a::t_c4cbc5a9074678 9
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 5-8,10
+  s_68cd0db0a8fc3a::t_552e2efbe08770 11-18
+docs/sandbox-architecture.md
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 5-6,67,119
+  s_68cd0db0a8fc3a::t_a26829a48fc235 63-66,68
+README.md
+  s_68cd0db0a8fc3a::t_a55d5cff56a90b 155
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 5,169,176-177
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_a55d5cff56a90b 933
+  s_68cd0db0a8fc3a::t_b0e1355abd1820 939
+  s_68cd0db0a8fc3a::t_a26829a48fc235 934-938
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4065158e98702321fee23836c5372dc056361a24",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
