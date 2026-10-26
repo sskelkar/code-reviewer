@@ -14,26 +14,24 @@ The current ordinary reviewer is still a controlled-environment tool. Neither a 
 - Keep Read/Grep/Glob only; no target tests/builds, installs, hooks, skills, MCP or LSP. Any extension of execution capability needs a new decision.
 - The whole guest can corrupt its own report or other persona state if compromised. Host isolation is the first boundary; per-persona integrity and semantic correctness are not guaranteed by this simpler design.
 
-## Controlled pilot scope
+## One production security contract
 
-The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) is authoritative: one VM, external default-deny access to the required OpenAI HTTPS endpoint, and a disposable test key privately supplied to guest memory/environment at runtime. Use the operator's non-sensitive personal repository; no authored review sample project is required. Keep synthetic fixtures for automated regressions and harmless denial probes. Defer the custom API relay/credential broker and extra orchestration. A compromised guest can steal/reuse its test key; accept that only for this controlled feasibility test, revoke afterward, and keep production Claude-only.
-
-This is not a relaxation of the eventual production gates below. Personal-repository admission/report export and externally enforced egress are implemented in the connected pilot; the separate offline workloads retain synthetic inputs. The two [confirmed review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26) are now fixed with regressions. The user subsequently authorized implementation. The [connected launcher](sandbox-connected.md) and the two recorded fixes are implemented; actual key/model/personal-repository use remains pending. No target access or paid run was performed during implementation.
+The [security contract](security-contract.md) is authoritative. The user requires one supported reviewer for every repository and provider. Earlier weaker personal/public/OpenAI pilot exceptions and per-run launch scripts are superseded. Preserve reusable sandbox code, but do not describe its missing production controls as optional merely because a test uses public code or a cheap model. Existing Claude-only data authorization remains separate from the common isolation requirements.
 
 ## Build next, in order
 
-Effort bands are relative engineering estimates, not delivery commitments. Authentication and the chosen runtime's compatibility may change them. No new Python dependencies are authorized or added by this plan.
+No new Python dependencies are authorized. Keep the one-job VM design; add services or isolation layers only when a required boundary calls for them.
 
-| Step | Work | Effort | Exit evidence |
-|---|---|---|---|
-| 1 | Offline whole-job and provider startup checks | Complete as scaffolding | Both flows pass with fake Claude/simulated OpenAI; real Claude refuses without auth |
-| 2 | Correct the two recorded prototype defects — done | Small | Archive-stage failure and skipped-file IO budget regressions pass |
-| 3 | Controlled personal-repo OpenAI path — implemented; live run pending | Medium | Bounded base/head input and report export, external destination enforcement, private disposable runtime key, denial/cleanup probes, then one small user-selected review |
-| 4 | Production boundary and stronger enforcement | Larger | Jailer, immutable runtime/snapshot, non-root execution qualification, guest execution/syscall/resource controls and independent cleanup pass hostile probes |
-| 5 | Claude-specific authentication/tool qualification | Medium/uncertain | Supported login without host home/keychain exposure; Claude-specific file/integration policy and egress validated |
-| 6 | Authorized Claude-only production pilot | Ongoing validation | Production gates below pass; useful reviews complete with manual publishing and documented residual risks |
+| Step | Work | Exit evidence |
+|---|---|---|
+| 1 | Repository-owned review command, trusted operator configuration and provider selection | No external driver scripts or target-selected executables/security policy; predictable private reports; unsupported or unenforced configurations refuse execution |
+| 2 | Qualified isolated PR acquisition and admission | Clean bounded fetching/parsing, pinned base/head, no target execution; source access revoked before inference |
+| 3 | Complete production VM/filesystem/execution boundaries | Jailer, immutable runtime/snapshot, non-root worker and tested guest execution/syscall/resource controls |
+| 4 | Provider-specific credential and inference qualification | Supported secure authentication, approved egress/tool behavior, credential lifetime/compromise/revocation addressed for each backend |
+| 5 | Lifecycle and release tests | Hostile path/network/process/input/output tests, cancellation, hard-failure recovery, both-flow regressions and explicit release evidence |
+| 6 | Supported real reviews | All required controls pass for the selected backend/runtime; no weaker public/personal/model exception |
 
-The personal-pilot input, egress and credential pieces are implemented together; do not turn the offline smoke into a live review by adding a key alone. Trusted configuration cannot come from the target. Missing enforcement must refuse startup; never widen egress, mount host credentials or silently execute on the host to repair a failed setup.
+The existing offline workloads and connected module provide useful evidence and reusable mechanics. They are development components until these gates pass. Do not prompt for a real key or resume the earlier personal review through the temporary launcher to bypass the missing final workflow. Credential-bearing qualification must be an explicit bounded test of a specific control, not a default escape hatch.
 
 ## Minimum controls for the first real-review version
 
@@ -86,7 +84,7 @@ Use synthetic files, fake credentials and disposable canaries. Test enforcement 
 
 MicroVMs per invocation, distributed orchestration, shared multi-tenant hosting, a controller container, signed publication approvals, central tamper-evident audit storage and an independently operated publishing service are not first-version prerequisites. For a hosted multi-user service, reassess tenant authorization/isolation, audit integrity, rate limits and incident operations before enabling that scope.
 
-The custom credential-injection/API relay is explicitly deferred for the controlled pilot. Reconsider it only for a concrete later production requirement; ordinary network policy may use existing tooling. Keep patching, private storage, basic provenance, repeatable boundary tests and credential revocation from the beginning; deeper enterprise process does not replace those controls.
+Credential handling must meet the common contract for each provider. Decide whether a broker, provider-scoped credential or another supported mechanism is needed from the concrete compromise/lifetime requirements; do not mandate a custom relay solely for architectural symmetry. Ordinary network policy may use existing tooling. Keep patching, private storage, basic provenance, repeatable boundary tests and credential revocation from the beginning; deeper enterprise process does not replace those controls.
 
 ## Reference guidance checked 2026-10-25
 

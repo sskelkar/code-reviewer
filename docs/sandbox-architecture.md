@@ -2,6 +2,8 @@
 
 Current decision: **one disposable VM contains the entire review job**, including Python orchestration and every model/tool call. The implemented connected pilot uses OpenAI; Claude production integration remains pending. Agreed 2026-10-25; the simpler connected-pilot scope below was confirmed 2026-10-26. This replaces the earlier proposal for a controller container, a supervisor service and a microVM per model invocation. [Security roadmap](security-roadmap.md) tracks the remaining controls; [architecture](architecture.md) describes the existing reviewer internals.
 
+The [security contract](security-contract.md), confirmed after the initial pilot work, now governs every repository/provider. Earlier personal-pilot concessions below are historical. The production target is one repository-owned workflow; the current connected components are not yet release-qualified.
+
 ## Implementation status
 
 | Part | Status |
@@ -58,6 +60,12 @@ The connected guest worker is non-root; exported files have read-only permission
 
 The three offline workloads have **no network interface or attached disks** and run their synthetic/startup checks as guest root. Their writable in-memory runtime and console summary interface are distinct from the connected pilot's unprivileged worker and private framed channel.
 
+## Trusted launcher: the program outside the review VM
+
+“Trusted launcher,” “host supervisor” and the diagram's supervisor node name the same operator-controlled Python entry point: [`sandbox/connected.py`](../src/code_reviewer/sandbox/connected.py). It runs in the dedicated Linux worker, outside the Firecracker guest. It is not an agent/model. It enforces lifecycle/network boundaries and transfers bounded input, a privately supplied runtime key and validated report artifacts; `guest.py` runs the actual review algorithm inside the guest. Trusted source and explicit operator settings give it authority; target repository settings and model outputs do not. Root is used for scoped Linux network setup, while VMM/proxy processes drop privileges. See the [launcher explanation](sandbox-connected.md#what-trusted-launcher-means) for details.
+
+**Current acquisition requirement:** implement PR acquisition/pinning in the repository-owned workflow inside a qualified isolation boundary. The earlier proposed shortcut fetched public Git data in the outer worker; that exception is superseded by the common security contract. The current diagram still starts with a prepared capsule and does not represent completed PR-fetch integration. Network authority must be restricted by phase, with source access removed before inference.
+
 ## Why Python is inside the job
 
 Dockerizing an application and separating privileges are compatible choices. A container for Python is optional packaging, not another required security service. For this version, put the trusted reviewer code and its runtime into the guest image and run it there directly.
@@ -108,7 +116,7 @@ The ordinary `reviewer` installation is unchanged; do not add `--sandbox` exampl
 
 ## Agreed connected pilot (2026-10-26)
 
-**Implementation update:** the controlled pilot path below is now implemented. Actual key/inference/personal-repo validation remains pending. Use the [connected runbook](sandbox-connected.md).
+**Historical scope:** the initial connected mechanics below were implemented, but the weaker pilot exceptions are superseded by the [security contract](security-contract.md). Actual key/inference/personal-repo validation remains pending. Use the [connected runbook](sandbox-connected.md).
 
 The next live review uses the operator's **non-sensitive personal repository and an OpenAI test key**. There is no requirement to write a new example project. The existing synthetic fixtures remain offline regressions and containment probes; they are not the required live review input. The operator will select the repository, a pinned base/head change, model, token rates and run budget before a live run. No production repository, saved production run or identifiers belong in this project. Production reviews remain Claude-only.
 

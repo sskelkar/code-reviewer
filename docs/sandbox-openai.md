@@ -1,5 +1,8 @@
 # OpenAI backend for sandbox tests
 
+**Current requirement:** the [security contract](security-contract.md) supersedes earlier personal/OpenAI pilot exceptions. This backend is reusable implementation, not a production-qualified workflow. Provider-specific authentication and guest-compromise exposure must meet the same release requirements as other backends.
+
+
 Updated 2026-10-26: test the sandbox using an OpenAI API key and the operator's selected **non-sensitive personal repository**. There is no requirement to author a sample project. Production reviews remain Claude-only; the normal `reviewer` CLI provider is unchanged. Existing synthetic inputs remain offline regressions and boundary probes. The [agreed connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) supersedes the earlier synthetic-only live-test scope.
 
 ## Implementation

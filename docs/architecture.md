@@ -10,6 +10,8 @@ Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the tempor
 
 ## Sandbox deployment
 
+The [security contract](security-contract.md) governs the final product for every repository/provider. Existing components below are not yet production-qualified, and temporary personal-pilot launch scripts are withdrawn.
+
 The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [connected pilot](sandbox-connected.md) is a separate Linux-only entry point: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. Only after admission and boundary checks does the host request and deliver the disposable key. Fixed bounded report files return over vsock. The regular CLI still constructs `ClaudeRunner` and does not select the sandbox.
 
 Three separate offline workloads exercise fake-Claude review, simulated-OpenAI review, and real-Claude startup/auth refusal. No-key connected deployment checks also pass; actual authenticated inference and personal-repository compatibility remain pending. Production jailer, immutable snapshot, guest execution/syscall policy and authenticated Claude qualification remain future gates. See the [offline runbook](../sandbox/README.md) and connected runbook for their distinct interfaces.

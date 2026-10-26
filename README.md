@@ -2,7 +2,7 @@
 
 A pull request review agent built on Claude Code. It runs independent review passes, merges their findings and reports how often each issue was found. You can review the results locally or explicitly post a summary to GitHub.
 
-**Status:** v0, for a controlled learning environment. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
+**Status:** v0, with production security as the required target for every repository/provider; the current implementation is not production-qualified. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
 
 [Quick start](#quick-start) · [Review flows](#review-flows) · [Results](#reading-the-results) · [Configuration](#configuration) · [Documentation](#documentation)
 
@@ -152,7 +152,7 @@ Reviewers and the persona Verifier have Read/Grep/Glob in a temporary checkout; 
 
 For normal CLI reviews, PR metadata, diff, criteria and files read during review are sent through your Claude Code login. Email redaction covers PR text only; repository files and diffs are not redacted. Saved runs contain code and must be treated accordingly. Use only repositories permitted by your organization's policy.
 
-This remains a controlled-environment tool. Normal CLI isolation relies on Claude Code restrictions, with no whole-job OS sandbox. The separate [connected sandbox pilot](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
+This remains a controlled-environment tool. Normal CLI isolation relies on Claude Code restrictions, with no whole-job OS sandbox. The existing [connected sandbox component](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. Its weaker pilot-use exception is superseded by the [common security contract](docs/security-contract.md); it is not the final supported entry point. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
 
 The [security roadmap](docs/security-roadmap.md) tracks production jailer, filesystem/execution/syscall controls and Claude qualification. Production stays Claude-only. Secret scanning and stronger prompt-injection/posting safeguards remain unfinished. Read [privacy and safety](docs/usage.md#privacy-and-safety) and the [hardening backlog](docs/proposal.md#5-safety-v0-baseline) before broader use.
 
@@ -166,14 +166,15 @@ python3 -m unittest discover -s tests -t .
 
 Tests use fake models and temporary repositories, with no network or paid calls. Supported Python is 3.9+; contributors run the full suite on their oldest and newest available Python. Repository rules are in [AGENTS.md](AGENTS.md); code ownership, checks, debugging and replay are in the [development guide](docs/development.md) and [architecture guide](docs/architecture.md).
 
-Current priority: the [one-VM sandbox](docs/sandbox-architecture.md), with the offline whole-job smoke and real-Claude startup probe now passing. The [controlled personal-repository pilot path](docs/sandbox-connected.md) is implemented: bounded pinned inputs/reports, external nftables plus standard CONNECT restrictions, and a privately supplied disposable runtime key. No-key real boundary/cleanup checks pass; the next user step is selecting the non-sensitive repo/change, accessible OpenAI model/rates and locally supplied key for the first actual review. The custom API relay is deferred. Production OS enforcement and Claude authentication/tool qualification follow; the pilot accepts key theft if its guest is compromised. Production reviews remain Claude-only. Review-quality comparisons, report improvements and the project context pack remain on the feature backlog; pluggable skills remain exploratory. Persona execution has a successful user-run check, but review quality is unmeasured. The automated eval harness is deliberately parked. See the [proposal checklist](docs/proposal.md#checklist) for the detailed roadmap and [handover](docs/HANDOVER.md) for current work.
+Current priority: integrate one repository-owned reviewer workflow and close the release gates in the [security contract](docs/security-contract.md). Public/personal repositories and cheaper models get the same security bar. The existing VM, provider and flow code is reusable; handwritten temporary launch scripts and weaker “pilot” exceptions are superseded. Required work includes qualified isolated PR acquisition, trusted configuration, production VM/filesystem/execution controls, provider credentials and crash recovery. See the [roadmap](docs/security-roadmap.md) and [handover](docs/HANDOVER.md). Feature/eval work remains parked behind this security focus.
 
 ## Documentation
 
 | Guide | Contents |
 |---|---|
 | [Usage reference](docs/usage.md) | CLI/REPL commands, reports, project criteria, all settings, storage and troubleshooting |
-| [Connected sandbox](docs/sandbox-connected.md) | Personal-repository pilot setup, boundary probes, private key entry and limitations |
+| [Security contract](docs/security-contract.md) | Common requirements and release gates for all repositories/providers |
+| [Connected sandbox](docs/sandbox-connected.md) | Existing engineering components, boundary probes and current limitations |
 | [Architecture](docs/architecture.md) | Code map, flow ownership and detailed single-agent diagrams |
 | [Development](docs/development.md) | Setup, tests, common changes, saved-run debugging and Comparator replay |
 | [Prompt contracts](prompts/README.md) | Model inputs, outputs, tools and deterministic validation |

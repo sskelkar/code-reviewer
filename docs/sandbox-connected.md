@@ -1,6 +1,8 @@
-# Connected personal-repository sandbox
+# Connected sandbox implementation and engineering checks
 
-Implemented 2026-10-26 as the controlled OpenAI pilot in the [architecture](sandbox-architecture.md). The ordinary `reviewer` command stays Claude-backed and unsandboxed. This separate Linux-only launcher runs the whole selected review flow inside one Firecracker VM. Production repositories remain Claude-only and outside this pilot.
+**Current direction:** the [security contract](security-contract.md) supersedes the weaker personal-repository pilot scope. The code below is reusable engineering implementation, not the production-qualified user entry point. Do not run the temporary personal-pilot scripts. Every repository/provider must meet the same release gates; production data still requires its approved provider.
+
+Implemented 2026-10-26 as an initial OpenAI-connected path in the [architecture](sandbox-architecture.md). The ordinary `reviewer` command remains Claude-backed and unsandboxed. The separate Linux module runs the selected review flow inside one Firecracker VM but lacks the full production controls and integrated PR workflow. Commands below document the engineering components; they are not authorization for a credential-bearing review before those gaps are resolved.
 
 ## What is implemented
 
@@ -12,6 +14,18 @@ Implemented 2026-10-26 as the controlled OpenAI pilot in the [architecture](sand
 - Bounded allow-listed report export and cleanup on success, error, timeout, Ctrl-C, SIGTERM and SIGHUP. Independent GNU `timeout` wrappers bound the VMM/proxy if the Python launcher disappears. Residual TAP/firewall state after a hard kill refuses a new job rather than being silently overwritten.
 
 The network policy controls CONNECT destinations and resolved network addresses; it does **not** inspect encrypted HTTP authority/content, enforce API URL paths/model spending, or certify provider/CDN behavior against domain fronting. The permitted provider can receive admitted code. A compromised guest can obtain/reuse its disposable key, corrupt results and bypass the Python accounting. Those controlled-pilot risks do not become a production security guarantee.
+
+## What “trusted launcher” means
+
+The launcher is our own small Python program, [`sandbox/connected.py`](../src/code_reviewer/sandbox/connected.py), started by the operator with `python3 -m code_reviewer.sandbox.connected`. It runs **outside the review microVM, inside the dedicated Linux worker**. On a compatible Mac, that worker is the mountless Lima VM; on native Linux it is the dedicated KVM host. “Trusted” means this program is part of the security boundary and comes from operator-approved reviewer sources/settings. It does not mean its code is immune to bugs.
+
+It is ordinary deterministic code, not an LLM agent, a separate always-running service or a container. It selects pinned runtime artifacts, creates the external network policy, starts Firecracker, transfers bounded input over the private channel, requests the disposable key after admission/probes, collects fixed report artifacts and cleans up. Scoped network setup requires root on the dedicated worker; the VMM and proxy run with reduced privileges. The actual reviewer Python program, model conversations and Read/Grep/Glob loop run **inside** the review microVM. Repository files and model replies cannot instruct the launcher to execute arbitrary commands or change its policy.
+
+### Public-repository acquisition: final requirement
+
+A public PR must not require an existing workstation clone or a handwritten external fetch driver. The repository-owned workflow must acquire and pin commits inside a qualified isolation boundary with clean configuration, bounded resources and no target hooks/dependency/build/script execution. Source-network access must be scoped to acquisition and removed before inference.
+
+A manual fetch in the dedicated outer Linux worker was used to stage the earlier personal pilot. That was an explicit earlier tradeoff, now superseded by the common production requirement. The existing `connected.py` still accepts only capsules and does not implement automated PR acquisition. The prepared input/probe result is engineering evidence, not a completed review or proof of final acquisition isolation.
 
 ## Prerequisites
 
@@ -37,7 +51,7 @@ python -m code_reviewer.sandbox.capsule \
 
 This command reads files only and never runs Git or target code. The capsule is private (mode 0600); transfer it explicitly to the Linux worker without mounting the clone or home. **It contains the chosen clone's Git object store, potentially including other branches/history**, not just changed files. Select only a non-sensitive personal repository and keep the capsule/results outside this project and out of public storage. Model file tools see only the exported head checkout; the admitted base is also used for diff/criteria discovery.
 
-Limits: 128 MiB capsule, 32 MiB per object file and 10,000 object entries. Symlink/hardlink objects, alternate stores, worktree `.git` files and unsupported object layouts are refused. Git parsing happens only in the guest using a new bare repository and clean config/templates. Both selected commits and their merge-base must exist locally. Each admitted tree is limited to 5,000 entries, 2 MiB per blob and 32 MiB aggregate blobs; checkout export checks paths/types and the same byte/count limits. There is no GitHub fetch, submodule/LFS download or PR URL interface in this pilot. The first live review can contain zero findings.
+Limits: 128 MiB capsule, 32 MiB per object file and 10,000 object entries. Symlink/hardlink objects, alternate stores, worktree `.git` files and unsupported object layouts are refused. For the implemented existing-clone import path, the importer invokes no host Git; reconstruction/tree parsing happens in the guest using a new bare repository and clean config/templates. Automatic acquisition still needs the qualified boundary described above. Both selected commits and their merge-base must exist locally. Each admitted tree is limited to 5,000 entries, 2 MiB per blob and 32 MiB aggregate blobs; checkout export checks paths/types and the same byte/count limits. There is currently no automated GitHub fetch, submodule/LFS download or PR URL interface; repository-owned isolated acquisition is a required implementation change. The first live review can contain zero findings.
 
 ## Build the connected runtime
 

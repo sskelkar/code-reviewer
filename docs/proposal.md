@@ -32,25 +32,21 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
-**Current focus: one VM per review; controlled personal-repository pilot (confirmed 2026-10-26)**
+**Current focus: one supported reviewer with production security for every repository/provider (2026-10-26)**
 
-The [sandbox architecture](sandbox-architecture.md) is the canonical design; the [security roadmap](security-roadmap.md) tracks the small single-operator implementation and gates. It supersedes the earlier controller/supervisor-service/per-invocation-VM plan. The whole job runs in the same disposable guest: the implemented connected pilot injects OpenAI, while authenticated Claude qualification remains pending; the existing flow internals stay intact.
+The [security contract](security-contract.md) supersedes the weaker personal/OpenAI pilot exceptions. All product code belongs in this repository; temporary job state is expected, but external handwritten drivers are not a supported entry point. Preserve the existing flows and sandbox mechanics without claiming that integration alone makes them secure.
 
-- [x] Verify local nested KVM and a synthetic Firecracker boot on M4/macOS
-- [x] Run both existing flows entirely inside the offline guest with synthetic code/fake Claude; record deployment evidence
-- [x] Verify the signed real Claude binary starts in the no-network guest and refuses an unauthenticated headless invocation
-- [x] Add an explicitly injected OpenAI Responses backend and bounded read-only tools; verify both flows with simulated API responses in a no-network guest
-- [x] Fix the two [pre-implementation review findings](sandbox-architecture.md#review-before-connected-implementation-2026-10-26): archive pipeline failures and skipped-file scan IO accounting
-- [x] Add bounded personal-repository base/head admission and safe report export, without target execution, host mounts or repository-selected security configuration
-- [x] Enforce external default-deny networking allowing the required OpenAI HTTPS destination; verify bypass refusal before releasing the runtime test key
-- [x] Implement private delivery of a dedicated disposable API key privately into guest memory/environment; keep it out of images, arguments, logs and Git; revoke after testing
-- [x] Run harmless no-key boundary/cleanup probes against the actual VM/network stack
-- [ ] Run one small review of the selected non-sensitive personal repository using an explicit OpenAI model/rates/budget
-- [ ] Complete production jailer, unprivileged execution, immutable runtime/snapshot, guest execution/syscall and bounded scratch/resource enforcement
-- [ ] Qualify Claude authentication/native tools and egress separately before the Claude-only production pilot ([runtime/auth record](sandbox-runtime-auth.md))
-- [ ] Conduct an authorized Claude-only production pilot after those gates pass; keep guest publishing disabled
+- [x] Verify nested KVM, both offline review flows, native Claude unauthenticated startup and simulated OpenAI execution
+- [x] Implement reusable bounded input/results, scoped external network policy, private bootstrap, non-root worker and initial deadline/cancellation checks
+- [x] Fix archive-stage status and skipped-file IO accounting defects; preserve failed-review diagnostics
+- [ ] Integrate the user-facing command, trusted operator configuration, provider selection and predictable private report storage
+- [ ] Implement bounded PR acquisition inside a qualified isolation boundary, with phase-scoped network access and no target execution
+- [ ] Qualify jailer, immutable runtime/snapshot, guest execution/syscall/resource controls and independent crash recovery
+- [ ] Resolve and qualify provider-specific credentials, guest-compromise exposure, egress and native tool behavior; no disposable-key waiver
+- [ ] Run repeatable adversarial containment and both-flow regressions; refuse unsupported or unenforced configurations
+- [ ] Resume the selected public PR through the supported workflow once the necessary controls are qualified; existing Claude-only production data authorization remains
 
-The [connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) is authoritative. No custom API relay/credential broker, per-persona VM or extra orchestration service is required. The controlled test accepts that a compromised guest can steal/reuse its disposable key and bypass the Python budget. The live review uses the operator's personal repository; synthetic fixtures remain automated tests/probes, not a project we must author. The controlled connected path is implemented through the [Linux runbook](sandbox-connected.md), with no-key deployment probes passing. No real key/model request or personal-repository run has been made; the ordinary CLI is still not sandboxed.
+The [architecture](sandbox-architecture.md) records existing mechanics and the [roadmap](security-roadmap.md) orders the release work. The ordinary CLI remains unsandboxed and the separate connected OpenAI component is not production-qualified. Earlier live-pilot instructions are withdrawn; no real key or model request has been used in the sandbox.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
