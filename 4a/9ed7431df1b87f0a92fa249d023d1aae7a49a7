@@ -1,0 +1,158 @@
+docs/HANDOVER.md
+  s_68cd0db0a8fc3a::t_65d91a53a80721 27,29
+  s_68cd0db0a8fc3a::t_5b2e6b04e49565 5-8
+  s_68cd0db0a8fc3a::t_bdcc46a050bf51 19-24,26,28,30
+  s_68cd0db0a8fc3a::t_06d19b1853c6d8 9-18
+  s_68cd0db0a8fc3a::t_cea62bf591fe9c 25
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 120-124,177-178,218-224
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 173-176,203,239,243
+  s_68cd0db0a8fc3a::t_55904451185482 183
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 5-6,113-114,116-119,125,179-182,184-202,242,252-257
+src/code_reviewer/repl_help.py
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 16-17
+  s_68cd0db0a8fc3a::t_d8bbf2e447eca7 9,12,42,67
+docs/sandbox-alternatives.md
+  s_68cd0db0a8fc3a::t_f9d8536a06e579 1-46
+src/code_reviewer/repl.py
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 69,135-136
+  s_68cd0db0a8fc3a::t_268344d50123d3 137
+tests/test_summary.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 27-28
+tests/test_security_boundary.py
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 80-84,103-104,106,118
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 1-4,6-39,44-79,85-102,105,107,117,119-168,180-188
+  s_68cd0db0a8fc3a::t_b73a03660d62bf 5,189-237
+  s_68cd0db0a8fc3a::t_55904451185482 169-179
+  s_68cd0db0a8fc3a::t_216da23abb459f 40-43
+  s_68cd0db0a8fc3a::t_68a9849f187055 108-116
+docs/usage.md
+  s_68cd0db0a8fc3a::t_aa588583630308 3-4
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 11,14-15,18,20,22,24,26,34-35,46,124
+  s_68cd0db0a8fc3a::t_65d91a53a80721 42,224
+prompts/README.md
+  s_68cd0db0a8fc3a::t_aa588583630308 99-100
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 96-98,101
+AGENTS.md
+  s_68cd0db0a8fc3a::t_bdcc46a050bf51 75-80
+docs/sandbox-check.md
+  s_68cd0db0a8fc3a::t_06d19b1853c6d8 13
+  s_68cd0db0a8fc3a::t_f9d8536a06e579 1-12,14-46
+tests/test_isolation_and_dry_run.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 135-136
+docs/sandbox-connected.md
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 7,88,90,92,94
+  s_68cd0db0a8fc3a::t_aa588583630308 3-4
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 40
+src/code_reviewer/sandbox/connected.py
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 22,134-136,249-251
+  s_68cd0db0a8fc3a::t_b73a03660d62bf 23,26,169-177,180,184,186-187,194,238-240
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 137
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_65d91a53a80721 9,31
+  s_68cd0db0a8fc3a::t_aa588583630308 35-36,60
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 11-25,43,62,69,73
+  s_68cd0db0a8fc3a::t_76abac3a93fa9d 10
+tests/test_connected_sandbox.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 135,138
+  s_68cd0db0a8fc3a::t_65d91a53a80721 183-184
+README.md
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 25,28-32,43,47,146,158
+  s_68cd0db0a8fc3a::t_aa588583630308 34,36-38,41-42,181-182
+  s_68cd0db0a8fc3a::t_cea62bf591fe9c 11,20
+src/code_reviewer/sandbox/guest.py
+  s_68cd0db0a8fc3a::t_65d91a53a80721 78
+tests/helpers.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 115-137
+src/code_reviewer/sandbox/launch.py
+  s_68cd0db0a8fc3a::t_cea62bf591fe9c 16,116-121
+docs/development.md
+  s_68cd0db0a8fc3a::t_aa588583630308 118-119
+  s_68cd0db0a8fc3a::t_bdcc46a050bf51 20-27,46,59,105
+src/code_reviewer/evals.py
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 73
+  s_68cd0db0a8fc3a::t_2448c5e40414a5 17,74
+src/code_reviewer/cli.py
+  s_68cd0db0a8fc3a::t_216da23abb459f 104
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 92-98
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 5,26,35,48,82-83,111-113
+  s_68cd0db0a8fc3a::t_6d1b9ef20e6cea 49,63-71,78-81
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 34-35,65-69,94-95
+src/code_reviewer/sandbox/check_worker.py
+  s_68cd0db0a8fc3a::t_a13f0475666225 1-44,47-66
+  s_68cd0db0a8fc3a::t_aeb3bd8f15152e 45-46
+src/code_reviewer/sandbox/check.py
+  s_68cd0db0a8fc3a::t_8ba54b684ba653 156-157
+  s_68cd0db0a8fc3a::t_a13f0475666225 1-28,30-36,39-152,160-175,179,182-204
+  s_68cd0db0a8fc3a::t_f378ea931b258f 29,37-38,176
+  s_68cd0db0a8fc3a::t_5f830e1373ce3d 153-155,158-159
+  s_68cd0db0a8fc3a::t_6d1b9ef20e6cea 177-178,180-181
+src/code_reviewer/sandbox/openai_smoke.py
+  s_68cd0db0a8fc3a::t_65d91a53a80721 35
+src/code_reviewer/security.py
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 1-52
+src/code_reviewer/sandbox/smoke.py
+  s_68cd0db0a8fc3a::t_65d91a53a80721 26,46
+tests/test_sandbox_check.py
+  s_68cd0db0a8fc3a::t_5f830e1373ce3d 160-161
+  s_68cd0db0a8fc3a::t_153a68247a0456 1-132,134-138,141-159,162-188
+  s_68cd0db0a8fc3a::t_f378ea931b258f 133,139-140
+docs/security-roadmap.md
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 58
+  s_68cd0db0a8fc3a::t_aa588583630308 23-24
+tests/test_evals.py
+  s_68cd0db0a8fc3a::t_fc28b2879c61b7 181-182,187-188
+  s_68cd0db0a8fc3a::t_3a5748364a1ca0 192,220
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_bdcc46a050bf51 42-43,45,52
+  s_68cd0db0a8fc3a::t_aa588583630308 3,44,53-54
+tests/test_review_banner.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 52-53
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_aa588583630308 925-926
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 9-10,88,94,97,927
+sandbox/README.md
+  s_68cd0db0a8fc3a::t_65d91a53a80721 5-6,95
+  s_68cd0db0a8fc3a::t_aa588583630308 3-4
+sandbox/firecracker/build-offline-guest.sh
+  s_68cd0db0a8fc3a::t_cea62bf591fe9c 72-73,75,77
+tests/test_persona_flow.py
+  s_68cd0db0a8fc3a::t_b73a03660d62bf 506
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 68-69
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_7b74b3a1c5266e 37-39
+  s_68cd0db0a8fc3a::t_216da23abb459f 40-41
+  s_68cd0db0a8fc3a::t_3e0c3e86c82d26 23,27-33,42-47
+  s_68cd0db0a8fc3a::t_9b541e15b0cb26 1,19,34-36
+tests/test_flow_selection.py
+  s_68cd0db0a8fc3a::t_fa2cdde23c54c6 27-28
+src/code_reviewer/sandbox/artifacts.py
+  s_68cd0db0a8fc3a::t_b73a03660d62bf 1-51
+review.example.toml
+  s_68cd0db0a8fc3a::t_38691db30c6b24 1-2,4
+src/code_reviewer/replay.py
+  s_68cd0db0a8fc3a::t_322f01b69c98fb 120-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4a9ed7431df1b87f0a92fa249d023d1aae7a49a7",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
