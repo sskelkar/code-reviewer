@@ -14,6 +14,7 @@ from typing import List, Optional
 
 from .claude_cli import ClaudeError, ClaudeRunner
 from .config import ConfigError, load_config
+from .security import require_ready
 from .eval_cases import (EvalError, external_output, git, load_suite, local_file, outside,
                          pinned_commit, read_object, object_hash, validate_suite)
 from .eval_grading import load_experiment, render_evaluation, summarize_many, trial_documents
@@ -69,6 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command in ("init", "plan", "run"):
+            require_ready("claude")
         if args.command == "init":
             repo, output = args.repo.expanduser().resolve(), args.output.expanduser().resolve()
             external_output(output, repo)

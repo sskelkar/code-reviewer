@@ -1,5 +1,9 @@
 # Offline Firecracker prototype
 
+For the repository-owned Mac command that builds current source, runs both flows and no-key connected probes, saves the result and stops the dedicated worker, start with [`reviewer sandbox check`](../docs/sandbox-check.md). The low-level commands below remain engineering interfaces. [Alternative designs](../docs/sandbox-alternatives.md) records the single-VM options considered; the selected setup remains Lima plus Firecracker.
+
+**Current entry-point status:** the [security contract](../docs/security-contract.md) applies to every repository/provider. Public reviews and connected real-key execution are gated off; `reviewer review PR --preflight` reports blockers. Offline smoke and harmless no-key boundary checks below remain engineering tests, not production approval.
+
 This is the first implementation slice of the [one-VM-per-review architecture](../docs/sandbox-architecture.md). It supports a synthetic fake-Claude smoke and a separate **real-Claude startup probe without credentials or network**, and an **offline OpenAI adapter smoke**. Normal `reviewer` commands are unchanged; the separate [controlled connected pilot](../docs/sandbox-connected.md) now has its own Linux launcher, while production qualification remains pending.
 
 The whole Python review harness and its fresh headless subprocesses run inside one Firecracker guest. Both flows exercise grounded findings and consolidation, including a four-persona parallel round. The first smoke does not fetch GitHub, authenticate to Claude, contact a provider, publish anything or accept a target repository.
@@ -88,4 +92,4 @@ The [2026-10-26 review](../docs/sandbox-architecture.md#review-before-connected-
 
 ## Controlled connected pilot
 
-Use the [dedicated connected runbook](../docs/sandbox-connected.md) for `capsule` input preparation, the builder's `connected` option, no-key boundary probes and the separate Linux `connected` launcher. The normal reviewer and all offline workloads keep their existing interfaces. No personal repository/key has been used during implementation checks; the first actual review needs the operator's selected inputs/model/rates and local disposable key.
+Use the [dedicated connected runbook](../docs/sandbox-connected.md) for `capsule` input preparation, the builder's `connected` option, no-key boundary probes and the separate Linux `connected` launcher. Offline workloads keep their interfaces; normal review now has a shared release gate. No personal repository/key has been used during implementation checks; the first supported real review requires the qualified product workflow and completed production controls, not a temporary launcher or disposable-key exception.

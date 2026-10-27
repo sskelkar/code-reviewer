@@ -132,6 +132,8 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
 
 class DryRunTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
+        from .helpers import synthetic_frontend
+        synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
         self.ctx.body = "Replaces the prepared statement.\n\nSummary by SomeBot: this PR looks great."

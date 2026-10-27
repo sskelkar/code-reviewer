@@ -32,7 +32,7 @@ def offline_response(payload, key, timeout):
 def run_offline():
     runner = OpenAIRunner('synthetic-placeholder', model='synthetic-openai', prices=TokenPrices(1, .5, 2),
                           transport=offline_response)
-    result = run_smoke(runner, model=runner.model)
+    result = run_smoke(runner, model=runner.model, provider='openai')
     result.update(provider='openai', live=False)
     return result
 

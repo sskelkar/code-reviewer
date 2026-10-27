@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** v0 implemented and being tried on real pull requests; optional four-persona review implemented with an execution check; connected OpenAI sandbox pilot implemented and boundary-tested; next: controlled personal-repository live validation (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, controlled environment
+**Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; live frontends blocked while acquisition, security controls and authenticated dispatch are completed (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -39,14 +39,19 @@ The [security contract](security-contract.md) supersedes the weaker personal/Ope
 - [x] Verify nested KVM, both offline review flows, native Claude unauthenticated startup and simulated OpenAI execution
 - [x] Implement reusable bounded input/results, scoped external network policy, private bootstrap, non-root worker and initial deadline/cancellation checks
 - [x] Fix archive-stage status and skipped-file IO accounting defects; preserve failed-review diagnostics
-- [ ] Integrate the user-facing command, trusted operator configuration, provider selection and predictable private report storage
+- [x] Add a shared no-target-IO CLI/REPL preflight and refusal gate; remove current-directory security config and legacy host/model bypass entry points
+- [x] Pin the bytes actually staged for VMM execution and separate root-owned runtime/configuration from writable socket state
+- [x] Replace handwritten deployment drivers with `reviewer sandbox check`: current-code build, both offline flows, no-key connected probes, bounded private result and outer-worker lifecycle
+- [ ] Complete qualified user-facing execution dispatch and predictable private report storage
 - [ ] Implement bounded PR acquisition inside a qualified isolation boundary, with phase-scoped network access and no target execution
 - [ ] Qualify jailer, immutable runtime/snapshot, guest execution/syscall/resource controls and independent crash recovery
 - [ ] Resolve and qualify provider-specific credentials, guest-compromise exposure, egress and native tool behavior; no disposable-key waiver
 - [ ] Run repeatable adversarial containment and both-flow regressions; refuse unsupported or unenforced configurations
 - [ ] Resume the selected public PR through the supported workflow once the necessary controls are qualified; existing Claude-only production data authorization remains
 
-The [architecture](sandbox-architecture.md) records existing mechanics and the [roadmap](security-roadmap.md) orders the release work. The ordinary CLI remains unsandboxed and the separate connected OpenAI component is not production-qualified. Earlier live-pilot instructions are withdrawn; no real key or model request has been used in the sandbox.
+The [architecture](sandbox-architecture.md) records existing mechanics and the [roadmap](security-roadmap.md) orders the release work. The ordinary CLI now refuses live reviews before target/model activity; the separate connected OpenAI component is restricted to no-key probes while production controls remain incomplete. Earlier live-pilot instructions are withdrawn; no real key or model request has been used in the sandbox.
+
+The user chose to continue with Lima plus Firecracker after considering the extra Mac compatibility layer. [Alternative designs](sandbox-alternatives.md) records direct disposable Lima/Apple VMs and a dedicated Linux Firecracker host, without claiming identical security guarantees. No second backend will be built now. The [supported deployment check](sandbox-check.md) is a concrete runnable step, not completion of the live review workflow.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries

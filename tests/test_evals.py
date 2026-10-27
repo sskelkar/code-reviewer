@@ -178,16 +178,18 @@ class EvalTests(TempDirTestMixin, unittest.TestCase):
         dest = self.tmp / "private" / "suite.json"
         args = ["init", "--repo", str(self.ctx.git_dir), "--base", "main", "--head", "feature",
                 "--output", str(dest), "--title", "Update lookup", "--description", "Change lookup."]
-        self.assertEqual(self.cli(args), 0)
+        with patch("code_reviewer.evals.require_ready"):
+            self.assertEqual(self.cli(args), 0)
         case = load_suite(dest)["cases"][0]
         self.assertEqual(case["base"], self.ctx.base_sha)
         self.assertEqual(case["head"], self.ctx.head_sha)
         self.assertEqual(case["expectation_status"], "provisional")
-        self.assertEqual(self.cli(args), 2)
+        with patch("code_reviewer.evals.require_ready"):
+            self.assertEqual(self.cli(args), 2)
 
     def test_cli_run_label_grade_round_trip_and_invalid_label_does_not_write(self):
         root = self.tmp / "cli"
-        with patch("code_reviewer.evals.ClaudeRunner", return_value=FakeRunner([{"findings": [finding()]}])), \
+        with patch("code_reviewer.evals.require_ready"), patch("code_reviewer.evals.ClaudeRunner", return_value=FakeRunner([{"findings": [finding()]}])), \
                 patch("code_reviewer.evals.load_config", return_value=self.cfg):
             self.assertEqual(self.cli(["run", str(self.suite_path), "--repo", str(self.ctx.git_dir),
                                        "--output", str(root), "--passes", "1"]), 0)
@@ -215,7 +217,7 @@ class EvalTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(summary["underlying_scenarios"], 2)
         inside = self.ctx.git_dir / "answers.json"
         dump_json(inside, self.suite)
-        with patch("code_reviewer.evals.ClaudeRunner", side_effect=AssertionError("must not create runner")):
+        with patch("code_reviewer.evals.require_ready"), patch("code_reviewer.evals.ClaudeRunner", side_effect=AssertionError("must not create runner")):
             self.assertEqual(self.cli(["plan", str(inside), "--repo", str(self.ctx.git_dir),
                                        "--output", str(self.tmp / "bad")]), 2)
 

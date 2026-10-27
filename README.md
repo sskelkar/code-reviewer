@@ -8,7 +8,7 @@ A pull request review agent built on Claude Code. It runs independent review pas
 
 ## Quick start
 
-You need Python 3.9+, git, GitHub CLI (`gh`) authenticated for the repository, and Claude Code (`claude`) installed and logged in. Reviews use your Claude Code login and incur model usage.
+Current preflight needs Python 3.9+ and the editable installation below; it needs no GitHub/Claude login or API key. Git is used by offline tests. Live review prerequisites will be qualified with the supported sandbox backend, rather than discovered from the target project.
 
 ```bash
 git clone https://github.com/sskelkar/code-reviewer.git
@@ -17,31 +17,34 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e .
-reviewer doctor
+reviewer doctor  # offline release status; currently exits 1 while controls are missing
 ```
 
 Keep the editable installation and its source checkout: prompts and criteria are loaded from it. Keep the virtual environment active when running `reviewer`. Installation pulls in `tomli` on Python 3.9/3.10; otherwise runtime code uses the standard library.
 
-Before the first real review, run `reviewer doctor --live` to check isolation and the Claude reply format. It makes one small paid call; plain `doctor` makes no model calls. See [environment checks](docs/development.md#verifying-against-the-real-claude-cli) for what this validates.
-
-From a local clone of the project you want reviewed, try a small PR you know well:
+Check the configured request and production release blockers without fetching code, reading credentials or calling a model:
 
 ```bash
-# Preview and save default-only prompts; no model calls or checkout creation.
-reviewer review OWNER/REPO#123 --mode single-agent --dry-run
-
-# One pass to check the review end to end.
-reviewer review OWNER/REPO#123 --mode single-agent --passes 1
-
-# Normal review: up to six passes with convergence stopping.
-reviewer review OWNER/REPO#123 --mode single-agent
+reviewer review OWNER/REPO#123 --mode single-agent --preflight
+reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --preflight
 ```
 
-Dry runs omit project-rule discovery/classification. A review uses the current clone when it matches the PR's repository; otherwise it uses a cached clone. Your working tree is left unchanged.
+Preflight returns JSON and exits nonzero while required controls are missing. Both providers are currently blocked. CLI/REPL reviews, `--dry-run`, `doctor --live`, paid replay/eval entry points and the old connected real-key path refuse execution before target/model activity. No flag, repository setting or model choice can waive missing controls. The offline flow algorithms and harmless no-key deployment checks remain testable.
+
+On a Mac with a prepared dedicated Lima worker and the pinned runtime artifacts, run the supported deployment command:
+
+```bash
+reviewer sandbox check --artifacts /path/to/verified-artifacts \
+  --lima-home /path/to/dedicated-lima-state --instance reviewer-sandbox
+```
+
+It builds the current code, runs both flows with simulated replies plus no-key boundary probes, saves a private JSON report and stops the worker. It accepts no repository or API key. See [prerequisites and results](docs/sandbox-check.md); this verifies deployment, not a live PR review or production qualification.
+
+Operator settings come only from an explicit `--config` outside Git working trees or `~/.code-reviewer/review.toml`. Current-directory `review.toml` is ignored. Files must be bounded regular files owned by the operator/root and not writable by other users. There is no host-review fallback. Full PR acquisition and supported sandbox execution remain required integration work; see the [security contract](docs/security-contract.md).
 
 ## Review flows
 
-Both flows pin the PR's commits, load its diff and criteria, and give fresh Claude sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
+The implemented flow algorithms below are exercised directly by offline tests and guest workloads; the public review entry point is currently gated. Both flows pin the PR's commits, load its diff and criteria, and give fresh Claude sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
 
 Each new review fetches the current PR head and target-branch tip into private refs, without updating your branches, remote-tracking refs or tags. Those commits stay fixed only for that run. The diff is merge-base to PR head; the checkout is the PR head, not a simulated merge with the latest target.
 
@@ -140,7 +143,7 @@ The CLI posts only with an explicit `--post` flag; it does not ask for an additi
 
 ## Configuration
 
-Copy [review.example.toml](review.example.toml) to the reviewed project's `review.toml` or `~/.code-reviewer/review.toml`. An explicit file goes before the subcommand: `reviewer --config PATH review OWNER/REPO#123`. Command options override file settings for that run.
+Copy [review.example.toml](review.example.toml) outside Git working trees to `~/.code-reviewer/review.toml` (recommend mode 0600). Project-directory configuration is not loaded. An explicit file goes before the subcommand: `reviewer --config PATH review OWNER/REPO#123`. Command options override file settings for that run.
 
 Common settings are `review_mode`, `persona_passes`, `persona_parallel`, the `model_*` roles, `criteria_mode`, `extra_exclude_patterns` and run/call budgets. `--model sonnet` changes **all roles**. Single-agent pass controls do not change persona scheduling. See the [complete settings reference](docs/usage.md#configuration) for defaults and limits.
 
@@ -152,7 +155,7 @@ Reviewers and the persona Verifier have Read/Grep/Glob in a temporary checkout; 
 
 For normal CLI reviews, PR metadata, diff, criteria and files read during review are sent through your Claude Code login. Email redaction covers PR text only; repository files and diffs are not redacted. Saved runs contain code and must be treated accordingly. Use only repositories permitted by your organization's policy.
 
-This remains a controlled-environment tool. Normal CLI isolation relies on Claude Code restrictions, with no whole-job OS sandbox. The existing [connected sandbox component](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. Its weaker pilot-use exception is superseded by the [common security contract](docs/security-contract.md); it is not the final supported entry point. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
+This remains a controlled-environment tool. The old host-execution path is no longer reachable through public review entry points; required production controls currently prevent live reviews. The existing [connected sandbox component](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. Its weaker pilot-use exception is superseded by the [common security contract](docs/security-contract.md); it is not the final supported entry point. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
 
 The [security roadmap](docs/security-roadmap.md) tracks production jailer, filesystem/execution/syscall controls and Claude qualification. Production stays Claude-only. Secret scanning and stronger prompt-injection/posting safeguards remain unfinished. Read [privacy and safety](docs/usage.md#privacy-and-safety) and the [hardening backlog](docs/proposal.md#5-safety-v0-baseline) before broader use.
 
@@ -175,6 +178,8 @@ Current priority: integrate one repository-owned reviewer workflow and close the
 | [Usage reference](docs/usage.md) | CLI/REPL commands, reports, project criteria, all settings, storage and troubleshooting |
 | [Security contract](docs/security-contract.md) | Common requirements and release gates for all repositories/providers |
 | [Connected sandbox](docs/sandbox-connected.md) | Existing engineering components, boundary probes and current limitations |
+| [Run the sandbox check](docs/sandbox-check.md) | Supported Mac command: build, both flows, boundary probes, private result and shutdown |
+| [Sandbox alternatives](docs/sandbox-alternatives.md) | Single-VM Mac designs, dedicated Linux and security tradeoffs |
 | [Architecture](docs/architecture.md) | Code map, flow ownership and detailed single-agent diagrams |
 | [Development](docs/development.md) | Setup, tests, common changes, saved-run debugging and Comparator replay |
 | [Prompt contracts](prompts/README.md) | Model inputs, outputs, tools and deterministic validation |

@@ -75,7 +75,7 @@ def run_job(sock, root, *, probe_network=network_probes):
     key = secret
     runner = OpenAIRunner(key, model=settings['model'], prices=TokenPrices(*settings['prices']),
                           transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
-    cfg = Config(review_mode=settings['mode'], model_reviewer=runner.model, model_comparator=runner.model,
+    cfg = Config(provider='openai', review_mode=settings['mode'], model_reviewer=runner.model, model_comparator=runner.model,
                  model_resolver=runner.model, model_verifier=runner.model, criteria_mode='merge',
                  min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
                  persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],

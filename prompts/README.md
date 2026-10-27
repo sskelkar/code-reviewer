@@ -93,3 +93,9 @@ The [sandbox prototype](../docs/sandbox-architecture.md) packages these same ass
 The [experimental OpenAI backend](../docs/sandbox-openai.md) reuses these prompts for synthetic sandbox tests. It translates output schemas into the provider's closed/required-field format without mutating common assets; bounded local function definitions supply Read/Grep/Glob. No model-facing prose or production provider selection changes. Offline protocol/guest tests are evidence of plumbing, not live model quality or schema acceptance.
 
 For the implemented [personal-repository OpenAI pilot](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26), reuse the existing prompts and validators. Synthetic fixed replies/finding counts belong only to offline tests; a live review may find no issues. The confirmed design uses external egress restrictions and a disposable key inside the guest, deferring a custom relay. The [connected Linux workload](../docs/sandbox-connected.md) is now implemented with the same prompt prose and validators; production remains Claude-only.
+
+## Production entry-point gate
+
+The supported [`reviewer sandbox check`](../docs/sandbox-check.md) command packages these same assets from current source and executes both flows with simulated replies in Firecracker, followed by no-key boundary probes. It adds no model-facing instructions and provides no live-review exception.
+
+The current CLI/REPL `review --preflight` shows code-owned release blockers without target/model/credential activity. Live reviews, legacy host dry-runs, live doctor, paid replay/eval entry points and the connected real-key path refuse until qualified sandbox integration exists. Operator configuration is not loaded from the target directory. Direct synthetic flow/guest tests still exercise these unchanged prompt contracts with fake responses. The gate and artifact/configuration hardening do not change model-facing prompt prose or claim review-quality improvement.

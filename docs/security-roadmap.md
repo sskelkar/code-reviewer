@@ -20,6 +20,8 @@ The [security contract](security-contract.md) is authoritative. The user require
 
 ## Build next, in order
 
+The supported [no-key deployment command](sandbox-check.md) now removes external check drivers and owns the existing worker/build/result lifecycle. It does not complete the PR acquisition or authenticated dispatcher in step 1. The user chose to retain the current VM setup; [alternatives](sandbox-alternatives.md) are documented for future comparison rather than implemented in parallel.
+
 No new Python dependencies are authorized. Keep the one-job VM design; add services or isolation layers only when a required boundary calls for them.
 
 | Step | Work | Exit evidence |
@@ -53,7 +55,7 @@ A secret detector reduces disclosure risk but cannot certify a repository secret
 
 Fresh contexts, pinned head/base, limited tools, saved inputs/results, deterministic validators/grounding, budgets/time limits and persona process-group cleanup are implemented. Export already skips links/special files and checks containment; Git diff disables external diff/text conversion. These are useful building blocks, not whole-job isolation.
 
-The ordinary CLI still implicitly loads current-directory `review.toml`, which can select the Claude executable and isolation flags. A harmless synthetic load confirmed acceptance. Fix that authority boundary before any real sandbox CLI integration; a VM cannot rescue a host launcher that executes repository-selected code first.
+The former current-directory `review.toml` authority is removed: only an explicit operator file outside Git working trees or the private global location is read, using bounded no-follow descriptor opens and ownership/write-permission checks. Both frontends have a shared no-target-IO `--preflight`; live entry points refuse missing controls. Full qualified acquisition/execution/report integration remains incomplete. Runtime artifacts are now hashed while staging their exact bytes into root-owned files outside the VMM-writable socket directory, closing the earlier verify-then-reopen race.
 
 ## Local Firecracker feasibility (2026-10-25)
 

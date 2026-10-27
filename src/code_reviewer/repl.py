@@ -66,8 +66,7 @@ class Session:
     # ------------------------------------------------------------------ main loop
 
     def loop(self) -> None:
-        local = git_ops.local_repo_info(self.local_path)
-        self.out(welcome_text("%s/%s (%s)" % (local.owner, local.repo, local.host) if local else None))
+        self.out(welcome_text(None))
         while True:
             try:
                 line = self.ask("reviewer> ")
@@ -125,13 +124,6 @@ class Session:
             self.out("error: %s" % exc)
             return
 
-        local = git_ops.local_repo_info(self.local_path)
-        if local is not None and not git_ops.same_repo(local, ref):
-            answer = self.ask("This PR belongs to %s, but the current directory is %s/%s. Review anyway using a cached clone? [y/N] " % (
-                ref.slug, local.owner, local.repo))
-            if answer.strip().lower() not in ("y", "yes"):
-                return
-
         try:
             outcome = run_review(cfg, self.runner, ref, options, self.local_path)
         except REVIEW_ERRORS as exc:
@@ -139,6 +131,9 @@ class Session:
             return
         except KeyboardInterrupt:
             self.out("cancelled before any pass completed")
+            return
+        if outcome.preflight:
+            self.out(json.dumps(outcome.preflight, indent=2))
             return
         if outcome.dry_run:
             self.out(render_dry_run(outcome.dry_run))

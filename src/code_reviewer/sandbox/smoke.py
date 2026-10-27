@@ -23,7 +23,7 @@ def git(repo, *args):
     return result.stdout.strip()
 
 
-def run_smoke(runner=None, *, model="haiku", expected_findings=1):
+def run_smoke(runner=None, *, model="haiku", expected_findings=1, provider="claude"):
     results = {}
     with tempfile.TemporaryDirectory(prefix='reviewer-vm-smoke-') as name:
         root = Path(name)
@@ -43,7 +43,7 @@ def run_smoke(runner=None, *, model="haiku", expected_findings=1):
         fake.write_bytes(Path(__file__).with_name('fake_claude.py').read_bytes())
         fake.chmod(0o700)
         for mode in ('single-agent', 'agent-personas'):
-            cfg = Config(model_reviewer=model, model_comparator=model, model_resolver=model, model_verifier=model,
+            cfg = Config(provider=provider, model_reviewer=model, model_comparator=model, model_resolver=model, model_verifier=model,
                          review_mode=mode, criteria_mode='defaults_only', min_passes=1, max_passes=2,
                          persona_passes=1, claude_bin=str(fake), runs_dir=str(root / mode))
             result = Engine(cfg, runner if runner is not None else ClaudeRunner(str(fake))).review(ctx)

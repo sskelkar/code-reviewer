@@ -6,15 +6,33 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 `Engine` selects one flow before PR preparation and asset loading. Each flow owns orchestration, model contracts, master/result types and presentation. `shared/` owns transport, git/diff handling, criteria discovery, grounding, storage and accounting; it imports neither flow. Frontends dispatch rendering through `presentation.py`.
 
-Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. For normal CLI reviews, every call is a fresh headless Claude session. The connected pilot injects an OpenAI runner with fresh per-call conversation state instead. Models propose; Python validates, accounts and writes state.
+Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. In the internal Claude flow algorithm, every call is a fresh headless session; the public frontend is currently gated. The connected pilot injects an OpenAI runner with fresh per-call conversation state instead. Models propose; Python validates, accounts and writes state.
+
+## Public entry-point boundary
+
+`review_flow.run_review` is now a no-target-IO preflight/refusal boundary shared by CLI and REPL. `security.py` reports code-owned release blockers per provider; operator config cannot assert readiness. There is no qualified execution backend yet. Even changing every status row to qualified would not re-enable the legacy host flow: dispatch still refuses until actual sandbox integration is implemented.
+
+```mermaid
+flowchart TD
+    ENTRY["CLI / REPL review request"] --> CFG["Trusted operator configuration only<br/>Ignore current-directory review.toml"]
+    CFG --> REQUEST["Validate effective options and parse PR identifier<br/>No Git or target-directory inspection"]
+    REQUEST --> CHECK{"Preflight?"}
+    CHECK -->|yes| JSON["Print provider controls and request settings<br/>Nonzero while release blockers exist"]
+    CHECK -->|no| GATE["Require qualified production controls"]
+    GATE --> STOP["Currently refuse before fetch / credentials / inference<br/>No legacy host fallback"]
+```
+
+The low-level connected real-key path, `doctor --live`, and paid replay/eval entry points also enforce the boundary. No-key synthetic deployment checks and direct injected-runner algorithm tests remain available. `config.py` reads only operator-selected/outside-repository configuration through bounded no-follow descriptor opens.
 
 ## Sandbox deployment
 
 The [security contract](security-contract.md) governs the final product for every repository/provider. Existing components below are not yet production-qualified, and temporary personal-pilot launch scripts are withdrawn.
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [connected pilot](sandbox-connected.md) is a separate Linux-only entry point: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. Only after admission and boundary checks does the host request and deliver the disposable key. Fixed bounded report files return over vsock. The regular CLI still constructs `ClaudeRunner` and does not select the sandbox.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [connected pilot](sandbox-connected.md) is a separate Linux-only entry point: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. The earlier key mechanism requested the key after admission/probes; the real-key path is now gated off, and only no-key engineering checks may launch. Fixed bounded report files return over vsock. The regular CLI constructs a runner object but its release boundary prevents host execution; the qualified sandbox dispatch is not implemented yet.
 
 Three separate offline workloads exercise fake-Claude review, simulated-OpenAI review, and real-Claude startup/auth refusal. No-key connected deployment checks also pass; actual authenticated inference and personal-repository compatibility remain pending. Production jailer, immutable snapshot, guest execution/syscall policy and authenticated Claude qualification remain future gates. See the [offline runbook](../sandbox/README.md) and connected runbook for their distinct interfaces.
+
+The public `reviewer sandbox check` command in `sandbox/check.py` now owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates only a harmless fixture and verifies host network cleanup; it accepts no PR or key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
 
 ## Code map
 
@@ -22,6 +40,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 
 | Location | Responsibility |
 |---|---|
+| `security.py`, `review_flow.py` | Shared no-target-IO readiness/refusal boundary; no caller-supplied readiness flag |
 | `engine.py`, `flows/__init__.py` | Stable API and one-time mode selection |
 | `flows/single_agent/flow.py` | Complete current review sequence and pass loop |
 | `flows/single_agent/passes.py`, `stop_policy.py` | One pass and convergence/failure/budget rules |
@@ -38,20 +57,20 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `progress.py`, `post.py`, `doctor.py`, `replay.py` | Progress, confirmed posting, environment checks and Comparator replay |
 | `backends/openai.py`, `backends/read_tools.py` | Optional stdlib Responses adapter and bounded descriptor-based Read/Grep/Glob; injected only by separate sandbox workloads |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
+| `sandbox/check.py`, `check_worker.py` | Supported no-key Mac deployment command and connected Linux fixture/cleanup check |
 | `sandbox/capsule.py`, `git_input.py`, `network.py`, `probes.py` | File-only target transfer, in-guest Git admission/export, external network enforcement and harmless probes |
-| `sandbox/bundle.py`, `image.py`, `launch.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
+| `sandbox/artifacts.py`, `bundle.py`, `image.py`, `launch.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
 | Legacy package-root modules | Small compatibility exports; edit canonical flow/shared files instead |
 
 Shared code imports no workflow. Flow-owned result types stay inside the flow; `code_reviewer.models.RunResult` remains a compatibility export of the single-agent result.
 
 ## Single-agent implementation
 
-The flow below follows one `reviewer review <pr>` (or `review` inside the interactive session) step by step, with the module that does each.
+The flow below explains the implemented internal algorithm and legacy preparation helpers. It is exercised programmatically by synthetic tests/guest workloads; the public frontend above does not currently execute it.
 
 ```mermaid
 flowchart TD
-    U["<b>You</b><br/>reviewer review PR<br/><i>cli.py or repl.py</i>"] --> RF["<b>review_flow.run_review</b><br/>shared by CLI and REPL"]
-    RF --> SELECT["<b>Engine</b><br/>select single-agent"]
+    U["Programmatic Engine / synthetic workload<br/>Not current public frontend dispatch"] --> SELECT["<b>Engine</b><br/>select single-agent"]
     SELECT --> PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
     PREP --> RED["<b>InputBuilder.redact</b><br/>replace email addresses in PR text"]
     RED --> DIFF["<b>InputBuilder.load_diff</b> (diffview)<br/>merge-base diff, drop lockfiles and generated files,<br/>refuse empty or oversized PRs"]

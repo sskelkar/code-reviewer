@@ -49,6 +49,8 @@ class BannerContentTests(unittest.TestCase):
 
 class BannerInTheCliTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
+        from .helpers import synthetic_frontend
+        synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
 

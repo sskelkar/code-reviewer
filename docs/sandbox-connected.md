@@ -1,8 +1,10 @@
 # Connected sandbox implementation and engineering checks
 
+Use [`reviewer sandbox check`](sandbox-check.md) for the supported Mac build/check/shutdown lifecycle. It generates its harmless input inside the dedicated worker and needs no key or existing project clone. The lower-level components below remain useful for development; authenticated PR review is not enabled by this check.
+
 **Current direction:** the [security contract](security-contract.md) supersedes the weaker personal-repository pilot scope. The code below is reusable engineering implementation, not the production-qualified user entry point. Do not run the temporary personal-pilot scripts. Every repository/provider must meet the same release gates; production data still requires its approved provider.
 
-Implemented 2026-10-26 as an initial OpenAI-connected path in the [architecture](sandbox-architecture.md). The ordinary `reviewer` command remains Claude-backed and unsandboxed. The separate Linux module runs the selected review flow inside one Firecracker VM but lacks the full production controls and integrated PR workflow. Commands below document the engineering components; they are not authorization for a credential-bearing review before those gaps are resolved.
+Implemented 2026-10-26 as an initial OpenAI-connected path in the [architecture](sandbox-architecture.md). The ordinary `reviewer` command now reports `--preflight` readiness and refuses live reviews until the security gates and sandbox dispatch are implemented. The separate Linux module runs the selected review flow inside one Firecracker VM but lacks the full production controls and integrated PR workflow. Commands below document the engineering components; they are not authorization for a credential-bearing review before those gaps are resolved.
 
 ## What is implemented
 
@@ -83,19 +85,13 @@ The probe's dummy model/rates are not used for inference. It accepts no key, mak
 
 The output directory must be new. Missing/failed probes or host policy prevent key release and prevent a review from starting. This is repeatable evidence for the listed probes, not an attestation that a malicious guest report is truthful or that every possible escape is prevented.
 
-## Run the controlled review
+## Credential-bearing review is disabled
 
-Use the same command with a **new result directory**, remove `--probe-only`, and choose an accessible actual OpenAI model plus verified USD-per-million input/cached-input/output token rates. Start with `--passes 1 --parallel 1`; use `--mode agent-personas` to select the persona flow. Passes are per persona there. No implicit Haiku-to-OpenAI mapping exists.
+The former real-key path in `connected.run` now checks the common production release gate **before** platform checks, input access, network/VM setup or key prompting. `probe_only=False` is refused while controls are missing. The temporary external pilot launcher is withdrawn. CLI/REPL use the same code-owned gate; use `reviewer review PR --provider openai --preflight` to inspect blockers without target activity. There is no configuration flag that certifies readiness.
 
-The launcher prompts invisibly for the disposable API key only after admission, policy and guest probes pass. Run it interactively in the dedicated Linux terminal; noninteractive use without `--key-fd` is refused so `getpass` cannot fall back to an echoing prompt. For automation, `--key-fd N` reads a bounded key from an already-open private descriptor; never put the key itself in an argument, source file, shell history or chat. No environment/keychain discovery or host-home mount is used. Probe-only mode rejects `--key-fd`.
+Root-owned runtime artifacts are now copied and hashed in one bounded pass using pinned source descriptors. A changed source, symlink/hardlink, special file, oversize input or hash mismatch refuses staging; partial output is removed and an existing destination is never replaced. The VMM's writable socket directory is separate from root-owned runtime/configuration files. This closes the earlier verified-path/reopen race but does not substitute for a production jailer or complete host confinement.
 
-Defaults: dollar estimate cap $3, per-call estimate allowance $0.50, one pass, one persona worker, whole-job deadline 900 seconds. Flags: `--budget`, `--call-budget`, `--passes` (1–10), `--parallel` (1–4), `--mode` and `--timeout` (60–1800 seconds). These local token-rate estimates are not provider-enforced spending limits. HTTP inactivity limits and unknown-cost handling remain in the [OpenAI adapter](sandbox-openai.md); a killed request may still be billed.
-
-On success, the host validates/exports only `report.md`, `summary.md` and `stats.json` (each at most 4 MiB; aggregate 8 MiB). Files are UTF-8, JSON artifacts parse, names are fixed, writes never overwrite old results, sudo-launched results are privately owned by the invoking operator, and literal copies of the known test key are refused. This is not comprehensive secret detection or report-truth verification. Reports contain target code/metadata and untrusted Markdown: keep them private and do not auto-execute, auto-publish or render active remote content. Full prompts/raw run directories stay in the disposable guest and are discarded.
-
-Partial review, budget exhaustion and the flows' `failures` state export their diagnostic reports but return nonzero. Infrastructure/probe/deadline failure returns no successful report and no host fallback. It may leave usage unknown if a key/request had already been released.
-
-**Revoke the disposable key after the test.** Cleanup removes VM/proxy, TAP, the job's nft table, sockets and scratch on handled outcomes; it cannot revoke the provider credential. Hard kills/host failure can leave restrictive stale infrastructure until operator inspection; automatic production recovery/jailer/audit enforcement is a separate gate.
+No-key checks above remain available as engineering tests. Real authentication/inference and private report workflow must be integrated and qualified before the supported entry point is enabled. No real key or model call has been used so far.
 
 ## Validation and remaining scope
 

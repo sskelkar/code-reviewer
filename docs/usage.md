@@ -1,59 +1,29 @@
 # Usage reference
 
+For an already prepared Mac/Lima worker, `reviewer sandbox check --artifacts DIR --lima-home DIR --instance NAME` builds the current code, runs both flows with simulated replies and no-key boundary probes, saves a private report and stops the worker. See the [deployment command](sandbox-check.md) for prerequisites. This accepts no repository/key and does not enable live reviews.
+
 Start with the [README quick start](../README.md#quick-start). This guide covers commands, interpreting results, project criteria, configuration, storage and troubleshooting.
 
 [Commands](#reviewing-a-pull-request) · [Results](#reading-the-report) · [Project criteria](#preparing-your-project-optional-recommended) · [Configuration](#configuration) · [Storage](#where-things-are-stored-and-cleaning-up) · [Troubleshooting](#troubleshooting)
 
 ## Reviewing a pull request
 
-### Interactive (recommended)
-
-Start the REPL inside the project you want to review. It then uses your local clone, so nothing large is downloaded.
+### Current supported preflight
 
 ```bash
-cd ~/code/my-service
-source ~/code/code-reviewer/.venv/bin/activate
-reviewer
-reviewer> review https://github.com/my-org/my-service/pull/123
+reviewer review OWNER/REPO#123 --preflight
+reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --passes 1 --preflight
 ```
 
-On start the prompt shows a welcome banner that lists every command, grouped by when you use them. You can also write `owner/repo#123`. While a review runs it prints one line per stage and pass:
+The CLI prints JSON with the provider, effective request settings and production release blockers. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means required controls are missing; this is currently the expected state for both providers. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
 
-```
-[00:04] diff: 12 files, 340 changed lines (2 excluded)
-[00:09] criteria: 10 default + 6 project rules from 3 files, 1 ignored references
-[00:41] pass 1: 5 new, 0 matched, 0 ungrounded · $0.17 · quiet streak 0/2
-...
-[07:12] converged after 4 passes
-```
+The same command works in the REPL as `review OWNER/REPO#123 --preflight`. The REPL no longer probes the current Git directory at startup or before reviewing. No code is fetched or checkout created by the public frontend yet: the repository-owned sandbox execution path is still being integrated.
 
-The `review` command takes the [review options](#review-options) below, for example `review <url> --passes 1`. Type `review --help` in the prompt to see them.
+### Live review is gated
 
-If the PR belongs to a different repository than your current directory, it asks first and then uses a cached clone under `~/.code-reviewer/cache/`. Outside any git repository it does the same.
+CLI/REPL review, `--dry-run`, `doctor --live`, the connected real-key module path, and retained paid replay/eval commands now refuse before target or model activity. `--post`, personal/public code, model/provider selection and operator config cannot bypass missing controls. `--preflight` cannot be combined with `--post` or `--dry-run`. No host-review fallback exists.
 
-When the review ends it prints the **review summary**: the findings, in exactly the text that `post` would send as a PR comment, so you can read it, copy it, or post it. Below it come one line about the run (passes, why it stopped, cost) and the path of the **full report**, which is there for digging into what the agent did. Then you can use these commands:
-
-| Command | What it does |
-|---|---|
-| `show F-007` | Full detail of one finding |
-| `mark F-007 real\|nit\|wrong` | Record your judgment. Saved in the run directory (`labels.json`) so you can judge how much to trust the tool |
-| `missed "no length check in create()"` | Record a real issue the agent did not find |
-| `drop F-007` / `undrop F-007` | Exclude a finding from the comment you may post |
-| `post [--tiers High,Medium,Low]` | Preview the PR comment (the review summary), then post it **only if you answer `y`** |
-| `summary [--tiers High,Medium]` | Show the review summary again, with your `drop`s applied. `--tiers` filters by confidence; by default all tiers are shown |
-| `open` | Open the full report file |
-| `help`, `quit` | |
-
-Ctrl-C during a review stops the current call and gives you a report from the passes that finished.
-
-### One-shot (scripts)
-
-```bash
-reviewer review OWNER/REPO#123 --mode single-agent --passes 4 --model sonnet
-reviewer review OWNER/REPO#123 --mode agent-personas --model haiku
-```
-
-In a terminal it first prints a short banner with this run's settings and the options you can add (it is not printed when output is piped or redirected, so scripts and CI logs stay clean). It then prints the review summary, one line about the run and the path of the full report, and exits (non-zero if the review failed). It **never posts** unless you pass `--post`, which is your explicit authorization. `reviewer review --help` lists every option.
+Both internal review algorithms remain implemented and covered by offline tests; the descriptions of their reports, agreement and saved artifacts below explain that behavior. They are not instructions to bypass the release gate. Prior host-CLI runs are historical evidence. Once a qualified sandbox backend is integrated, the supported frontend must use it rather than revive the old host path. See the [security contract](security-contract.md).
 
 ### Review options
 
@@ -61,17 +31,19 @@ These work the same in the interactive prompt (`review <url> ...`) and the one-s
 
 | Option | Meaning |
 |---|---|
+| `--preflight` | Show release blockers and effective request without target/model/credential activity |
+| `--provider NAME` | `claude` or `openai`; identical security requirements |
 | `--parallel N` | Persona-only concurrency from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; rejected for single-agent |
 | `--mode NAME` | Select `single-agent` (default) or `agent-personas`. Each runs its own workflow. Works in both CLI and REPL |
 | `--passes N` | **Single-agent:** maximum review attempts, default `max_passes` (6). **Agent-personas:** scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots and no quiet-pass stopping. N must be a positive whole number. In single-agent mode: The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` runs exactly one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
 | `--model NAME` | Model for all roles (including persona classification and verification), an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
 | `--keep-checkout` | Keep the temporary read-only checkout so you can inspect exactly what the reviewer saw. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
-| `--dry-run` | Preview default-only inputs and stop: the PR title, description and commit messages, diff size, criteria, tools and the `claude` command. **No model is called, nothing is posted and no checkout is created.** The exact prompts and the redacted PR text are saved under the run's `input/` (persona prompts under `input/personas/`). The project's own criteria need a model call to resolve, so a dry run includes only the default rules. Cannot be combined with `--post` |
+| `--dry-run` | Legacy target/prompt preview; currently refused because it needs qualified target preparation. Use `--preflight` for a no-target-IO readiness report |
 | `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
 | `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. In the interactive prompt use the `post` command instead |
 | `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
-| `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (or `reviewer --config PATH` to start the prompt). Settings file to use instead of `./review.toml` or `~/.code-reviewer/review.toml` |
+| `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (or `reviewer --config PATH` to start the prompt). Explicit trusted operator file outside Git working trees, replacing `~/.code-reviewer/review.toml` |
 
 Options override the settings file for that run only. Everything else (budgets, thresholds, criteria mode, ...) is set in [Configuration](#configuration).
 
@@ -149,7 +121,7 @@ For single-agent, edit [src/code_reviewer/flows/single_agent/criteria/general.md
 
 ## Configuration
 
-Settings come from a TOML file, first found of: `--config PATH`, `./review.toml` (current directory), `~/.code-reviewer/review.toml`. Copy [review.example.toml](../review.example.toml) and change what you need; every key is optional. Unknown keys are rejected so typos do not pass silently.
+Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` only. Current-directory `review.toml` is ignored. Explicit files inside Git working trees are rejected, along with symlinks/hardlinks, non-regular/oversized files, foreign ownership and group/other-write permissions. The loader uses directory-relative no-follow opens and a 64 KiB limit. A security-ready flag is not a configuration option. Copy [review.example.toml](../review.example.toml) and change what you need; every key is optional. Unknown keys are rejected so typos do not pass silently.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -249,6 +221,6 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Sandbox prototype status
 
-Normal `reviewer` commands remain Claude-backed without whole-job VM isolation; this page describes that CLI/REPL. The separate [connected Linux command](sandbox-connected.md) now runs either review flow with an OpenAI backend inside a disposable Firecracker VM. It accepts a bounded local Git-object capsule with full base/head hashes, not a PR URL; its explicit settings do not load target `review.toml`. It privately requests a disposable key after admission/probes and exports fixed bounded reports without posting. No-key boundary/cleanup checks pass; authenticated personal-project inference has not been run.
+Normal `reviewer` commands now go through the shared release gate; live reviews are unavailable until the qualified sandbox workflow is integrated. The separate [connected Linux component](sandbox-connected.md) contains both-flow OpenAI execution mechanics, but its real-key path is now gated off; only harmless no-key checks are enabled. It accepts a bounded local Git-object capsule with full base/head hashes, not a PR URL; its explicit settings do not load target `review.toml`. The earlier private runtime-key mechanism and bounded report export remain internal code; live dispatch is refused until the shared production gates and qualified workflow are complete. No-key boundary/cleanup checks pass; authenticated personal-project inference has not been run.
 
 The [offline workloads](../sandbox/README.md) separately exercise fake-Claude and simulated-OpenAI review, plus [real-Claude startup](sandbox-runtime-auth.md) without credentials/network. The [architecture](sandbox-architecture.md) and [security roadmap](security-roadmap.md) distinguish implemented pilot controls from pending production jailer/filesystem/execution/syscall and Claude qualification. The regular CLI has no `--sandbox` switch or automatic fallback.

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import math
+import stat
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -108,7 +110,19 @@ class Config:
     persona_passes: int = 3
     persona_parallel: int = 4
 
+    provider: str = "claude"
+
     def validate(self) -> None:
+        if self.provider not in ("claude", "openai"):
+            raise ConfigError("provider must be claude or openai; no fallback")
+        for name in ("call_budget_usd", "run_budget_usd"):
+            value = getattr(self, name)
+            try:
+                valid = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and value > 0
+            except OverflowError:
+                valid = False
+            if not valid:
+                raise ConfigError("%s must be finite and positive" % name)
         if isinstance(self.persona_parallel, bool) or not isinstance(self.persona_parallel, int) or not 1 <= self.persona_parallel <= 4:
             raise ConfigError("persona_parallel must be an integer from 1 to 4")
         if isinstance(self.persona_passes, bool) or not isinstance(self.persona_passes, int) or self.persona_passes < 1:
@@ -156,8 +170,37 @@ def _read_toml(path: Path) -> Dict[str, Any]:
             raise ConfigError(
                 "reading %s needs Python 3.11+ or the 'tomli' package (pip install tomli)" % path
             ) from exc
-    with open(path, "rb") as handle:
-        return toml_lib.load(handle)
+    return toml_lib.loads(_operator_bytes(path).decode("utf-8"))
+
+
+def _operator_bytes(path: Path) -> bytes:
+    if os.name != "posix":
+        raise ConfigError("trusted operator configuration currently requires POSIX file controls")
+    # Pin each directory descriptor so a concurrent symlink swap cannot redirect
+    # the configuration open. Canonical parents also support macOS /tmp aliases.
+    if path.is_symlink():
+        raise ConfigError("operator configuration must not be a symlink")
+    canonical = path.parent.resolve(strict=True) / path.name
+    if any((parent / ".git").exists() for parent in canonical.parents):
+        raise ConfigError("operator configuration must be outside Git working trees")
+    directory = os.open(canonical.anchor, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in canonical.parts[1:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(canonical.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    finally:
+        os.close(directory)
+    with os.fdopen(fd, "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 65536
+                or info.st_uid not in (0, os.geteuid()) or info.st_mode & 0o022):
+            raise ConfigError("operator configuration must be bounded, owned and not writable by other users")
+        data = handle.read(65537)
+    if len(data) > 65536:
+        raise ConfigError("operator configuration grew beyond its limit")
+    return data
 
 
 def _coerce(name: str, value: Any, default: Any) -> Any:
@@ -172,7 +215,13 @@ def _coerce(name: str, value: Any, default: Any) -> Any:
     if isinstance(default, float):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ConfigError("%s must be a number" % name)
-        return float(value)
+        try:
+            result = float(value)
+        except OverflowError as exc:
+            raise ConfigError("%s must be a finite number" % name) from exc
+        if not math.isfinite(result):
+            raise ConfigError("%s must be a finite number" % name)
+        return result
     if isinstance(default, list):
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise ConfigError("%s must be a list of strings" % name)
@@ -187,11 +236,11 @@ def _coerce(name: str, value: Any, default: Any) -> Any:
 def find_config_file(explicit: Optional[str]) -> Optional[Path]:
     if explicit:
         path = Path(explicit).expanduser()
-        if not path.is_file():
+        if not path.exists() and not path.is_symlink():
             raise ConfigError("config file not found: %s" % path)
         return path
-    for candidate in (Path.cwd() / "review.toml", DATA_DIR / "review.toml"):
-        if candidate.is_file():
+    for candidate in (DATA_DIR / "review.toml",):
+        if candidate.exists() or candidate.is_symlink():
             return candidate
     return None
 
@@ -200,7 +249,12 @@ def load_config(explicit: Optional[str] = None) -> Config:
     cfg = Config()
     path = find_config_file(explicit)
     if path is not None:
-        data = _read_toml(path)
+        try:
+            data = _read_toml(path)
+        except (OSError, ValueError) as exc:
+            if isinstance(exc, ConfigError):
+                raise
+            raise ConfigError("cannot read valid trusted operator configuration") from exc
         known = {f.name: f for f in fields(Config)}
         for key, value in data.items():
             if key not in known:

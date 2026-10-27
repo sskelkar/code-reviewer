@@ -65,6 +65,8 @@ class PersonaRunner:
 
 class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
+        from .helpers import synthetic_frontend
+        synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
         self.cfg = Config(review_mode='agent-personas', persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.tmp / 'runs'))
@@ -501,7 +503,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         error = io.StringIO()
         with patch.object(replay, 'ClaudeRunner', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):
             self.assertEqual(replay.main([str(result.run_dir)]), 1)
-        self.assertIn('single-agent runs only', error.getvalue())
+        self.assertIn('production review unavailable', error.getvalue())
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):
         runner = self.conflict_runner(self.annotation())

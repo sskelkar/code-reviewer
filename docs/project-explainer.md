@@ -6,6 +6,8 @@ Code samples are copied from this repository (some are abridged, marked with `..
 
 **Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The separate `agent_personas/flow.py` implements the optional configured parallel-round workflow (three rounds by default, `persona_passes` or `--passes N` to change it), loading `personas.json`, common review instructions and thirteen criteria. It owns its contracts, master/result, budget guard and report. Reviewer calls run concurrently within each round; consolidation is serial in fixed order, with proportional role/persona pools and cancellation-aware subprocesses. Frontends dispatch presentation through `presentation.py`; shared code imports neither workflow. Persona behavior is offline-tested and has a successful user-run execution check; finding quality remains unmeasured. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
 
+**Production boundary update (2026-10-26).** `review_flow.run_review` no longer dispatches host Git/reviews. It returns a no-network `--preflight` report or refuses because release controls are incomplete. Operator configuration is no longer discovered in the current project. Internal flow examples below describe reusable algorithms exercised by synthetic tests, not a bypass around this gate. The public command is `reviewer review PR --provider claude|openai --preflight`; supported sandbox execution is still pending. See the [security contract](security-contract.md).
+
 **How to use this guide**
 
 | If you want to... | Read |
@@ -83,16 +85,16 @@ if __name__ == "__main__":
 | `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
 | `reviewer doctor` | `cli.main` | [`doctor.run_doctor`](../src/code_reviewer/doctor.py): environment checks |
 
-Both normal review entry points go through `review_flow.run_review`, then `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
+Both normal review entry points go through `review_flow.run_review`, which currently returns preflight or refuses before `Engine`/Git/model execution. Inside synthetic tests and guest workloads, `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
 
 ### 2.3 Tests
 
 `python3 -m unittest discover -s tests -t .` is the "run all tests" command (like `mvn test`). See [12](#12-tests).
 
-### 2.4 A normal single-agent review, as a call stack
+### 2.4 Internal single-agent algorithm and legacy preparation, as a call stack
 
 ```
-reviewer review <url>
+Historical host path (public dispatch is now gated):
  cli.main
   ├─ load_config()                         -> Config (settings object)
   ├─ ClaudeRunner(...)                     -> wrapper that runs `claude -p ...` as a subprocess
@@ -920,7 +922,9 @@ This part of the project was built and then set aside; the project now judges re
 
 ## Sandbox deployment status
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. Normal `reviewer` CLI/REPL commands remain unsandboxed and Claude-backed. The separate [connected Linux entry point](sandbox-connected.md) injects an OpenAI runner into the same `Engine` and existing flows; it does not duplicate the review algorithm.
+There is now a supported deployment command: `reviewer sandbox check`. `cli.py` dispatches it to `sandbox/check.py` before review configuration loading. That Python module validates and owns the dedicated Lima lifecycle, builds the current trusted source, exercises both flows with simulated model replies, runs no-key connected probes, removes temporary state and saves a private JSON result after shutdown. The second VM is a sequential test workload, not another layer or per-persona VM. See [how to run it](sandbox-check.md) and [alternative designs](sandbox-alternatives.md). It does not yet review a real PR.
+
+The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. Normal `reviewer` CLI/REPL review commands now refuse until production controls and sandbox dispatch are qualified. The separate [connected Linux entry point](sandbox-connected.md) injects an OpenAI runner into the same `Engine` and existing flows; it does not duplicate the review algorithm.
 
 Follow the boundary by module:
 

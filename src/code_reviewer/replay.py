@@ -117,6 +117,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--repeat", type=int, default=1, help="how many times to replay (the model is not deterministic)")
     parser.add_argument("--config", help="path to a review.toml")
     args = parser.parse_args(argv)
+    from .security import require_ready
+    from .shared.models import ReviewRefused
+    try:
+        require_ready('claude')
+    except ReviewRefused as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     run_dir = Path(args.run_dir).expanduser()
     saved_config = run_dir / 'config.json'
     if saved_config.is_file():

@@ -69,19 +69,12 @@ if [ "$#" -eq 3 ]; then
 fi
 if [ "$#" -eq 4 ]; then
     # This is a trusted operator artifact, never a repository-selected executable.
-    python3 - "$3" "$4" "$root/usr/bin/claude" <<'PYCLAUDE'
-import hashlib,shutil,sys
+    PYTHONPATH="$root/opt/reviewer/src" python3 - "$3" "$4" "$root/usr/bin/claude" <<'PYCLAUDE'
+import sys
 from pathlib import Path
+from code_reviewer.sandbox.artifacts import Artifact
 source,digest,output=Path(sys.argv[1]),sys.argv[2],Path(sys.argv[3])
-if source.is_symlink() or not source.is_file() or source.stat().st_size>300000000:
-    raise ValueError('invalid bounded Claude binary')
-if len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest):
-    raise ValueError('invalid expected Claude digest')
-with source.open('rb') as stream:
-    actual=hashlib.file_digest(stream,'sha256').hexdigest()
-if actual!=digest:
-    raise ValueError('Claude binary digest mismatch')
-shutil.copyfile(source,output)
+Artifact(source,digest,300000000).stage(output)
 output.chmod(0o755)
 PYCLAUDE
     workload=runtime_probe

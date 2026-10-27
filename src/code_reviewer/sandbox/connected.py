@@ -19,9 +19,11 @@ import tempfile
 import time
 from pathlib import Path
 
+from ..shared.models import ReviewRefused
+from .artifacts import Artifact
 from .capsule import MAX_CAPSULE, regular
 from .guest import ARTIFACTS, MAX_ARTIFACT, MAX_EXPORT, validate_settings
-from .launch import MAX_INITRD_BYTES, MAX_KERNEL_BYTES, boot_config, verify_file
+from .launch import MAX_INITRD_BYTES, MAX_KERNEL_BYTES, boot_config
 from .network import Network, TAP, command
 from .wire import BOOT_PORT, RESULT_LIMIT, receive_json, send, send_json
 
@@ -129,6 +131,10 @@ def exchange(sock, settings, data, output, key_reader):
 
 def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None):
     validate_settings(settings)
+    if not settings['probe_only']:
+        from ..security import require_ready
+        require_ready('openai')
+        raise ReviewRefused('qualified credential/execution dispatch is not integrated; no legacy key path')
     if sys.platform != 'linux' or os.geteuid() != 0 or not os.access('/dev/kvm', os.R_OK | os.W_OK):
         raise ValueError('connected pilot requires a dedicated Linux/KVM host and root for scoped network setup')
     if Path(output).exists():
@@ -159,28 +165,33 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
                 root.chmod(0o711)
                 vm = root / 'vm'
                 vm.mkdir(mode=0o700)
-                for source, dest in ((binary, vm / 'firecracker'), (kernel, vm / 'kernel'), (initrd, vm / 'initrd')):
-                    shutil.copyfile(source, dest)
-                    dest.chmod(0o500 if dest.name == 'firecracker' else 0o400)
-                    os.chown(dest, uid, kvm_gid)
                 os.chown(vm, uid, kvm_gid)
+                runtime = root / 'runtime'
+                runtime.mkdir(mode=0o750)
+                os.chown(runtime, 0, kvm_gid)
+                for source, dest in ((binary, runtime / 'firecracker'), (kernel, runtime / 'kernel'), (initrd, runtime / 'initrd')):
+                    if not isinstance(source, Artifact):
+                        raise ValueError('pinned artifact specifications required')
+                    source.stage(dest)
+                    os.chown(dest, 0, kvm_gid)
+                    dest.chmod(0o550 if dest.name == 'firecracker' else 0o440)
                 with Network(root, uid, timeout):
                     print('sandbox: external network policy installed; starting review VM', file=sys.stderr)
-                    config = boot_config(vm / 'kernel', vm / 'initrd', runtime=True)
+                    config = boot_config(runtime / 'kernel', runtime / 'initrd', runtime=True)
                     config['network-interfaces'] = [{'iface_id': 'review', 'host_dev_name': TAP,
                                                      'guest_mac': '06:00:00:00:00:02'}]
                     config['vsock'] = {'guest_cid': 3, 'uds_path': str(vm / 'bootstrap.sock')}
-                    path = vm / 'config.json'
+                    path = runtime / 'config.json'
                     path.write_text(json.dumps(config))
-                    os.chown(path, uid, kvm_gid)
-                    path.chmod(0o400)
+                    os.chown(path, 0, kvm_gid)
+                    path.chmod(0o440)
                     def demote():
                         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
                         resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
                         os.setgroups([kvm_gid])
                         os.setgid(kvm_gid)
                         os.setuid(uid)
-                    proc = subprocess.Popen(['/usr/bin/timeout', '--signal=KILL', str(timeout), str(vm / 'firecracker'), '--no-api', '--config-file', str(path)],
+                    proc = subprocess.Popen(['/usr/bin/timeout', '--signal=KILL', str(timeout), str(runtime / 'firecracker'), '--no-api', '--config-file', str(path)],
                                             cwd=str(vm), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                             stderr=subprocess.DEVNULL, start_new_session=True, preexec_fn=demote,
                                             env={'PATH': '/usr/bin:/bin', 'LANG': 'C'})
@@ -224,9 +235,9 @@ def main():
     settings = dict(model=args.model, prices=args.prices, mode=args.mode, passes=args.passes,
                     parallel=args.parallel, budget=args.budget, call_budget=args.call_budget, probe_only=args.probe_only)
     try:
-        binary = verify_file(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES)
-        kernel = verify_file(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES)
-        initrd = verify_file(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES)
+        binary = Artifact(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES)
+        kernel = Artifact(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES)
+        initrd = Artifact(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES)
         def read_key(prompt):
             return os.read(args.key_fd, 4097).decode('ascii').rstrip('\r\n')
         result = run(binary, kernel, initrd, args.input, args.output, settings, timeout=args.timeout,
@@ -235,6 +246,9 @@ def main():
         if not args.probe_only:
             print('Review VM stopped. Revoke the disposable test key after this test.', file=sys.stderr)
         return 0 if result['stop_reason'] in ('probes_passed', 'completed', 'converged', 'max_passes') else 1
+    except ReviewRefused as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     except (Exception, KeyboardInterrupt):
         # Infrastructure/provider exceptions must never disclose a key or guest-controlled console bytes.
         print('sandbox job refused, failed or interrupted; inspect policy/input; no host fallback', file=sys.stderr)

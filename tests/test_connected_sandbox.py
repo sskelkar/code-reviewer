@@ -132,10 +132,10 @@ class ConnectedTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guest.validate_settings(dict(self.settings, claude_bin='untrusted'))
 
-    def test_hidden_key_prompt_refuses_noninteractive_echo_fallback(self):
+    def test_live_job_refuses_before_platform_or_key_access(self):
         with patch.object(connected.sys,'platform','linux'), patch.object(connected.os,'geteuid',return_value=0), \
                 patch.object(connected.os,'access',return_value=True), patch.object(connected.sys.stdin,'isatty',return_value=False):
-            with self.assertRaisesRegex(ValueError,'terminal'):
+            with self.assertRaisesRegex(ValueError,'production review unavailable'):
                 connected.run(self.root/'vmm',self.root/'kernel',self.root/'initrd',self.root/'input',self.root/'out',
                               dict(self.settings,probe_only=False))
 
@@ -180,6 +180,8 @@ class ConnectedTests(unittest.TestCase):
                     patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
                     patch.object(guest, 'send_json') as ready_message, patch.object(guest, 'request_response', provider):
                 value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
+            metadata = next((root / 'runs').glob('*/config.json'))
+            self.assertEqual(json.loads(metadata.read_text())['config']['provider'], 'openai')
             self.assertEqual(ready_message.call_args.args[1]['kind'], 'ready')
             self.assertEqual(set(value['files']), {'report.md', 'summary.md', 'stats.json'})
             for encoded in value['files'].values():

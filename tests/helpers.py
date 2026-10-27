@@ -112,3 +112,26 @@ class TempDirTestMixin:
         path = tempfile.mkdtemp(prefix="code-reviewer-test-")
         self.addCleanup(shutil.rmtree, path, True)  # type: ignore[attr-defined]
         return Path(path)
+
+
+def synthetic_frontend(test):
+    """Isolate presentation tests from the production release gate using only fake runners.
+
+    Production refusal is exercised without this mock in test_security_boundary.
+    Direct Engine regressions continue to exercise both real flow algorithms.
+    """
+    from unittest.mock import patch
+    from code_reviewer.engine import Engine
+    from code_reviewer.review_flow import ReviewOutcome
+
+    def review(cfg, runner, ref, options, local_path):
+        engine = Engine(cfg, runner)
+        ctx = engine.prepare(ref, local_path)
+        if options.dry_run:
+            return ReviewOutcome(dry_run=engine.dry_run(ctx))
+        return ReviewOutcome(result=engine.review(ctx, keep_checkout=options.keep_checkout))
+
+    for name in ('code_reviewer.cli.run_review', 'code_reviewer.repl.run_review'):
+        mocked = patch(name, side_effect=review)
+        mocked.start()
+        test.addCleanup(mocked.stop)

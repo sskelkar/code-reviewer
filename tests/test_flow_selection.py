@@ -24,6 +24,8 @@ from .helpers import FakeRunner, TempDirTestMixin, make_repo
 
 class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
+        from .helpers import synthetic_frontend
+        synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.runner = FakeRunner(reviewer=[])
 

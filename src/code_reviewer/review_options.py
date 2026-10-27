@@ -31,6 +31,8 @@ def positive_int(text: str) -> int:
 
 def add_run_options(parser: argparse.ArgumentParser) -> None:
     """Options that change how a review runs. Both frontends add exactly these."""
+    parser.add_argument("--preflight", action="store_true", help="show production readiness without fetching code, running a model or reading credentials")
+    parser.add_argument("--provider", choices=("claude", "openai"), help="inference backend; the same security gates apply to both")
     parser.add_argument("--parallel", type=positive_int, metavar="N", help="persona-only concurrent calls, 1 to 4 (default: persona_parallel, 4)")
     parser.add_argument("--mode", choices=REVIEW_MODES,
                         help="review flow (default: review_mode in review.toml, single-agent); agent-personas defaults to three passes per persona")
@@ -60,6 +62,11 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
 def apply_run_options(cfg: Config, args: Any) -> Config:
     """Return a copy of `cfg` with the command-line overrides applied and validated. The original is untouched."""
     cfg = replace(cfg)
+    if getattr(args, "provider", None):
+        cfg.provider = args.provider
+    if getattr(args, 'preflight', False) and getattr(args, 'dry_run', False):
+        from .config import ConfigError
+        raise ConfigError('--preflight cannot be combined with --dry-run')
     if getattr(args, "mode", None):
         cfg.review_mode = args.mode
     if getattr(args, 'parallel', None) is not None:
@@ -84,6 +91,8 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # The options of `reviewer review`, one line each, for the banner it prints in a terminal. A test checks that every option
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
+    ("--preflight", "show release blockers; no fetch, model call or credential access"),
+    ("--provider NAME", "claude or openai; the same security gates apply"),
     ("--parallel N", "persona-only concurrent calls, 1 to 4 (default 4)"),
     ("--mode NAME", "single-agent (default); agent-personas defaults to three passes each"),
     ("--passes N", "single-agent maximum passes; agent-personas passes per persona"),

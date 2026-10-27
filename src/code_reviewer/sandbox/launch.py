@@ -13,6 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from .artifacts import Artifact
 from .smoke import RESULT_PREFIX
 
 MAX_OUTPUT_BYTES = 1024 * 1024
@@ -110,11 +111,14 @@ def main():
         parser.error('--timeout must be between 1 and 600 seconds')
     if sys.platform != 'linux' or not os.access('/dev/kvm', os.R_OK | os.W_OK):
         parser.error('requires a Linux test host with read/write KVM access; no fallback')
-    binary = verify_file(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES)
-    kernel = verify_file(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES)
-    initrd = verify_file(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES)
     with tempfile.TemporaryDirectory(prefix='reviewer-offline-boot-') as name:
         root = Path(name)
+        binary = Artifact(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES).stage(root / 'firecracker')
+        kernel = Artifact(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES).stage(root / 'kernel')
+        initrd = Artifact(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES).stage(root / 'initrd')
+        binary.chmod(0o500)
+        kernel.chmod(0o400)
+        initrd.chmod(0o400)
         config = root / 'firecracker.json'
         config.write_text(json.dumps(boot_config(kernel, initrd, runtime=args.workload == 'runtime')))
         text = collect([str(binary), '--no-api', '--config-file', str(config)], root, args.timeout)
