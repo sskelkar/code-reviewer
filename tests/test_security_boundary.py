@@ -33,7 +33,7 @@ class BoundaryTests(unittest.TestCase):
                                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
                             code = cli.main(['review', 'example/project#1', '--provider', provider, '--mode', mode] + flags)
                         self.assertEqual(code, 1)
-                        self.assertIn('production review unavailable', err.getvalue())
+                        self.assertIn('VM review unavailable', err.getvalue())
 
     def test_preflight_is_real_shared_frontend_output_with_no_target_or_model_io(self):
         for provider in ('claude', 'openai'):
@@ -53,7 +53,8 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual(report['provider'], provider)
             self.assertEqual(report['request']['passes'], 2)
             self.assertEqual(report['request']['parallel'], 1)
-            self.assertIn('isolated-acquisition', report['blockers'])
+            self.assertIn('vm-configuration', report['blockers'])
+            self.assertFalse(report['qualified'])
             self.assertEqual(cfg.provider, 'claude')
 
     def test_repl_start_and_review_do_not_inspect_local_git(self):
@@ -63,7 +64,7 @@ class BoundaryTests(unittest.TestCase):
             session = Session(Config(provider=provider), FakeRunner([]), out=rows.append, ask=lambda p: next(commands))
             with patch('subprocess.run', side_effect=AssertionError('no Git/model')):
                 session.loop()
-            self.assertIn('production review unavailable', '\n'.join(rows))
+            self.assertIn('VM review unavailable', '\n'.join(rows))
             self.assertIsNone(session.result)
             self.assertEqual(session.runner.calls, [])
 
@@ -95,7 +96,7 @@ class BoundaryTests(unittest.TestCase):
                         parallel=1, budget=3, call_budget=.5, probe_only=False)
         with patch.object(connected, 'regular', side_effect=AssertionError('no input access')), \
                 patch('getpass.getpass', side_effect=AssertionError('no key')):
-            with self.assertRaisesRegex(ReviewRefused, 'production review unavailable'):
+            with self.assertRaisesRegex(ReviewRefused, 'VM review unavailable'):
                 connected.run(None, None, None, None, None, settings)
 
     def test_doctor_live_cannot_call_the_legacy_host_model(self):

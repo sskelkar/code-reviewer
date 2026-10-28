@@ -1,12 +1,12 @@
 #!/bin/sh
-# Test-only image builder. Run inside the disposable Ubuntu ARM64 Lima VM.
+# Trusted runtime image builder. Run inside the disposable Ubuntu ARM64 Lima VM.
 set -eu
 umask 022
 if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != aarch64 ]; then
     echo 'Requires the disposable Ubuntu ARM64 Linux build VM.' >&2
     exit 2
 fi
-if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
+if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ] && [ "$#" -ne 5 ]; then
     echo 'usage: build-offline-guest.sh trusted-source.tar output-directory [sources-only | openai-offline | openai-private | connected | verified-claude-binary expected-sha256]' >&2
     exit 2
 fi
@@ -68,13 +68,20 @@ cp -a /usr/lib/python3.12 "$root/usr/lib/"
 cp -a /usr/lib/locale "$root/usr/lib/"
 cp -a /usr/lib/ld-linux-aarch64.so.1 "$root/usr/lib/"
 workload=smoke
-if [ "$#" -eq 3 ]; then
+if [ "$#" -eq 3 ] || [ "$#" -eq 5 ]; then
     workload=openai_smoke
     if [ "$3" = connected ]; then workload=guest; fi
 fi
-if [ "$#" -eq 4 ]; then
+if [ "$#" -eq 4 ] || [ "$#" -eq 5 ]; then
+    native_path="$3"
+    native_sha="$4"
+    if [ "$#" -eq 5 ]; then
+        [ "$3" = connected ] || exit 2
+        native_path="$4"
+        native_sha="$5"
+    fi
     # This is a trusted operator artifact, never a repository-selected executable.
-    PYTHONPATH="$root/opt/reviewer/src" python3 - "$3" "$4" "$root/usr/bin/claude" <<'PYCLAUDE'
+    PYTHONPATH="$root/opt/reviewer/src" python3 - "$native_path" "$native_sha" "$root/usr/bin/claude" <<'PYCLAUDE'
 import sys
 from pathlib import Path
 from code_reviewer.sandbox.artifacts import Artifact
@@ -82,7 +89,7 @@ source,digest,output=Path(sys.argv[1]),sys.argv[2],Path(sys.argv[3])
 Artifact(source,digest,300000000).stage(output)
 output.chmod(0o755)
 PYCLAUDE
-    workload=runtime_probe
+    if [ "$#" -eq 4 ]; then workload=runtime_probe; fi
 fi
 chmod 1777 "$root/tmp"
 cat > "$root/init" <<'INIT'

@@ -32,8 +32,9 @@ class BannerContentTests(unittest.TestCase):
         text = review_banner("acme/project#7", Config(max_passes=4, model_reviewer="sonnet", self_check=False, redact_emails=False))
         for expected in ("acme/project#7", "up to 4 passes", "model sonnet", "self-check off", "NOT redacted",
                          "Options you can add to this command:", "--passes N", "--dry-run", "--post",
-                         "the review summary", "interactive prompt", "run `reviewer`"):
+                         "the review summary", "interactive prompt", "mark/drop commands are parked"):
             self.assertIn(expected, text)
+        self.assertNotIn('run `reviewer`', text)
         self.assertIn("self-check on", review_banner("a/b#1", Config()))
 
     def test_option_descriptions_line_up(self):
@@ -58,7 +59,7 @@ class BannerInTheCliTests(TempDirTestMixin, unittest.TestCase):
         fake = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], resolver=RESOLVER)
         config = Config(runs_dir=str(self.tmp / "runs"))
         with mock.patch.object(cli, "load_config", return_value=config), \
-                mock.patch.object(cli, "ClaudeRunner", return_value=fake), \
+                mock.patch("code_reviewer.backends.factory.create_runner", return_value=fake), \
                 mock.patch.object(Engine, "prepare", return_value=self.ctx), \
                 contextlib.redirect_stdout(stream):
             return cli.main(["review", "acme/project#7"] + list(argv))

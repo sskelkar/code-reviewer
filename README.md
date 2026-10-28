@@ -2,13 +2,13 @@
 
 A pull request review agent with runtime-selected Claude and OpenAI adapters. It runs independent review passes, merges their findings and reports how often each issue was found. You can review the results locally or explicitly post a summary to GitHub.
 
-**Status:** v0. Both adapters share one review core. VM execution is the intended default, with explicit direct-host execution planned. Authenticated CLI dispatch is not integrated yet. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
+**Status:** v0. Both adapters share one review core. VM execution is the default; `--no-sandbox` explicitly selects direct-host execution. Both dispatch paths are wired. The VM path has simulated adapter tests and real no-key containment checks; authenticated inference still needs an authorized live check. The REPL is parked; its code is retained, and bare `reviewer` shows help. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
 
 [Quick start](#quick-start) · [Review flows](#review-flows) · [Results](#reading-the-results) · [Configuration](#configuration) · [Documentation](#documentation)
 
 ## Quick start
 
-Current preflight needs Python 3.9+ and the editable installation below; it needs no GitHub/Claude login or API key. Git is used by offline tests. Live review prerequisites will be qualified with the supported sandbox backend, rather than discovered from the target project.
+Current preflight needs Python 3.9+ and the editable installation below; it needs no GitHub/Claude login or API key. Git is used by offline tests. Host reviews need the selected adapter's configured credentials plus Git/GitHub CLI access. VM execution prerequisites are separate from the target project.
 
 ```bash
 git clone https://github.com/sskelkar/code-reviewer.git
@@ -17,7 +17,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e .
-reviewer doctor  # offline release status; currently exits 1 while controls are missing
+reviewer doctor  # offline configuration/status; exits 1 when setup is missing
 ```
 
 Keep the editable installation and its source checkout: prompts and criteria are loaded from it. Keep the virtual environment active when running `reviewer`. Installation pulls in `tomli` on Python 3.9/3.10; otherwise runtime code uses the standard library.
@@ -29,7 +29,15 @@ reviewer review OWNER/REPO#123 --mode single-agent --preflight
 reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --preflight
 ```
 
-Preflight returns JSON and exits nonzero while required controls are missing. Both providers are currently blocked. CLI/REPL reviews, `--dry-run`, `doctor --live`, paid replay and the old connected real-key path refuse execution before target/model activity. The planned direct-host option is not implemented yet; neither provider nor repository labels enable execution. The offline flow algorithms and harmless no-key deployment checks remain testable.
+Preflight returns JSON without target/model/credential activity. Configure the dedicated worker and artifacts in trusted TOML ([VM setup](docs/usage.md#vm-review-configuration)), then run a review. Explicit host execution is also available:
+
+```bash
+reviewer review OWNER/REPO#123 --passes 1  # default VM
+reviewer review OWNER/REPO#123 --no-sandbox --passes 1
+reviewer review OWNER/REPO#123 --no-sandbox --dry-run
+```
+
+Use the selected adapter's configured credentials. The API adapter reads `OPENAI_API_KEY` from the review process environment and requires one explicit model ID for all roles plus `openai_input_price`, `openai_cached_input_price` and `openai_output_price` in trusted operator TOML (positive USD per million tokens). Preflight validates settings without checking credentials; dry-run acquires input but calls no model and needs no key/rates. See [configuration](docs/usage.md#configuration). No real model has been called in the implementation checks.
 
 On a Mac with a prepared dedicated Lima worker and the pinned runtime artifacts, run the supported deployment command:
 
@@ -42,23 +50,23 @@ It builds the current code, runs both flows with simulated replies plus no-key b
 
 Clean images are reused when their source, builder and OS inputs match. Add `--lifecycle` to test cancellation and supervisor loss, or `--pr https://github.com/OWNER/REPOSITORY/pull/NUMBER` to check public acquisition and source-access revocation inside the review VM without inference. An abandoned dedicated worker can be reset explicitly with `reviewer sandbox recover --lima-home DIR --instance NAME`; see [recovery scope](docs/sandbox-check.md#recover-an-abandoned-worker).
 
-Operator settings come only from an explicit `--config` outside Git working trees or `~/.code-reviewer/review.toml`. Current-directory `review.toml` is ignored. Files must be bounded regular files owned by the operator/root and not writable by other users. A VM failure never selects host execution automatically. Explicit host execution is an intended separate operator choice. Public PR acquisition now has a no-key VM check; authenticated review and supported sandbox dispatch remain required integration work; see the [security contract](docs/security-contract.md).
+Operator settings come only from an explicit `--config` outside Git working trees or `~/.code-reviewer/review.toml`. Current-directory `review.toml` is ignored. Files must be bounded regular files owned by the operator/root and not writable by other users. A VM failure never selects host execution automatically. Explicit host execution is an intended separate operator choice. Public PR acquisition has a no-key VM check; authenticated VM inference remains unverified; see the [security contract](docs/security-contract.md).
 
 ## Execution location and provider
 
-The planned interface has independent choices:
+The interface has independent choices:
 
 - `--provider claude|openai` chooses the adapter used by the same review core.
 - `--mode single-agent|agent-personas` chooses the review strategy.
-- VM execution is the default; the proposed `--no-sandbox` flag explicitly selects direct-host acquisition/review without VM startup overhead. **That flag and live dispatch are not implemented yet.**
+- VM execution is the default request; `--no-sandbox` or trusted `sandbox = false` explicitly selects direct-host acquisition/review without VM startup overhead. **Both paths use the same review core and selected provider.**
 
 Any repository uses the chosen settings; there is no production/personal/public reviewer tier. Direct mode preserves the existing host acquisition feature and common review checks, while VM mode adds kernel/filesystem/network isolation. A failed VM request stops rather than switching modes. See the [execution contract](docs/security-contract.md).
 
 ## Review flows
 
-The implemented flow algorithms below are exercised directly by offline tests and guest workloads; the public review entry point is currently gated. Both flows pin the PR's commits, load its diff and criteria, and give fresh model sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
+The implemented flow algorithms below are exercised directly by offline tests and guest workloads; the one-shot CLI runs them inside the default VM or on the explicitly selected host. Both flows pin the PR's commits, load its diff and criteria, and give fresh model sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
 
-Each new review fetches the current PR head and target-branch tip into private refs, without updating your branches, remote-tracking refs or tags. Those commits stay fixed only for that run. The diff is merge-base to PR head; the checkout is the PR head, not a simulated merge with the latest target.
+Acquisition pins the observed PR head and target tip for each run. Retained host preparation uses private review refs; in-VM acquisition fetches exact hashes from the initial API metadata. Neither updates your working branches. Those commits stay fixed only for that run. The diff is merge-base to PR head; the checkout is the PR head, not a simulated merge with the latest target.
 
 Choose with `--mode`, or set `review_mode` in `review.toml`:
 
@@ -71,7 +79,7 @@ Choose with `--mode`, or set `review_mode` in `review.toml`:
 
 ```mermaid
 flowchart TD
-    PREP["Pin PR, load diff and criteria"] --> REV["Claude: fresh general Reviewer"]
+    PREP["Pin PR, load diff and criteria"] --> REV["Model: fresh general Reviewer"]
     REV --> CHECK["Harness: validate and ground findings"]
     CHECK --> MERGE["Comparator when needed; harness merges sightings"]
     MERGE --> NEXT{"Continue review?"}
@@ -110,7 +118,7 @@ flowchart TD
     MASTER --> MORE{"More slots and review allowed?"}
     MORE -->|yes| ROUND
     MORE -->|no| FLAGS{"Unexamined flagged groups<br/>and verification allowed?"}
-    FLAGS -->|yes| VER["Claude: fresh targeted Verifier"]
+    FLAGS -->|yes| VER["Model: fresh targeted Verifier"]
     VER --> ANN["Harness: validate and attach annotations"]
     ANN --> FLAGS
     FLAGS -->|no| REPORT["Combined report: per-persona agreement,<br/>conflict annotations and unfinished work"]
@@ -122,13 +130,13 @@ All passes within a persona receive identical prompts. Any persona may report an
 
 The Comparator flags possible conflicts while merging. The Verifier investigates only those groups and explains evidence, uncertainty or tradeoffs. **Annotations never suppress findings or change severity/votes.** No flags means no Verifier calls; blocked or failed verification stays visible as pending/unresolved.
 
-For module-level walkthroughs, see [architecture](docs/architecture.md). The [persona criteria guide](docs/persona-criteria.md) lists the rules, and [proposal §12](docs/proposal.md#12-agreed-persona-design-and-next-steps) records the full contract.
+For module-level walkthroughs and the concrete [remaining end-to-end wiring](docs/architecture.md#remaining-end-to-end-wiring), see the architecture guide. The [persona criteria guide](docs/persona-criteria.md) lists the rules, and [proposal §12](docs/proposal.md#12-agreed-persona-design-and-next-steps) records the full contract.
 
 Persona budgets scale with the total cap: 10% criteria builder, 10% Comparator, 13⅓% Verifier, then an equal split of the remainder among personas (about 16⅔% each). At $3 this is $0.30/$0.30/$0.40 plus $0.50 per persona. Calls/retries reserve their allowance atomically; unused pools are not transferred. An exhausted persona or its consecutive-failure limit skips only that persona's remaining slots. Comparator exhaustion stops new review work; Verifier exhaustion leaves conflicts pending. Already-running token usage can exceed the global token threshold. [Budget details](docs/usage.md#persona-budget-pools).
 
 ## Reading the results
 
-A review prints its findings, completion/cost line and full-report path. Runs are saved under `~/.code-reviewer/runs/`:
+The implemented report/presentation code produces findings, a completion/cost line and a full-report path; the host CLI presents these outputs; VM report transport still needs integration. Runs are saved under `~/.code-reviewer/runs/`:
 
 | Artifact | Purpose |
 |---|---|
@@ -139,19 +147,7 @@ A review prints its findings, completion/cost line and full-report path. Runs ar
 
 **Agreement measures repetition, not correctness.** High confidence starts at 75%, Medium at 40%; fewer than two completed passes are unrated. Single-agent uses completed passes as the denominator. Persona mode scores each discovering persona separately—for example, `test-quality: 3/3`—with no combined tier. Failed slots do not contribute votes or completions. Unrated findings remain visible under tier filters.
 
-To inspect and judge findings interactively, start `reviewer` inside the project clone, then run `review OWNER/REPO#123 --mode agent-personas` (or `single-agent`):
-
-```text
-show F-001                 inspect a finding
-mark F-001 real            record your judgment (real, nit or wrong)
-missed "describe an issue"  record a missed issue
-drop F-001                 omit it from the shareable summary
-summary                    show the summary with your omissions
-open                       open the full report
-post                       preview, then ask for confirmation
-```
-
-The CLI posts only with an explicit `--post` flag; it does not ask for an additional confirmation. Posting creates or updates one summary comment per PR. See the [usage reference](docs/usage.md) for all commands, options and report details.
+The REPL is parked. Its implementation and regression tests remain for possible future use, but bare `reviewer` prints CLI help. Current integration work targets `reviewer review ...` and local report inspection.
 
 ## Configuration
 
@@ -167,7 +163,7 @@ Reviewers and the persona Verifier have Read/Grep/Glob in a temporary checkout; 
 
 PR metadata, diff, criteria and files read during review are supplied to the selected model provider. Email redaction covers PR text only; diffs/files are not redacted. Saved runs contain code and should be stored privately.
 
-VM execution adds the shared jailer/resource/deadline lifecycle, read-only admitted input, phase-scoped external networking and private bounded transfer. Its no-key deployment checks pass; authenticated dispatch and adapter integration remain unfinished. Explicit host execution is planned and retains acquisition on the machine; it does not claim VM isolation. See the [VM checklist](docs/sandbox-todo.md) and [privacy reference](docs/usage.md#privacy-and-safety).
+VM execution adds the shared jailer/resource/deadline lifecycle, read-only admitted input, phase-scoped external networking and private bounded transfer. Its no-key deployment checks pass; normal selected-adapter dispatch is wired; authenticated inference/native-tool qualification remains untested. Explicit host execution is implemented and retains acquisition on the machine; it does not claim VM isolation. See the [VM checklist](docs/sandbox-todo.md) and [privacy reference](docs/usage.md#privacy-and-safety).
 
 ## Development and roadmap
 
@@ -179,13 +175,13 @@ python3 -m unittest discover -s tests -t .
 
 Tests use fake models and temporary repositories, with no network or paid calls. Supported Python is 3.9+; contributors run the full suite on their oldest and newest available Python. Repository rules are in [AGENTS.md](AGENTS.md); code ownership, checks, debugging and replay are in the [development guide](docs/development.md) and [architecture guide](docs/architecture.md).
 
-Current priority: finish one workflow with runtime-selected provider and explicit execution location. Keep host acquisition for the direct option and the shared jailed lifecycle for the VM default; common criteria, validators, budgets and reports stay shared. The standalone VM experiment now lives outside this repository. See the [roadmap](docs/security-roadmap.md) and [VM checklist](docs/sandbox-todo.md). The unused eval framework was removed; review quality is judged manually.
+Current priority: finish default VM dispatch around the same runtime-selected provider/core now used by explicit host reviews. Keep host acquisition for the direct option and the shared jailed lifecycle for the VM default; common criteria, validators, budgets and reports stay shared. The standalone VM experiment now lives outside this repository. See the [roadmap](docs/security-roadmap.md) and [VM checklist](docs/sandbox-todo.md). The unused eval framework was removed; review quality is judged manually.
 
 ## Documentation
 
 | Guide | Contents |
 |---|---|
-| [Usage reference](docs/usage.md) | CLI/REPL commands, reports, project criteria, all settings, storage and troubleshooting |
+| [Usage reference](docs/usage.md) | One-shot commands, parked REPL status, reports, project criteria, all settings, storage and troubleshooting |
 | [Security contract](docs/security-contract.md) | Shared requirements, VM-default and explicit direct-host execution |
 | [Connected sandbox](docs/sandbox-connected.md) | Existing engineering components, boundary probes and current limitations |
 | [Run the sandbox check](docs/sandbox-check.md) | Supported Mac command: build, both flows, boundary probes, private result and shutdown |

@@ -10,7 +10,7 @@ Current direction, confirmed 2026-10-28: one reviewer, runtime-selected provider
 | Review strategy | Single-agent or agent-personas; independent of provider/execution location |
 | Execution | VM by default; explicit direct-host selection for trusted use without VM startup overhead |
 
-The proposed direct flag is `--no-sandbox`. It is **not implemented yet**. Host acquisition is an intended feature, not an obsolete fallback. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.
+The direct flag is `--no-sandbox`; trusted operator config can also set `sandbox = false`. Explicit host dispatch is implemented. Host acquisition is an intended feature, not an obsolete fallback. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.
 
 ## Shared requirements
 
@@ -30,8 +30,8 @@ The operator deliberately selects the host boundary. Acquisition uses the existi
 
 ## Current implementation and next work
 
-Public CLI/REPL currently offer preflight/refusal; authenticated VM and explicit direct-host dispatch remain unwired. Both adapters and internal review algorithms exist. Keep those facts visible; do not make status-row edits stand in for implementation.
+The REPL is parked with code/tests retained. The one-shot CLI provides credential-free preflight, explicit host dry-run/review and default VM review dispatch. VM dry-run and private in-VM source authentication remain unsupported. Both adapters and internal review algorithms exist. Keep those facts visible; do not make status-row edits stand in for implementation.
 
-The supported VM checks cover jailed lifecycle, host/native containment, clean image reuse, bounded public PR acquisition, source-access revocation, private results and recovery without credentials/inference. Next wire an execution selector and provider factory into the common workflow, retain host acquisition for the direct path, and complete VM endpoint/authentication/tool integration for both adapters. Test explicit selection and absence of silent fallbacks.
+The supported VM checks cover jailed lifecycle, host/native containment, clean image reuse, bounded public PR acquisition, source-access revocation, private results and recovery without credentials/inference. The execution selector and provider factory are wired to host acquisition/core. Normal-command VM dispatch, trusted deployment settings, provider-scoped endpoint policy, private credential transport and bounded report presentation are implemented. Simulated tests cover both providers/strategies; authorized live authentication/inference and native tool qualification remain outstanding. Preflight separates offline configuration readiness from qualification evidence.
 
 See [architecture](architecture.md), [VM design](sandbox-architecture.md) and [checklist](sandbox-todo.md). The standalone Firecracker playground is external to this project.

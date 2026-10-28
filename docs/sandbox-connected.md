@@ -8,7 +8,7 @@ The shared VM lifecycle uses a matching jailer, reduced privileges, finite resou
 
 Public URL acquisition parses/fetches only inside the review VM. Optional capsule transfer admits pinned Git objects without host-side Git/config/hooks. These feed the same review core; see [acquisition limits](sandbox-check.md#public-pr-acquisition-check).
 
-The current private key/bootstrap code is not enabled for live dispatch. Both runtime-selected adapters must fit the same workflow, with their actual protocol, credentials, endpoints and tool behavior integrated. The ordinary CLI/REPL still offers preflight/refusal only. Explicit direct-host operation is planned separately from this VM transport; see the [execution contract](security-contract.md).
+The normal CLI now dispatches both providers through this workflow. Trusted review settings, selected credentials and results travel through private SSH pipes/vsock; credentials are released only after admission and boundary checks. Native CLI credentials use an explicit API-key or OAuth choice, without host login import or billing fallback. Bounded reports are published locally only after worker shutdown. Authenticated inference/native-tool qualification remains untested. See [VM configuration](usage.md#vm-review-configuration). The one-shot CLI also supports explicit direct-host review; the REPL remains parked; see the [execution contract](security-contract.md).
 
 ## What “trusted launcher” means
 
@@ -32,7 +32,7 @@ python -m code_reviewer.sandbox.capsule \
 
 The capsule contains the selected clone's bounded Git object store, potentially including other branches/history. Keep it private and outside this project. No host Git or target code executes. Symlink/hardlink objects, alternates, unsupported layouts and oversized inputs are refused. Each admitted tree has existing path/blob/count/byte limits; no submodule/LFS content is downloaded. Public URL acquisition avoids this manual input step; private URL authentication remains unsupported.
 
-This importer is retained alongside the intended direct-host acquisition feature. A capsule enters the VM; direct-host acquisition/review remains on the machine by explicit operator choice.
+This importer is retained alongside the intended direct-host acquisition feature. A capsule enters the VM; direct-host acquisition/review runs on the machine by explicit operator choice.
 
 ## Network and credential limits
 

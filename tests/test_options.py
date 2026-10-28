@@ -1,9 +1,13 @@
 """The review options are defined once and documented in `reviewer --help`, `reviewer review --help` and the REPL help."""
+from __future__ import annotations
+
 import contextlib
 import io
 import unittest
 from argparse import Namespace
+from unittest.mock import patch
 
+from code_reviewer import cli
 from code_reviewer.cli import build_parser
 from code_reviewer.config import Config, ConfigError
 from code_reviewer.repl import Session
@@ -42,6 +46,17 @@ def options(**overrides):
 
 
 class HelpTextTests(unittest.TestCase):
+    def test_no_command_shows_help_without_loading_config_or_starting_a_session(self):
+        for argv in ([], ['--config', '/nonexistent/operator-config.toml']):
+            output = io.StringIO()
+            with patch.object(cli, 'load_config', side_effect=AssertionError('no config needed')), \
+                 patch('code_reviewer.backends.factory.create_runner', side_effect=AssertionError('no runner')), \
+                 patch('builtins.input', side_effect=AssertionError('REPL is parked')), \
+                 contextlib.redirect_stdout(output):
+                self.assertEqual(cli.main(argv), 0)
+            self.assertIn('interactive prompt is parked', output.getvalue())
+            self.assertIn('reviewer review', output.getvalue())
+
     def test_top_level_help_points_to_the_review_options(self):
         text = render_help()
         self.assertIn("reviewer review --help", text)

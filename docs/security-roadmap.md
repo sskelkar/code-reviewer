@@ -1,13 +1,13 @@
 # Execution integration roadmap
 
-One reviewer supports runtime-selected providers and independent single-agent/persona strategies. The intended execution default is the review VM, with an explicit `--no-sandbox` direct-host option. Repository visibility or purpose does not create another product tier. See the [current contract](security-contract.md).
+One reviewer supports runtime-selected providers and independent single-agent/persona strategies. The default request is the review VM (dispatch wired; authenticated inference untested), with implemented explicit `--no-sandbox` direct-host execution. Repository visibility or purpose does not create another product tier. See the [current contract](security-contract.md).
 
 ## Work in order
 
-1. Keep one review orchestration path and select its runner and execution location from trusted operator settings. Preserve host acquisition for the direct path. The proposed direct flag is not implemented yet.
-2. Wire direct dispatch to the existing acquisition/core, and VM dispatch to the shared jailed lifecycle. VM failures refuse; never fall back silently. Common validators, criteria, budgets and reports stay shared.
-3. Finish authentication, inference, endpoint policy and tool integration for both adapters inside the VM. Differences stay in adapter/runtime plumbing, not separate repository categories or review loops.
-4. Integrate private report transfer/retention and local presentation, then run authorized end-to-end checks. Test both providers, both strategies and explicit execution selection.
+1. **Done:** select provider/execution from trusted settings, create the runner at dispatch time, and connect explicit host acquisition/core. Preflight/dry-run read no model key.
+2. Verify the implemented default VM dispatch/authentication against the shared jailed lifecycle. Direct dispatch already uses existing acquisition/core. VM failures refuse; never fall back silently. Common validators, criteria, budgets and reports stay shared.
+3. Qualify the implemented credential, inference, endpoint and native-tool paths using explicitly authorized live calls for both adapters inside the VM. Differences stay in adapter/runtime plumbing, not separate repository categories or review loops.
+4. Verify implemented private report transfer/retention and CLI presentation during those authorized end-to-end checks. The REPL is parked with its code/tests retained. Test both providers, both strategies and explicit execution selection.
 5. Return to manual review-quality comparison. The unused eval framework has been removed.
 
 ## Keep
@@ -22,4 +22,4 @@ One reviewer supports runtime-selected providers and independent single-agent/pe
 
 No per-persona VMs, distributed scheduler, custom orchestration service, automatic credential broker, enterprise audit platform, additional VM backend or repository-specific security hierarchy. Direct mode intentionally skips VM isolation; it must be explicitly selected by the operator. No automatic handover document.
 
-Existing checks and limitations are recorded in the [VM checklist](sandbox-todo.md) and [deployment runbook](sandbox-check.md). Passing them does not by itself implement live dispatch.
+Existing checks and limitations are recorded in the [VM checklist](sandbox-todo.md) and [deployment runbook](sandbox-check.md). No-key checks and simulated inference do not establish live authentication or review quality.

@@ -1,7 +1,15 @@
 # Copy outside Git working trees to ~/.code-reviewer/review.toml (chmod 600).
-# Project-directory review.toml is not loaded. Live reviews are gated until qualification.
+# Project-directory review.toml is not loaded. VM-default and explicit host reviews are wired; live VM inference remains untested.
 # Every key is optional; the values below are the defaults.
-provider = "claude"  # or openai; selecting it never relaxes the security requirements
+provider = "claude"  # runtime adapter: claude or openai
+sandbox = true       # default VM request; false or --no-sandbox explicitly selects the host
+
+# OpenAI: set one explicit model ID for all model_* roles, supply current positive USD/million token rates,
+# and set OPENAI_API_KEY in the process environment. Zero defaults mean rates are not configured.
+# No key belongs in this TOML file or on the command line.
+openai_input_price = 0.0
+openai_cached_input_price = 0.0
+openai_output_price = 0.0
 
 # Review flow: single-agent (default); agent-personas defaults to three passes for each of four personas, then conflict-only verification.
 review_mode = "single-agent"
@@ -74,3 +82,14 @@ redact_emails = true
 
 # Where runs are stored (default: ~/.code-reviewer/runs)
 runs_dir = ""
+
+# VM-default execution: prepare the dedicated worker separately (docs/sandbox-check.md).
+# vm_artifacts = "/absolute/path/to/verified-artifacts"
+# vm_lima_home = "/absolute/path/to/dedicated-lima-state"
+# vm_instance = "reviewer-sandbox"
+# vm_timeout_s = 1800
+# Required only when provider = "claude": a verified Linux ARM64 native artifact.
+# vm_claude_binary = "/absolute/path/to/linux-arm64-claude"
+# vm_claude_sha256 = "verified-lowercase-sha256"
+# vm_claude_auth = "api-key" # or "oauth"; explicit billing, no fallback
+# Credentials come from the selected process environment; NEVER put key/token values here.

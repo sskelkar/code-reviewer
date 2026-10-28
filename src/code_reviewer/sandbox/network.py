@@ -47,11 +47,16 @@ def firewall(proxy_uid=13, resolvers=('127.0.0.53',)):
 }'''.replace('PROXY_UID', str(proxy_uid)).replace('DNS_ADDRESSES', dns)
 
 
-def squid_config(folder, phase='inference'):
+def squid_config(folder, phase='inference', provider='openai'):
     if phase not in ('acquisition', 'inference'):
         raise ValueError('invalid network phase')
-    domains = 'github.com api.github.com' if phase == 'acquisition' else 'api.openai.com'
-    authority = r'^(github\.com|api\.github\.com):443$' if phase == 'acquisition' else r'^api\.openai\.com:443$'
+    import re
+    from .settings import ENDPOINTS
+    if provider not in ENDPOINTS:
+        raise ValueError('unsupported inference provider')
+    names = ('github.com', 'api.github.com') if phase == 'acquisition' else ENDPOINTS[provider]
+    domains = ' '.join(names)
+    authority = '^' + ('(' + '|'.join(re.escape(name) for name in names) + ')' if len(names) > 1 else re.escape(names[0])) + ':443$'
     # -n prevents reverse-DNS conversion from turning a literal IP into an allowed name.
     return '''http_port 192.0.2.1:3128
 workers 1
@@ -94,7 +99,8 @@ def command(args, *, text=None, check=True):
 
 
 class Network:
-    def __init__(self, root, uid, timeout=900, *, acquisition=False):
+    def __init__(self, root, uid, timeout=900, *, acquisition=False, provider='openai'):
+        self.provider = provider
         self.root, self.uid, self.timeout = Path(root), uid, timeout
         self.tap = self.table = False
         self.proxy = None
@@ -158,7 +164,7 @@ class Network:
         folder = self.root / 'proxy'
         user = pwd.getpwnam('proxy')
         config = self.root / 'proxy.conf'
-        config.write_text(squid_config(folder, self.phase))
+        config.write_text(squid_config(folder, self.phase, self.provider))
         config.chmod(0o644)  # Parent/config are root-owned; the proxy cannot replace policy.
         # Run in foreground, unprivileged, without enabling the system Squid service.
         def demote():

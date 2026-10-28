@@ -1,4 +1,4 @@
-"""One release boundary for CLI and REPL; preflight never prepares target code."""
+"""Explicit execution dispatch; preflight never prepares target code or credentials."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +9,9 @@ from .shared.claude_cli import ClaudeError
 from .config import Config, ConfigError
 from .shared.git_ops import GitError, PRRef
 from .shared.models import ReviewRefused
+from .backends import factory
+from .engine import Engine
+from .progress import ProgressPrinter
 
 # What a review can fail with in an expected way. Frontends catch these and report them as an error message.
 REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, ClaudeError)
@@ -16,7 +19,7 @@ REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, ClaudeError)
 
 @dataclass
 class ReviewOutcome:
-    """Frontend presentation data; production currently returns only preflight or refusal."""
+    """Shared frontend presentation data for preflight, dry-run or completed review."""
 
     dry_run: Optional[Any] = None
     result: Optional[Any] = None
@@ -24,9 +27,9 @@ class ReviewOutcome:
 
 
 def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:
-    """Check the shared release boundary before Git, target IO, model calls or credentials."""
-    from .security import readiness, require_ready
-    report = readiness(cfg.provider)
+    """Select the operator's boundary before Git or credentials; VM requests never fall back."""
+    from .security import readiness
+    report = readiness(cfg.provider, sandbox=cfg.sandbox)
     report['request'] = {'repository': ref.slug, 'pr': ref.number, 'host': ref.host,
                          'mode': cfg.review_mode, 'model': cfg.model_reviewer,
                          'passes': cfg.persona_passes if cfg.review_mode == 'agent-personas' else cfg.max_passes,
@@ -34,14 +37,32 @@ def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: P
                          'run_budget_usd': cfg.run_budget_usd, 'call_budget_usd': cfg.call_budget_usd,
                          'models': {role: getattr(cfg, 'model_' + role)
                                     for role in ('reviewer', 'resolver', 'comparator', 'verifier')}}
-    report['configuration_errors'] = []
-    if cfg.provider == 'openai' and any(name in ('haiku', 'sonnet', 'opus') for name in report['request']['models'].values()):
-        report['configuration_errors'].append('select explicit OpenAI model IDs; Claude aliases are not mapped')
+    model_errors = factory.configuration_errors(cfg, dry_run=getattr(options, 'dry_run', False))
+    report['configuration_errors'] = list(model_errors)
+    if cfg.sandbox:
+        from .sandbox import review as vm_review
+        report['configuration_errors'] += vm_review.configuration_errors(cfg, ref, options)
+        report['qualified'] = report['ready']
+        report['qualification_blockers'] = report['blockers']
+        report['ready'] = not report['configuration_errors']
+        report['blockers'] = [] if report['ready'] else ['vm-configuration']
+        report['diagnostic'] = 'Offline configuration check only; worker, authentication and containment are checked at runtime.'
+    if model_errors:
         report['ready'] = False
         report['blockers'].append('model-configuration')
     if getattr(options, 'preflight', False):
         return ReviewOutcome(preflight=report)
-    require_ready(cfg.provider)
-    # No qualified execution backend exists yet. Never resume the legacy host
-    # prepare/review path merely because a release-status row changes.
-    raise ReviewRefused('qualified sandbox workflow is not integrated; no host fallback')
+    if cfg.sandbox:
+        if report['configuration_errors']:
+            raise ReviewRefused('VM review unavailable: ' + '; '.join(report['configuration_errors']) + '; no host fallback')
+        return ReviewOutcome(result=vm_review.run(cfg, ref, options))
+    if report['configuration_errors']:
+        raise ConfigError('; '.join(report['configuration_errors']))
+    dry_run = getattr(options, 'dry_run', False)
+    if runner is None and not dry_run:
+        runner = factory.create_runner(cfg)
+    engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=getattr(options, 'verbose', False)))
+    ctx = engine.prepare(ref, local_path)
+    if dry_run:
+        return ReviewOutcome(dry_run=engine.dry_run(ctx))
+    return ReviewOutcome(result=engine.review(ctx, keep_checkout=getattr(options, 'keep_checkout', False)))

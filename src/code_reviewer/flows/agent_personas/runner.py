@@ -35,7 +35,7 @@ class ParallelRunner:
         try:
             proc = subprocess.Popen(cmd, stdin=prompt, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     text=True, encoding='utf-8', errors='replace', cwd=kwargs['cwd'],
-                                    start_new_session=os.name == 'posix')
+                                    start_new_session=os.name == 'posix', env=self.runner.env)
         except FileNotFoundError as exc:
             raise ClaudeError('claude binary not found: %s' % self.runner.claude_bin) from exc
         started = time.monotonic()

@@ -1,4 +1,4 @@
-"""Command line entry point: `reviewer` (REPL), `reviewer review <url>`, `reviewer doctor`."""
+"""One-shot review and deployment commands; the interactive frontend is parked."""
 from __future__ import annotations
 
 import argparse
@@ -8,18 +8,16 @@ from pathlib import Path
 from typing import List, Optional
 
 from .shared import git_ops
-from .shared.claude_cli import ClaudeRunner
 from .config import ConfigError, load_config
 from .presentation import render_dry_run
 from .post import format_comment, post_comment
-from .repl import Session
 from .review_flow import REVIEW_ERRORS, run_review
 from .review_options import add_run_options, apply_run_options, review_banner
 from .presentation import render_summary, run_line
 
 MAIN_EPILOG = """\
 examples:
-  reviewer                                start the interactive prompt (run it inside the project you want to review)
+  reviewer                                show help (the interactive prompt is parked)
   reviewer review <PR URL> --passes 1     one cheap pass over a pull request
   reviewer review <PR URL> --dry-run      show what the reviewer would be given, without calling the model
   reviewer review <PR URL>                a full review (several passes)
@@ -34,14 +32,14 @@ examples:
   reviewer review OWNER/REPO#123 --model sonnet
   reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --preflight
 
-The review never posts to GitHub unless you pass --post. In the interactive prompt (`reviewer`), use `post` instead.
+The review never posts to GitHub unless you pass --post.
 """
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reviewer",
-        description="Multi-pass pull request review agent. Run without a subcommand to start the interactive prompt.",
+        description="Multi-pass pull request review agent. The interactive prompt is parked; use reviewer review.",
         epilog=MAIN_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -49,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="{review,doctor,sandbox}")
 
     review = sub.add_parser(
-        "review", help="review a pull request without the interactive prompt",
+        "review", help="review a pull request with the one-shot CLI",
         description="Review a pull request: several independent passes, then a merged report with findings, tokens and cost.",
         epilog=REVIEW_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     review.add_argument("pr", metavar="PR", help="pull request URL, or owner/repo#number")
@@ -59,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--local-path", metavar="DIR",
                         help="local clone to use as the git object store (default: the current directory, if it is a clone of the same repository)")
 
-    doctor = sub.add_parser("doctor", help="check the environment and the headless Claude Code setup")
+    doctor = sub.add_parser("doctor", help="show offline execution status without commands or credentials")
     doctor.add_argument("--live", action="store_true", help="legacy live check; blocked until the production backend is qualified")
     sandbox = sub.add_parser('sandbox', help='run the supported sandbox deployment checks')
     checks = sandbox.add_subparsers(dest='sandbox_command', required=True)
@@ -80,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        return 0
     if args.command == 'sandbox':
         # Deployment checks accept no target config, PR, provider credential or model settings.
         from .sandbox.check import cli as sandbox_check
@@ -91,11 +92,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ConfigError as exc:
         print("config error: %s" % exc, file=sys.stderr)
         return 2
-    runner = ClaudeRunner(cfg.claude_bin, cfg.isolation_flags)
-
     if args.command == "doctor":
         from .security import readiness
-        report = readiness(cfg.provider)
+        report = readiness(cfg.provider, sandbox=cfg.sandbox)
+        from .backends.factory import configuration_errors
+        report['configuration_errors'] = configuration_errors(cfg)
+        if cfg.sandbox:
+            from .sandbox.review import configuration_errors as vm_errors
+            report['configuration_errors'] += vm_errors(cfg)
+            report['qualified'] = report['ready']
+            report['qualification_blockers'] = report['blockers']
+            report['ready'] = not report['configuration_errors']
+            report['blockers'] = [] if report['ready'] else ['vm-configuration']
+        if report['configuration_errors']:
+            report['ready'] = False
+            report['blockers'].append('model-configuration')
         report['diagnostic'] = 'offline release status; no external executable or model was started'
         if args.live:
             report['diagnostic'] = 'live sandbox diagnostic is not integrated; no host fallback'
@@ -109,7 +120,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if sys.stdout.isatty() and not args.preflight:  # readiness output stays JSON even in a terminal
                 print(review_banner(str(ref), cfg))
             local = Path(args.local_path) if args.local_path else Path.cwd()
-            outcome = run_review(cfg, runner, ref, args, local)
+            outcome = run_review(cfg, None, ref, args, local)
         except REVIEW_ERRORS as exc:
             print("error: %s" % exc, file=sys.stderr)
             return 1
@@ -131,9 +142,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("posting failed: %s" % exc, file=sys.stderr)
                 return 1
         return 0 if result.stop_reason in ("converged", "max_passes", "completed", "cancelled", "budget_exceeded") else 1
-
-    Session(cfg, runner).loop()
-    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

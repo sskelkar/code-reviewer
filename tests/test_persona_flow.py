@@ -416,7 +416,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         from code_reviewer.repl import Session
         output = io.StringIO()
         runner = PersonaRunner()
-        with patch.object(cli, 'load_config', return_value=self.cfg), patch.object(cli, 'ClaudeRunner', return_value=runner), \
+        with patch.object(cli, 'load_config', return_value=self.cfg), patch('code_reviewer.backends.factory.create_runner', return_value=runner), \
                 patch.object(Engine, 'prepare', return_value=self.ctx), contextlib.redirect_stdout(output):
             self.assertEqual(cli.main(['review', self.ctx.label, '--mode', 'agent-personas']), 0)
         self.assertIn('agent-personas: 12/12 completed', output.getvalue())
@@ -492,7 +492,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         error = io.StringIO()
         with patch.object(replay, 'ClaudeRunner', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):
             self.assertEqual(replay.main([str(result.run_dir)]), 1)
-        self.assertIn('production review unavailable', error.getvalue())
+        self.assertIn('VM review unavailable', error.getvalue())
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):
         runner = self.conflict_runner(self.annotation())

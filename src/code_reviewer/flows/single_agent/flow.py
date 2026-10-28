@@ -124,7 +124,7 @@ class SingleAgentFlow:
         return DryRun(
             ctx=ctx, run_dir=store.root, files=summary["files"], excluded=summary["excluded"], changed_lines=summary["changed_lines"],
             default_rules=len(criteria.rules), model=cfg.model_reviewer, tools=Reviewer.TOOLS, command=reviewer_command(cfg),
-            redaction_enabled=cfg.redact_emails, redacted_emails=redacted_emails,
+            redaction_enabled=cfg.redact_emails, redacted_emails=redacted_emails, provider=cfg.provider,
         )
 
     def _run_metadata(self, ctx: PRContext) -> Dict[str, Any]:

@@ -15,10 +15,18 @@ def _renderer(mode: str) -> Any:
 
 
 def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
+    from .sandbox.review import ExportedReview
+    if isinstance(result, ExportedReview):
+        if list(tiers) != result.cfg.post_tiers or dropped:
+            raise ValueError('VM summaries use the filters selected before review')
+        return result.summary_text
     return _renderer(result.cfg.review_mode).render_summary(result, tiers, dropped)
 
 
 def run_line(result: Any) -> str:
+    from .sandbox.review import ExportedReview
+    if isinstance(result, ExportedReview):
+        return 'VM review: %s (%s, %s); usage is in stats.json' % (result.stop_reason, result.cfg.provider, result.cfg.review_mode)
     return _renderer(result.cfg.review_mode).run_line(result)
 
 

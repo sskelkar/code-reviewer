@@ -1,17 +1,17 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; live frontends blocked while runtime-selected provider/execution dispatch is integrated (see [README.md](../README.md) and [VM checklist](sandbox-todo.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
+**Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; VM-default and explicit-host dispatch wired; authenticated VM inference awaits live verification (see [README.md](../README.md) and [VM checklist](sandbox-todo.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
 
-A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by running **N independent review passes** with Claude (Haiku first) in headless mode. Each pass is a fresh context that never sees earlier results. A **Comparator** merges each pass into a master list. Findings get a **confidence score = share of passes that found them**. Output: a report with findings, token usage and cost. Optionally posted as a PR comment through an explicit CLI `--post` flag or a confirmed REPL `post` command.
+A one-shot Python CLI that reviews a GitHub PR with **N independent review passes** using the runtime-selected provider. The REPL is retained but parked. Each pass is a fresh context that never sees earlier results. A **Comparator** merges each pass into a master list. Findings get a **confidence score = share of passes that found them**. Output: a report with findings, token usage and cost. Optionally posted as a PR comment through an explicit CLI `--post` flag (the retained REPL posting interface is parked).
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
 **Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each by default (configurable with `--passes N`). The persona Comparator merges duplicates, categorizes findings and flags possible conflicts; a targeted Verifier annotates flagged groups only. The automated eval framework was removed to keep the project focused on real reviews and manual judgment.
 
-**Not yet built:** project context pack; broader per-finding verification; inline PR comments; authenticated VM and explicit direct-host dispatch. Both provider adapters and reusable VM components are implemented; authenticated VM inference remains untested. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
+**Not yet built:** project context pack; broader per-finding verification; inline PR comments; live VM authentication/inference qualification and private in-VM source authentication. Both provider adapters and reusable VM components are implemented; authenticated VM inference remains untested. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
 
 ## Checklist
 
@@ -34,19 +34,20 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Current focus: one reviewer, runtime provider selection, VM default and explicit host execution (2026-10-28)**
 
-Provider and execution location are independent of repository purpose/visibility. Both adapters use the same single-agent/persona core, criteria, validators, budgets and reports. Preserve host acquisition as a supported direct-flow feature; the planned `--no-sandbox` chooses it explicitly without VM startup overhead. It is not implemented yet. VM failures never switch modes automatically.
+Provider and execution location are independent of repository purpose/visibility. Both adapters use the same single-agent/persona core, criteria, validators, budgets and reports. Preserve host acquisition as a supported direct-flow feature; `--no-sandbox` (or trusted `sandbox = false`) now chooses it explicitly without VM startup overhead. VM failures never switch modes automatically.
 
 - [x] Implement both review algorithms, adapters and trusted operator configuration
 - [x] Implement and no-key check the shared jailed VM lifecycle, read-only admitted input, phase-scoped networking, bounded results, image reuse and explicit recovery
 - [x] Check bounded public PR acquisition inside the VM and close existing source tunnels before inference
 - [x] Remove the unused eval framework and old host-based doctor; remove automatic handover maintenance
 - [x] Extract the raw standalone Firecracker experiment outside this project; retain shared supported-runtime helpers
-- [ ] Wire runtime execution/provider selection, retaining host acquisition and using the shared core in both boundaries
-- [ ] Complete VM authentication, endpoint policy and tools for both runtime-selected adapters
-- [ ] Integrate private reports/display and test explicit selection, cleanup and absence of silent fallback
-- [ ] Run an authorized end-to-end review, then return to manual quality comparison
+- [x] Wire runtime provider selection and explicit host execution using preserved acquisition and the shared core; preflight/dry-run read no credentials
+- [x] Wire default VM dispatch around the same core and selected adapter
+- [x] Implement private credential handoff and provider-scoped endpoint selection; live authentication/tool qualification remains below
+- [x] Integrate bounded private reports/display; test explicit selection, cleanup and no fallback with simulated adapters
+- [ ] Run an authorized one-shot end-to-end review, then return to manual quality comparison
 
-See the [execution contract](security-contract.md), [architecture](architecture.md), [roadmap](security-roadmap.md) and [VM checklist](sandbox-todo.md). Current public commands remain preflight/refusal until dispatch is implemented. No project category receives another provider or review policy.
+See the [execution contract](security-contract.md), [architecture](architecture.md), [roadmap](security-roadmap.md) and [VM checklist](sandbox-todo.md). The REPL is parked with code/tests retained; bare `reviewer` shows help. Focus integration on the one-shot CLI, which now dispatches both execution paths; live VM inference still needs verification; [the architecture guide lists the concrete missing wiring](architecture.md#remaining-end-to-end-wiring). No project category receives another provider or review policy.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
@@ -65,7 +66,7 @@ See the [execution contract](security-contract.md), [architecture](architecture.
 - [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
 
 **Security backlog (promoted to current work; roadmap determines order)**
-- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; normal authenticated dispatch remains unwired; explicit host operation is an intended option
+- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; normal VM/host dispatch is wired; authenticated VM inference remains untested
 - [ ] **Prompt-injection safeguards for text coming from the code under review:** randomized delimiters, warnings when the PR or files contain instruction-like text, a test suite that plants instructions in the diff, PR text and repository files and checks they are ignored, sanitizing text posted to the PR (links, images, HTML, @mentions), and a capability split so the component that reads untrusted code cannot post
 - [ ] Secret scanning and removing `.env*`, key files and `.git` from the checkout; read-only permissions
 - [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; qualify authenticated tool restrictions inside the VM after Claude Code upgrades
@@ -79,6 +80,7 @@ See the [execution contract](security-contract.md), [architecture](architecture.
   - a command that lists and summarizes past runs (what was reviewed, when, by whom, cost, what was posted).
 
 **Later features**
+- [ ] Resume the retained REPL only if explicitly requested
 - [ ] Inline PR comments; MCP server or `/review-pr` skill; provider-agnostic backend; optional LLM executive summary; resume of interrupted runs
 
 ## 1. Architecture
@@ -96,7 +98,7 @@ Sections 1–8 describe the implemented single-agent mode. The optional persona 
 | Comparator | LLM, findings only | Maps each new finding to an existing master ID or `new`. Mapping only. |
 | Harness | Python | Checkout, validation, grounding check, applies mappings, counters, convergence, budget, renders report. |
 
-Each LLM call is a separate `claude -p` subprocess. Its final message is JSON on stdout (`--output-format json` envelope plus `--json-schema`). The harness validates it (one retry), writes all files itself, and agents have no write tools. Prompt templates and JSON schemas live in [prompts/](../prompts/README.md); the harness renders them and records their hashes in each run's config.
+Each LLM call uses a fresh runner session: the CLI adapter starts `claude -p`, while the HTTPS adapter manages a fresh request/tool conversation. Both return structured JSON through the same runner contract. The harness validates it (one retry), writes all files itself, and agents have no write tools. Prompt templates and JSON schemas live in [prompts/](../prompts/README.md); the harness renders them and records their hashes in each run's config.
 
 ### Loop
 
@@ -248,6 +250,8 @@ Validation for the stdin/cost-certainty fix: **296 tests pass** on Python 3.9.6 
 5. ⬜ `--max-budget-usd` behavior when exceeded; timeout kills cleanly (the timeout path is covered by a fake-binary test only).
 6. ✅ `--model haiku` resolves to `claude-haiku-5-5` (recorded from `modelUsage`). ⬜ `stream-json` for a live `--verbose` mode is not implemented.
 7. ⬜ Run one tiny prompt 3× to eyeball pass-to-pass variation.
+
+The VM-default dispatcher now shares worker/image preparation and jailed lifecycle with deployment checks. It privately carries complete review settings, the selected runtime credential and bounded reports. Simulated tests cover both providers/strategies and native parallel environment propagation. A real no-key rerun exposed a provider TLS-probe variable regression; after fixing it, both simulated flows, network/native/file checks, cleanup and worker shutdown passed. No live authentication/inference result is claimed.
 
 ## 10. Roadmap
 

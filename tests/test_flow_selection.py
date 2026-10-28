@@ -62,7 +62,7 @@ class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
         cfg = Config(runs_dir=str(self.tmp / 'runs'))
         ctx = make_repo(self.tmp)
         with patch.object(cli, 'load_config', return_value=cfg), \
-                patch.object(cli, 'ClaudeRunner', return_value=self.runner), \
+                patch('code_reviewer.backends.factory.create_runner', return_value=self.runner), \
                 patch.object(Engine, 'prepare', return_value=ctx), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = cli.main(['review', ctx.label, '--mode', 'agent-personas', '--dry-run'])
@@ -87,7 +87,7 @@ class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
                     cfg = Config(review_mode=mode, persona_passes=2, runs_dir=str(self.tmp / 'runs'))
                     out, err, lines = io.StringIO(), io.StringIO(), []
                     with patch.object(cli, 'load_config', return_value=cfg), \
-                            patch.object(cli, 'ClaudeRunner', return_value=self.runner), \
+                            patch('code_reviewer.backends.factory.create_runner', return_value=self.runner), \
                             patch.object(Engine, 'prepare', return_value=ctx), \
                             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                         code = cli.main(['review', ctx.label, '--dry-run'] + flags)

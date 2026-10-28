@@ -182,7 +182,7 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
         out = io.StringIO()
         config = Config(runs_dir=str(self.tmp / "runs"))
         with mock.patch.object(cli, "load_config", return_value=config), \
-                mock.patch.object(cli, "ClaudeRunner", return_value=fake), \
+                mock.patch("code_reviewer.backends.factory.create_runner", return_value=fake), \
                 mock.patch.object(Engine, "prepare", return_value=self.ctx), \
                 contextlib.redirect_stdout(out):
             code = cli.main(["review", "acme/project#7", "--dry-run"])

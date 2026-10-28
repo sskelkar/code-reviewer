@@ -162,13 +162,14 @@ def build_command(
 class ClaudeRunner:
     """Runs one headless Claude Code call. The user prompt is sent on stdin."""
 
-    def __init__(self, claude_bin: str = "claude", isolation_flags: Optional[Sequence[str]] = None):
+    def __init__(self, claude_bin: str = "claude", isolation_flags: Optional[Sequence[str]] = None, *, env: Optional[Dict[str, str]] = None):
+        self.env = env
         self.claude_bin = claude_bin
         self.isolation_flags = list(isolation_flags if isolation_flags is not None else ["--safe-mode", "--restricted"])
 
     def version(self) -> str:
         try:
-            proc = subprocess.run([self.claude_bin, "--version"], capture_output=True, text=True, timeout=30)
+            proc = subprocess.run([self.claude_bin, "--version"], capture_output=True, text=True, timeout=30, env=self.env)
         except (OSError, subprocess.TimeoutExpired):
             return "unknown"
         return (proc.stdout or proc.stderr).strip() or "unknown"
@@ -206,6 +207,7 @@ class ClaudeRunner:
                 errors="replace",
                 cwd=str(cwd) if cwd else None,
                 timeout=timeout_s,
+                env=self.env,
             )
         except subprocess.TimeoutExpired:
             return ClaudeResult(ok=False, error="timed out after %ss" % timeout_s, timed_out=True)

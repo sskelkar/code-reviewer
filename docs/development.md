@@ -19,7 +19,9 @@ Supported Python is 3.9 and up. Before sending a change, run the tests on the ol
 
 ## Release-boundary checks
 
-`reviewer review example/project#1 --provider claude --preflight` reports the current production blockers without external commands, target reads, model calls or credential prompts. Exit 1 is currently expected. `doctor` reports offline release status; `doctor --live` refuses until a qualified sandbox diagnostic exists. Direct-host dispatch is an intended explicit option, but is not yet integrated; paid replay remains blocked too.
+`reviewer review example/project#1 --provider claude --preflight` reports the current production blockers without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; qualification remains a separate field. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline release status; `doctor --live` refuses until a qualified sandbox diagnostic exists. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
+
+The REPL is parked: its modules and regression tests remain, but bare `reviewer` only prints help and does not start a session. New end-to-end work targets the one-shot CLI.
 
 `tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch out the production gate. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the planned explicit host and default VM execution paths.
 
@@ -42,7 +44,8 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_live_envelope` | Parsing of a recorded Claude result (`tests/fixtures/live_envelope_haiku.json`); no live call |
 | `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
 | `test_persona_criteria` | Static assignment coverage, unique/shared rule identities, reporting sections and shared-parser rendering/disabling |
-| `test_security_boundary` | CLI/REPL/diagnostic/replay refusal before target/model/credential activity, no override certification, trusted config discovery/descriptor opens, and staged-byte artifact pinning |
+| `test_host_execution` | Actual one-shot host dispatcher, both adapters/strategies with simulated model transport, real temporary Git, credential-free preflight/dry-run, validation, secret exclusion and no VM-to-host fallback |
+| `test_security_boundary` | default VM/diagnostic/replay refusal before target/model/credential activity, no override certification, trusted config discovery/descriptor opens, and staged-byte artifact pinning |
 | `test_connected_sandbox` | Checked archive failures, raw scan-IO budgets, bounded capsules without host Git/config/hooks, clean guest Git/export, frame limits, key-release ordering, artifact/key refusal, proxy/firewall policy and both guest flow report paths with fake API replies |
 | `test_openai_backend` | Simulated Responses continuations, reasoning/tool items, costs/refusals/unknown usage/cancellation, bounded local read-tool authority, fixed HTTP endpoint and both full flows |
 | `test_sandbox_prototype` | Stable bounded trusted-source bundles, artifact digests, no-network boot config, both real flows using fake headless processes, result framing, output limits, child-process timeout cleanup, fresh runtime-probe environments and rejection of unexpected authentication |
@@ -68,7 +71,7 @@ Things to know when writing tests:
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration) |
 | Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
 | Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ClaudeCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
-| Add a REPL command | In `repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
+| Resume the parked REPL (only if requested) | In `repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
 | Change the stop rules | `flows/single_agent/stop_policy.py` and `tests/test_stop_policy.py` |
 
 ## Code conventions
@@ -101,7 +104,7 @@ Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw (its l
 
 ## Verifying against the real Claude CLI
 
-The offline tests cannot prove how Claude Code behaves. The previous `reviewer doctor --live` host route is now gated off. Once a qualified sandbox diagnostic/review path exists, check after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These use paid model calls; agents need the user's request before running them. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
+The offline tests cannot prove how Claude Code behaves. The previous host-based doctor implementation was removed; the CLI keeps only a refusal for `doctor --live`. Once a qualified sandbox diagnostic/review path exists, check after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These use paid model calls; agents need the user's request before running them. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
 
 ## Offline VM prototype
 

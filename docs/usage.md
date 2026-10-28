@@ -2,7 +2,7 @@
 
 For an already prepared Mac/Lima worker, `reviewer sandbox check --artifacts DIR --lima-home DIR --instance NAME` builds the current code, runs both flows with simulated replies and no-key boundary probes, saves a private report and stops the worker. See the [deployment command](sandbox-check.md) for prerequisites. It accepts no key; optional `--pr` tests in-VM public acquisition and does not enable live reviews.
 
-Start with the [README quick start](../README.md#quick-start). This guide covers commands, interpreting results, project criteria, configuration, storage and troubleshooting.
+Start with the [README quick start](../README.md#quick-start). The REPL is parked and bare `reviewer` shows help. This guide covers one-shot commands, interpreting results, project criteria, configuration, storage and troubleshooting.
 
 [Commands](#reviewing-a-pull-request) · [Results](#reading-the-report) · [Project criteria](#preparing-your-project-optional-recommended) · [Configuration](#configuration) · [Storage](#where-things-are-stored-and-cleaning-up) · [Troubleshooting](#troubleshooting)
 
@@ -15,35 +15,36 @@ reviewer review OWNER/REPO#123 --preflight
 reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --passes 1 --preflight
 ```
 
-The CLI prints JSON with the provider, effective request settings and production release blockers. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means required controls are missing; this is currently the expected state for both providers. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
+The CLI prints JSON with the provider, effective settings, configuration blockers and qualification evidence. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means configuration is missing/unsupported. `ready: true` means offline settings passed, not that files, worker or authentication have been checked. `qualified: false` records that live VM qualification is outstanding. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
 
-The same command works in the REPL as `review OWNER/REPO#123 --preflight`. The REPL no longer probes the current Git directory at startup or before reviewing. No code is fetched or checkout created by the public frontend yet: the repository-owned sandbox execution path is still being integrated.
+The retained REPL modules are not launched by the CLI. Explicit host review/dry-run is now wired. Default VM dispatch is wired; the deployment still needs trusted worker/artifact settings and the selected runtime credential.
 
-### Live review is gated
+### Execution selection
 
-CLI/REPL review, `--dry-run`, `doctor --live`, the connected real-key module path, and retained paid replay now refuse before target or model activity. Repository labels do not choose execution behavior. The intended explicit host flag is not implemented yet. `--preflight` cannot be combined with `--post` or `--dry-run`. There is no automatic host fallback; explicit host mode is planned.
+Default VM review uses the dedicated Mac/Lima worker and one jailed Firecracker VM. VM dry-run, `doctor --live` and retained paid replay are unsupported and refuse. Explicit host review/dry-run is available. Repository labels do not choose execution behavior. Use `--no-sandbox` or trusted `sandbox = false` to select host execution. `--preflight` cannot be combined with `--post` or `--dry-run`. There is no automatic host fallback.
 
-Both internal review algorithms remain implemented and covered by offline tests; the descriptions of their reports, agreement and saved artifacts below explain that behavior. They are not instructions to bypass the release gate. Prior host-CLI runs are historical evidence. The integration target is VM execution by default and explicit direct-host execution via the proposed `--no-sandbox` flag. Keep host acquisition for that direct path; use the same core and runtime-selected adapter in either boundary. See the [security contract](security-contract.md).
+Both internal review algorithms remain implemented and covered by offline tests; the descriptions of their reports, agreement and saved artifacts below explain that behavior. The normal CLI selects the execution backend before acquisition. Prior host-CLI runs are historical evidence. VM remains the default request; explicit host dispatch via `--no-sandbox` is implemented. Keep host acquisition for that direct path; use the same core and runtime-selected adapter in either boundary. See the [security contract](security-contract.md).
 
 ### Review options
 
-These work the same in the interactive prompt (`review <url> ...`) and the one-shot command (`reviewer review <url> ...`). The same text is shown by `reviewer review --help` and the prompt's `review --help`.
+Use these with `reviewer review <url> ...`; `reviewer review --help` describes them. The parked REPL retains shared option definitions for later use.
 
 | Option | Meaning |
 |---|---|
+| `--no-sandbox` | Explicit direct-host acquisition/review; no VM startup. Also selectable with trusted `sandbox = false`; no automatic fallback |
 | `--preflight` | Show release blockers and effective request without target/model/credential activity |
 | `--provider NAME` | `claude` or `openai`; identical security requirements |
 | `--parallel N` | Persona-only concurrency from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; rejected for single-agent |
-| `--mode NAME` | Select `single-agent` (default) or `agent-personas`. Each runs its own workflow. Works in both CLI and REPL |
+| `--mode NAME` | Select `single-agent` (default) or `agent-personas`. Each runs its own workflow. The REPL is parked |
 | `--passes N` | **Single-agent:** maximum review attempts, default `max_passes` (6). **Agent-personas:** scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots and no quiet-pass stopping. N must be a positive whole number. In single-agent mode: The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` runs exactly one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
 | `--model NAME` | Model for all roles (including persona classification and verification), an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
 | `--keep-checkout` | Keep the temporary read-only checkout so you can inspect exactly what the reviewer saw. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
-| `--dry-run` | Legacy target/prompt preview; currently refused because it needs qualified target preparation. Use `--preflight` for a no-target-IO readiness report |
+| `--dry-run` | Host-only target/prompt preview without credentials or model calls; VM requests refuse. Use `--preflight` for no target IO |
 | `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
 | `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. In the interactive prompt use the `post` command instead |
 | `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
-| `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (or `reviewer --config PATH` to start the prompt). Explicit trusted operator file outside Git working trees, replacing `~/.code-reviewer/review.toml` |
+| `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (bare `reviewer` only shows help). Explicit trusted operator file outside Git working trees, replacing `~/.code-reviewer/review.toml` |
 
 Options override the settings file for that run only. Everything else (budgets, thresholds, criteria mode, ...) is set in [Configuration](#configuration).
 
@@ -186,10 +187,10 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Privacy and safety
 
-- **What is sent to Claude:** the PR title, description and commit messages, the diff, the criteria text, and any repository files the Reviewer reads. It goes through your Claude Code login. Make sure your company policy allows that for the repository, and do not point the agent at repositories or PRs containing customer, rider or other personal data.
+- **What reaches the selected provider:** PR text, diff, criteria and repository files read by code-reading model roles. Authentication uses the selected adapter; repository labels do not select a provider. Both dispatch paths are wired; authenticated VM inference remains untested. Saved prompts/reports also contain code and should stay private.
 - **What the Reviewer and persona Verifier can do:** read files in a separate checkout of the PR. They cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so earlier passes' findings are not next to it. The former host-based `doctor --live` implementation has been removed. Runtime containment checks use the [sandbox deployment command](sandbox-check.md); the tool allow-list alone is not an OS boundary.
-- **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub for the review (a test fails if comments are ever added to it). Posting a comment separately lists the PR's comments to find the tool's own earlier one; that list is never given to the model. Use `reviewer review <url> --dry-run` to see exactly what would be sent, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
-- **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. `--dry-run` shows the text exactly as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
+- **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub for the review (a test fails if comments are ever added to it). Posting a comment separately lists the PR's comments to find the tool's own earlier one; that list is never given to the model. Host `--no-sandbox --dry-run` describes the defaults-only inputs without credentials or model calls, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
+- **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. The internal dry-run output shows the text as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
 - **Untrusted PR text:** the PR description and code are treated as data and the model is told never to follow instructions found in them. That reduces the risk of prompt injection but cannot eliminate it. Read findings critically.
 - **Nothing outward-facing happens without you:** the only action on GitHub is `post`, after a preview and your confirmation (or the explicit `--post` flag).
 - **Not done in v0:** secret scanning of the diff, and filtering of what the Reviewer may read inside the checkout. See [proposal.md](proposal.md) section 5.
@@ -217,4 +218,35 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Sandbox prototype status
 
-Normal commands currently provide preflight/refusal. VM-default and explicit direct-host dispatch are being integrated into one reviewer with runtime-selected provider. The existing VM component supports bounded local input or public URL acquisition in no-key checks; authentication and normal report dispatch are still incomplete. See the [execution contract](security-contract.md) and [VM runbook](sandbox-check.md).
+Normal VM reviews acquire public GitHub PRs inside the VM, select the configured adapter, privately hand off credentials after boundary checks and return bounded reports after worker shutdown. Explicit host dispatch remains available. Private URL authentication and normal-CLI capsule input remain unsupported; low-level no-key checks retain capsules. See the [execution contract](security-contract.md) and [VM runbook](sandbox-check.md).
+
+## Host adapter configuration
+
+Host reviews use `--no-sandbox` or trusted `sandbox = false`; preflight does not check/read model credentials. The CLI adapter uses its configured local login/token. The API adapter reads `OPENAI_API_KEY` only when a real host review starts; never put the key in arguments or TOML. Configure `openai_input_price`, `openai_cached_input_price` and `openai_output_price` as positive USD per million tokens. The current API adapter requires one explicit model ID across all `model_*` roles (`--model MODEL_ID` sets all of them). A host dry-run needs a valid model ID, but no key or rates. Missing/invalid configuration refuses before target acquisition. The [example TOML](../review.example.toml) lists the fields.
+
+
+### VM review configuration
+
+Store these **outside Git working trees**, in `~/.code-reviewer/review.toml` or an explicit `reviewer --config /absolute/path/review.toml review ...` file:
+
+```toml
+sandbox = true
+vm_artifacts = "/absolute/path/to/verified-artifacts"
+vm_lima_home = "/absolute/path/to/dedicated-lima-state"
+vm_instance = "reviewer-sandbox"
+vm_timeout_s = 1800
+# For the native CLI adapter, also provide a verified Linux ARM64 artifact:
+vm_claude_binary = "/absolute/path/to/linux-arm64-claude"
+vm_claude_sha256 = "REPLACE_WITH_VERIFIED_64_CHARACTER_LOWERCASE_SHA256"
+vm_claude_auth = "api-key" # or "oauth"; never chooses billing automatically
+```
+
+Use the worker/artifact prerequisites in [sandbox check](sandbox-check.md). Preflight checks configuration shape without opening artifacts, inspecting the worker or reading a key. Real execution hashes staged artifacts, validates/locks the dedicated stopped worker, prepares clean images and starts one jailed VM. The selected native binary digest joins the connected image's cache identity. The normal command currently supports **public github.com PR acquisition only**; it does not inspect/fetch the target on the workstation. `--local-path` and `--keep-checkout` refuse in VM mode.
+
+Set only the intended credential in the invoking process environment: `OPENAI_API_KEY`, or for Claude, `ANTHROPIC_API_KEY` with `vm_claude_auth = "api-key"`, or `CLAUDE_CODE_OAUTH_TOKEN` with `"oauth"`. No key/token value belongs in TOML, arguments, images or chat. The native adapter receives only its selected credential, fixed proxy configuration and a fresh guest home; host login files/keychains are not imported. OAuth and API billing never fall back to each other. For OpenAI, retain explicit model and token rates as described above.
+
+The launcher reads that selected credential only after input admission, external source-access revocation and native/file/network probes pass. Private SSH process pipes and vsock carry bounded frames. The inference proxy permits only the selected provider's fixed endpoints: `api.openai.com`, or `api.anthropic.com` and `platform.claude.com`. Interactive login, SSO, extra providers/endpoints and custom gateways are unsupported. A missing endpoint fails under policy; it does not widen access automatically. See [native authentication details](sandbox-runtime-auth.md).
+
+After VM/network cleanup and confirmed outer-worker shutdown, the host saves `report.md`, `summary.md` and `stats.json` in a fresh `vm-<random ID>` directory under `runs_dir`. The directory is 0700 and files 0600; internal prompts/raw replies remain ephemeral in the VM. The terminal/posting path uses the prefiltered summary generated inside the guest. `--post` remains explicit and uses the operator's host GitHub CLI after review. No untrusted Python result object is deserialized.
+
+This wiring is covered by simulated provider/transport tests; **authenticated VM inference has not yet been exercised**. A compromised guest can falsify findings/accounting or reuse the credential it receives. VM destruction does not revoke that credential or enforce a hard provider spending cap. Use revocable credentials and retain provider-side limits.

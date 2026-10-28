@@ -10,11 +10,13 @@ from ..backends.read_tools import ReadOnlyTools
 from .network import PROXY
 
 
-def source_tunnel():
+def source_tunnel(provider='openai'):
     # Hold an actual acquisition tunnel across the host's phase transition.
     # A new deny rule alone must not leave established source access usable.
     with socket.create_connection(PROXY, timeout=3) as denied:
-        denied.sendall(b'CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n')
+        from .settings import ENDPOINTS
+        host = ENDPOINTS[provider][0]
+        denied.sendall(('CONNECT %s:443 HTTP/1.1\r\nHost: %s:443\r\n\r\n' % (host, host)).encode())
         if b' 403 ' not in denied.recv(4096).split(b'\r\n', 1)[0]:
             raise ValueError('inference access permitted during acquisition')
     sock = socket.create_connection(PROXY, timeout=20)
@@ -45,7 +47,9 @@ def source_denied():
     return True
 
 
-def network_probes():
+def network_probes(provider='openai'):
+    from .settings import ENDPOINTS
+    approved = ENDPOINTS[provider][0]
     checks = {}
     for label, host, port in (('direct_public', '1.1.1.1', 443), ('metadata', '169.254.169.254', 80),
                               ('private', '192.168.1.1', 80), ('host_service', '192.0.2.1', 22)):
@@ -55,7 +59,7 @@ def network_probes():
         except OSError:
             checks[label] = True
     for label, destination in (('other_domain', 'example.com:443'), ('literal_ip', '1.1.1.1:443'),
-                                ('wrong_port', 'api.openai.com:80'), ('private_proxy', '127.0.0.1:443')):
+                                ('wrong_port', approved + ':80'), ('private_proxy', '127.0.0.1:443')):
         with socket.create_connection(PROXY, timeout=3) as sock:
             sock.sendall(('CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' % (destination, destination)).encode())
             status = sock.recv(4096).split(b'\r\n', 1)[0]
@@ -77,7 +81,7 @@ def network_probes():
         checks['ipv6'] = True
     connection = http.client.HTTPSConnection(PROXY[0], PROXY[1], timeout=20)
     try:
-        connection.set_tunnel('api.openai.com', 443)
+        connection.set_tunnel(approved, 443)
         connection.connect()  # verified TLS only, no HTTP API/model request
         checks['approved_tls'] = True
     finally:

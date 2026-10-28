@@ -17,12 +17,12 @@ class Control:
 # Partial controls deliberately block release. Replace a row only alongside the
 # enforcement implementation and its containment evidence, not an operator flag.
 COMMON_CONTROLS: Tuple[Control, ...] = (
-    Control('isolated-acquisition', 'partial', 'public in-VM acquisition and source revocation pass no-key checks; private acquisition and normal review dispatch remain unsupported'),
+    Control('isolated-acquisition', 'partial', 'public in-VM acquisition and source revocation pass no-key checks; private acquisition remains unsupported; normal public-PR dispatch is wired'),
     Control('vmm-confinement', 'partial', 'jailed VMM and systemd resource controls pass no-key checks; full lifecycle/release evidence remains incomplete'),
-    Control('immutable-filesystem', 'partial', 'root-owned runtime and read-only admitted input pass native checks; supported live workflow is not integrated'),
+    Control('immutable-filesystem', 'partial', 'root-owned runtime and read-only admitted input pass native checks; normal dispatch is wired; authenticated operation remains untested'),
     Control('guest-execution-policy', 'partial', 'non-root/no-new-privileges enforced; custom guest syscall policy is deferred under the simplified scope'),
-    Control('crash-recovery', 'partial', 'independent deadlines, supervisor-loss checks and explicit local recovery pass; full live review integration remains incomplete'),
-    Control('private-report-workflow', 'partial', 'bounded export exists; integrated private local retention/rendering is incomplete'),
+    Control('crash-recovery', 'partial', 'independent deadlines, supervisor-loss checks and explicit local recovery pass; authenticated lifecycle qualification remains incomplete'),
+    Control('private-report-workflow', 'partial', 'bounded export exists; bounded private local retention/rendering is wired; live qualification remains outstanding'),
 )
 PROVIDER_CONTROLS = {
     'claude': (
@@ -36,17 +36,19 @@ PROVIDER_CONTROLS = {
 }
 
 
-def readiness(provider: str) -> Dict[str, Any]:
+def readiness(provider: str, *, sandbox: bool = True) -> Dict[str, Any]:
     if provider not in PROVIDER_CONTROLS:
         raise ReviewRefused('unsupported provider; no fallback')
-    rows = COMMON_CONTROLS + PROVIDER_CONTROLS[provider]
+    rows = COMMON_CONTROLS + PROVIDER_CONTROLS[provider] if sandbox else (
+        Control('explicit-host-execution', 'qualified', 'operator-selected host boundary; VM controls are not applied'),
+    )
     blockers = [row.id for row in rows if row.status != 'qualified']
-    return {'ready': not blockers, 'provider': provider, 'blockers': blockers,
+    return {'ready': not blockers, 'provider': provider, 'execution': 'vm' if sandbox else 'host', 'blockers': blockers,
             'controls': [{'id': row.id, 'status': row.status, 'reason': row.reason} for row in rows]}
 
 
 def require_ready(provider: str) -> None:
     report = readiness(provider)
     if not report['ready']:
-        raise ReviewRefused('production review unavailable: ' + ', '.join(report['blockers'])
+        raise ReviewRefused('VM review unavailable: ' + ', '.join(report['blockers'])
                             + '; use review --preflight for details; no host fallback')

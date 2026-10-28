@@ -115,7 +115,7 @@ class TempDirTestMixin:
 
 
 def synthetic_frontend(test):
-    """Isolate presentation tests from the production release gate using only fake runners.
+    """Isolate presentation tests from execution dispatch using only fake runners.
 
     Production refusal is exercised without this mock in test_security_boundary.
     Direct Engine regressions continue to exercise both real flow algorithms.
@@ -125,6 +125,9 @@ def synthetic_frontend(test):
     from code_reviewer.review_flow import ReviewOutcome
 
     def review(cfg, runner, ref, options, local_path):
+        if runner is None:
+            from code_reviewer.backends.factory import create_runner
+            runner = create_runner(cfg)
         engine = Engine(cfg, runner)
         ctx = engine.prepare(ref, local_path)
         if options.dry_run:

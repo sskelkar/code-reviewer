@@ -165,6 +165,32 @@ def prepared_images(text, source_sha, builder_sha):
     return value
 
 
+def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False):
+    """Share trusted deployment preparation between checks and normal reviews."""
+    filenames = ['firecracker', 'jailer', 'kernel', 'source.tar', 'build.sh']
+    if native:
+        filenames.append('claude')
+    for filename in filenames:
+        worker.call('copy', stage / filename, worker.instance + ':' + job + '/' + filename)
+    print('sandbox: preparing pinned reviewer images (reuse unchanged inputs)', file=sys.stderr)
+    uid = int(worker.shell('id', '-u').strip())
+    if not 1 <= uid < 2**31:
+        raise ValueError('expected an unprivileged worker operator')
+    root_env = ('sudo', '-n', 'env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'HOME='+job,
+                'SUDO_UID='+str(uid), 'PYTHONDONTWRITEBYTECODE=1', 'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null')
+    worker.shell(*root_env, 'sh', job+'/build.sh', job+'/source.tar', job+'/bootstrap', 'sources-only')
+    extra = ('--claude', job+'/claude', '--claude-sha256', native) if native else ()
+    preparation = prepared_images(worker.shell(*root_env,
+        'PYTHONPATH='+job+'/bootstrap/root/opt/reviewer/src',
+        'python3', '-m', 'code_reviewer.sandbox.prepare', '--source', job+'/source.tar',
+        '--source-sha256', bundle_sha, '--builder', job+'/build.sh', '--builder-sha256', builder_sha,
+        '--keep-job', job, *extra, timeout=600), bundle_sha, builder_sha)
+    images = preparation['images']
+    print('sandbox: images '+', '.join(label+(' reused' if image['reused'] else ' built')
+                                      for label,image in images.items()), file=sys.stderr)
+    return root_env, preparation
+
+
 def run_check(artifacts, lima_home, instance, output=None, *, lifecycle=False, source=None):
     if source is not None:
         from .acquire import parse_pr
@@ -185,23 +211,8 @@ def run_check(artifacts, lima_home, instance, output=None, *, lifecycle=False, s
         with worker.session():
             worker.shell('mkdir', '-m', '700', job)
             try:
-                for filename in ('firecracker', 'jailer', 'kernel', 'source.tar', 'build.sh'):
-                    worker.call('copy', stage / filename, worker.instance + ':' + job + '/' + filename)
-                print('sandbox: preparing pinned reviewer images (reuse unchanged inputs)', file=sys.stderr)
-                uid = int(worker.shell('id','-u').strip())
-                if not 1 <= uid < 2**31:
-                    raise ValueError('expected an unprivileged worker operator')
-                root_env = ('sudo', '-n', 'env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'HOME='+job,
-                    'SUDO_UID='+str(uid), 'PYTHONDONTWRITEBYTECODE=1', 'GIT_CONFIG_NOSYSTEM=1', 'GIT_CONFIG_GLOBAL=/dev/null')
-                worker.shell(*root_env, 'sh', job+'/build.sh', job+'/source.tar', job+'/bootstrap', 'sources-only')
-                preparation = prepared_images(worker.shell(*root_env,
-                    'PYTHONPATH='+job+'/bootstrap/root/opt/reviewer/src',
-                    'python3', '-m', 'code_reviewer.sandbox.prepare', '--source', job+'/source.tar',
-                    '--source-sha256', bundle['sha256'], '--builder', job+'/build.sh', '--builder-sha256', builder_sha,
-                    '--keep-job', job, timeout=420), bundle['sha256'], builder_sha)
+                root_env, preparation = prepare_worker(worker, stage, job, bundle['sha256'], builder_sha)
                 images = preparation['images']
-                print('sandbox: images '+', '.join(label+(' reused' if image['reused'] else ' built')
-                                                  for label,image in images.items()), file=sys.stderr)
                 print('sandbox: running both flows with simulated OpenAI replies (no network)', file=sys.stderr)
                 arguments = (*root_env, 'PYTHONPATH=' + images['connected']['path'] + '/root/opt/reviewer/src',
                     'python3', '-m', 'code_reviewer.sandbox.check_worker', '--root', job,

@@ -32,7 +32,8 @@ def positive_int(text: str) -> int:
 def add_run_options(parser: argparse.ArgumentParser) -> None:
     """Options that change how a review runs. Both frontends add exactly these."""
     parser.add_argument("--preflight", action="store_true", help="show production readiness without fetching code, running a model or reading credentials")
-    parser.add_argument("--provider", choices=("claude", "openai"), help="inference backend; the same security gates apply to both")
+    parser.add_argument("--provider", choices=("claude", "openai"), help="runtime inference adapter; independent of host/VM execution")
+    parser.add_argument('--no-sandbox', action='store_true', help='explicit trusted direct-host acquisition/review, without starting a VM')
     parser.add_argument("--parallel", type=positive_int, metavar="N", help="persona-only concurrent calls, 1 to 4 (default: persona_parallel, 4)")
     parser.add_argument("--mode", choices=REVIEW_MODES,
                         help="review flow (default: review_mode in review.toml, single-agent); agent-personas defaults to three passes per persona")
@@ -62,6 +63,8 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
 def apply_run_options(cfg: Config, args: Any) -> Config:
     """Return a copy of `cfg` with the command-line overrides applied and validated. The original is untouched."""
     cfg = replace(cfg)
+    if getattr(args, 'no_sandbox', False):
+        cfg.sandbox = False
     if getattr(args, "provider", None):
         cfg.provider = args.provider
     if getattr(args, 'preflight', False) and getattr(args, 'dry_run', False):
@@ -92,7 +95,8 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
     ("--preflight", "show release blockers; no fetch, model call or credential access"),
-    ("--provider NAME", "claude or openai; the same security gates apply"),
+    ("--provider NAME", "runtime adapter: claude or openai, independent of execution location"),
+    ('--no-sandbox', 'explicit direct-host execution; default is VM, with no automatic fallback'),
     ("--parallel N", "persona-only concurrent calls, 1 to 4 (default 4)"),
     ("--mode NAME", "single-agent (default); agent-personas defaults to three passes each"),
     ("--passes N", "single-agent maximum passes; agent-personas passes per persona"),
@@ -121,12 +125,12 @@ def review_banner(pr: str, cfg: Config) -> str:
     ]
     if cfg.review_mode == 'agent-personas':
         lines.insert(3, 'Persona schedule: %d passes per persona; no quiet-pass stopping.' % cfg.persona_passes)
+    lines.insert(3, 'Execution: %s · provider %s' % ('VM' if cfg.sandbox else 'direct host (explicitly selected)', cfg.provider))
     lines += ["  %s%s" % (flag.ljust(width), description) for flag, description in BANNER_OPTIONS]
     lines += [
         "",
         "When it finishes you get the review summary (the text --post would send), one line about the run and the path of the",
-        "full report. To mark findings, drop one or post after reading the summary, use the interactive prompt instead:",
-        "run `reviewer`, then `review <PR URL>`.",
+        "full report. Inspect that file locally; the interactive prompt and its mark/drop commands are parked.",
         "",
     ]
     return "\n".join(lines)

@@ -4,13 +4,13 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 ## Ownership
 
-`Engine` selects one flow before PR preparation and asset loading. Each flow owns orchestration, model contracts, master/result types and presentation. `shared/` owns transport, git/diff handling, criteria discovery, grounding, storage and accounting; it imports neither flow. Frontends dispatch rendering through `presentation.py`.
+`Engine` selects one flow before PR preparation and asset loading. Each flow owns orchestration, model contracts, master/result types and presentation. `shared/` owns transport, git/diff handling, criteria discovery, grounding, storage and accounting; it imports neither flow. The CLI dispatches rendering through `presentation.py`. The REPL code/tests are retained but parked; bare `reviewer` shows help.
 
-Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. In the internal Claude flow algorithm, every call is a fresh headless session; the public frontend is currently gated. The connected pilot injects an OpenAI runner with fresh per-call conversation state instead. Models propose; Python validates, accounts and writes state.
+Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. In the internal Claude flow algorithm, every call is a fresh headless session; the native adapter uses fresh headless sessions. The API adapter uses fresh per-call conversation state. Models propose; Python validates, accounts and writes state.
 
-## Execution choices (planned)
+## Execution choices
 
-Provider, review strategy and execution location are independent operator settings. One core supports either provider and either strategy in the selected boundary. VM is the intended default; the proposed `--no-sandbox` explicitly selects host acquisition/review. Repository labels never select behavior. No automatic VM-to-host fallback exists.
+Provider, review strategy and execution location are independent operator settings. One core supports either provider and either strategy in the selected boundary. VM is the default; `--no-sandbox` (or trusted `sandbox = false`) explicitly selects host acquisition/review. Repository labels never select behavior. No automatic VM-to-host fallback exists.
 
 ```mermaid
 flowchart TD
@@ -23,35 +23,53 @@ flowchart TD
     ADAPTER --> VALIDATE["Shared validators, accounting and private reports"]
 ```
 
-This diagram is the integration target. Current frontend behavior is described below; the host flag is not yet implemented.
+Host dispatch and runtime provider selection are implemented. Both dispatch paths are wired; authenticated VM inference remains untested. Current routing is below.
 
 ## Public entry-point boundary
 
-`review_flow.run_review` is now a no-target-IO preflight/refusal boundary shared by CLI and REPL. `security.py` reports code-owned release blockers per provider; operator config cannot assert readiness. Authenticated execution dispatch is not integrated yet. Even changing every status row to qualified would not re-enable the legacy host flow: dispatch still refuses until actual execution integration is implemented.
+`review_flow.run_review` checks effective execution/provider configuration before target activity. Preflight returns settings/readiness without target or credential reads. Explicit host selection uses the provider factory, retained host acquisition and the shared Engine. Host dry-run skips runner/credential creation. VM requests validate deployment settings and use `sandbox/review.py`; every real job must pass artifact/worker/admission/confinement checks. VM failure never switches to the host.
 
 ```mermaid
 flowchart TD
-    ENTRY["CLI / REPL review request"] --> CFG["Trusted operator configuration only<br/>Ignore current-directory review.toml"]
-    CFG --> REQUEST["Validate effective options and parse PR identifier<br/>No Git or target-directory inspection"]
-    REQUEST --> CHECK{"Preflight?"}
-    CHECK -->|yes| JSON["Print provider controls and request settings<br/>Nonzero while release blockers exist"]
-    CHECK -->|no| GATE["Check current execution readiness"]
-    GATE --> STOP["Currently refuse before fetch / credentials / inference<br/>No legacy host fallback"]
+    ENTRY["One-shot CLI request"] --> CFG["Trusted configuration + runtime overrides"]
+    CFG --> PRE{"Preflight?"}
+    PRE -->|yes| JSON["Configuration/readiness JSON<br/>No target or credential activity"]
+    PRE -->|no| LOC{"Execution location"}
+    LOC -->|"VM default"| WORKER["Validate/lock/start dedicated Lima worker<br/>Stage pinned artifacts; prepare clean image"]
+    WORKER --> VM["One jailed Firecracker VM<br/>Acquire and pin public PR; seal input"]
+    VM --> CHECKS["Revoke GitHub access; boundary probes<br/>Private selected credential handoff"]
+    CHECKS --> GUEST["Selected adapter + same Engine inside VM"]
+    GUEST --> EXPORT["Bounded private report transfer<br/>Stop VM/network and outer worker"]
+    EXPORT --> OUT
+    LOC -->|"Explicit host"| DRY{"Dry-run?"}
+    DRY -->|yes| INPUT["Acquire input; render defaults-only preview<br/>No key or model call"]
+    DRY -->|no| RUNNER["Provider factory: configured credential + runner"]
+    RUNNER --> ACQ["Host acquisition and pinned context"]
+    ACQ --> CORE["Engine: selected strategy, shared validation/accounting"]
+    CORE --> OUT["Private report + CLI summary; post only if requested"]
 ```
 
-The low-level connected real-key path, `doctor --live`, and paid replay also enforce the boundary. No-key synthetic deployment checks and direct injected-runner algorithm tests remain available. `config.py` reads only operator-selected/outside-repository configuration through bounded no-follow descriptor opens.
+`doctor` reports offline execution/configuration status. The retained `doctor --live`, paid replay and legacy incomplete-settings connected jobs remain blocked. Normal VM reviews use the complete operator job protocol. The parked REPL remains covered by internal tests, with no CLI launch route.
 
 ## Sandbox deployment
 
-The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal authenticated dispatch remains unwired.
+The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal dispatch is wired, with live authentication/inference qualification outstanding.
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [VM supervisor](sandbox-connected.md) runs in the dedicated Linux worker: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. The earlier key mechanism requested the key after admission/probes; the real-key path is now gated off, and only no-key engineering checks may launch. Fixed bounded report files return over vsock. The regular CLI constructs a runner object but its release boundary prevents host execution; normal execution/provider dispatch is not implemented yet.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. `sandbox/review.py` stages trusted source/artifacts and reuses `check.prepare_worker` for the dedicated Linux worker. `review_worker.py` owns private framed SSH stdio; `connected.py` installs external network policy and launches the shared jailed VM. `guest.py` acquires/pins the public PR, seals input read-only, checks native/file/network restrictions and runs the configured provider/strategy. The credential is read on the workstation only after admission/probes, then transferred over private pipes/vsock. No key/token is stored in argv, TOML, cache images or console logs. `settings.py` transports the complete allowlisted review configuration while excluding host paths/infrastructure settings.
 
-Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The raw standalone launcher was extracted outside this project. The supported Mac check now uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition now runs unprivileged inside the guest with source access revoked externally before readiness. Authenticated provider operation and user-facing review integration remain pending; recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
+The VM returns three bounded files: report, summary and stats. After VM/network cleanup, remote job deletion and confirmed outer-worker shutdown, the host validates and saves them privately. `ExportedReview` supplies the already filtered summary to CLI/posting; Python objects are never unpickled. Internal prompt/raw-call files remain ephemeral. Native runtime bytes are digest-pinned and part of connected-image cache identity. The native adapter receives an explicit fresh environment, including the selected credential and proxy, in sequential and parallel subprocess paths. The API adapter uses its explicit proxy transport.
+
+Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The raw standalone launcher was extracted outside this project. The supported Mac check now uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition now runs unprivileged inside the guest with source access revoked externally before readiness. Authenticated provider operation remains untested; recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
 
 The public `reviewer sandbox check` command in `sandbox/check.py` now owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates a harmless fixture or passes an explicit public PR URL into the review VM, and verifies host network cleanup; it accepts no key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
 
-Image preparation is now a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. Normal-command authenticated review/report dispatch is still pending.
+Image preparation is now a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. The normal command now reuses image preparation, worker lifecycle and connected supervision.
+
+## Remaining end-to-end wiring
+
+The normal VM/host dispatcher, trusted settings, provider-scoped endpoint policy, private credential handoff and local report presentation are implemented. Offline tests cover both providers/strategies and refusal/cleanup paths. Preflight distinguishes configuration readiness from live qualification; it opens no artifacts and reads no credentials.
+
+Remaining: verify authenticated inference and native tools under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input and VM dry-run remain unsupported. Host API calls currently require one explicit model for all roles and operator token rates. Keep real credentials out of tests; no successful live VM inference has been recorded.
 
 ## Code map
 
@@ -72,9 +90,11 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `shared/claude_cli.py`, `llm.py`, `templates.py` | Claude subprocesses/retries, accounting/logging and generic template rendering |
 | `shared/git_ops.py`, `pr_source.py`, `diffview.py`, `findings.py` | Pinned PR input, diff parsing/exclusions and evidence validation |
 | `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
-| `cli.py`, `repl.py`, `review_flow.py`, `presentation.py`, `review_options.py`, `repl_help.py` | User entry points, common launch sequence, options and help |
+| `cli.py`, `review_flow.py`, `presentation.py`, `review_options.py` | Active command entry point, execution boundary, output, options and help |
+| `repl.py`, `repl_help.py` | Parked interactive frontend; code and tests retained, no CLI launch route |
 | `progress.py`, `post.py`, `replay.py` | Progress, confirmed posting and Comparator replay; offline release status is handled by `cli.py`/`security.py` |
-| `backends/openai.py`, `backends/read_tools.py` | Optional stdlib Responses adapter and bounded descriptor-based Read/Grep/Glob; injected only by separate sandbox workloads |
+| `backends/factory.py`, `openai.py`, `read_tools.py` | Runtime runner selection, credential/config checks, stdlib API adapter and bounded read tools |
+| `sandbox/review.py`, `review_worker.py`, `settings.py`, `channel.py` | Normal VM dispatch, allowlisted settings, private SSH pipe protocol and local exported result |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
 | `sandbox/check.py`, `check_worker.py` | Supported no-key Mac deployment command and connected Linux fixture/cleanup check |
 | `sandbox/vm.py`, `snapshot.py` | Shared jailed VMM/systemd lifecycle and read-only admitted guest input with native isolation probes |
@@ -91,11 +111,13 @@ The flow below explains the implemented internal algorithm and legacy preparatio
 
 ```mermaid
 flowchart TD
-    U["Programmatic Engine / synthetic workload<br/>Not current public frontend dispatch"] --> SELECT["<b>Engine</b><br/>select single-agent"]
-    SELECT --> PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
+    U["Host or guest caller / synthetic workload"] --> SELECT["<b>Engine</b><br/>select single-agent"]
+    SELECT --> INPUT{"Already admitted PRContext?"}
+    INPUT -->|yes, guest or internal caller| RED
+    INPUT -->|no, retained host preparation| PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
     PREP --> RED["<b>InputBuilder.redact</b><br/>replace email addresses in PR text"]
     RED --> DIFF["<b>InputBuilder.load_diff</b> (diffview)<br/>merge-base diff, drop lockfiles and generated files,<br/>refuse empty or oversized PRs"]
-    DIFF --> CO["<b>RunStore + git_ops.export_tree</b><br/>read-only copy of the PR head<br/>in a temporary directory"]
+    DIFF --> CO["<b>Prepared checkout or RunStore + export_tree</b><br/>Reuse sealed VM snapshot, or export separate head copy<br/>Read-only model tools in either case"]
     CO --> CRIT
 
     subgraph CRIT["Criteria: InputBuilder.resolve_criteria (criteria.py)"]
@@ -125,9 +147,7 @@ flowchart TD
     SP1 -->|stop| OUT
     SP2 -->|converged or limit| OUT
     OUT["<b>report.render_report + summary.render_summary</b><br/>confidence = share of passes that found each finding<br/>RunStore writes report.md, summary.md, master.json, stats.json"]
-    OUT --> SHOW["Terminal: shareable summary<br/>and cost line"]
-    SHOW --> REPL["REPL only: show / drop / mark / missed"]
-    REPL --> POST["<b>post</b>: preview the comment, ask y/N,<br/>then gh posts it to the PR"]
+    OUT --> RESULT["Return RunResult to host caller or guest exporter<br/>CLI renders direct or privately exported summary"]
 
     classDef model fill:#dbeafe,stroke:#2563eb,color:#111827
     class C3 model
@@ -168,13 +188,13 @@ What is checked, and by whom, today:
 
 Numbered steps, with the module that does each:
 
-1. `pr_source` fetches the PR head and base into `refs/code-reviewer/` and pins SHAs.
+1. Receive an admitted `PRContext` from the execution backend, or use retained host `pr_source` preparation to fetch/pin commits. VM acquisition does not call the host preparation path.
 2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, drops excluded files and refuses empty or oversized PRs.
-3. `git_ops.export_tree` exports the PR head to a checkout in its own temporary directory (symlinks skipped).
+3. Reuse the execution backend's admitted `prepared_checkout`, or export the head into a separate flow-owned temporary directory (symlinks skipped). VM setup seals its mounts read-only; the generic exporter alone does not provide that OS control.
 4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), adds the nested `AGENTS.md` and `.claude/rules` files that cover the changed paths (`criteria.scoped_files`, no model call), and rule IDs are assigned.
 5. `SingleAgentFlow._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`. The Comparator is skipped when there is nothing to compare (for example a single finding in the first pass).
 6. `StopPolicy` decides after every pass whether to stop.
-7. `report.render_report` writes the report; `RunStore` writes all artifacts. Criteria appear in the report by name and source, never by their internal IDs.
+7. `report.render_report` renders Markdown; the flow and `RunStore` write the report/artifacts. Criteria appear in the report by name and source, never by their internal IDs.
 
 ## Persona implementation
 

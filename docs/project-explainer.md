@@ -6,7 +6,7 @@ Code samples are copied from this repository (some are abridged, marked with `..
 
 **Flow refactor note (2026-10-20).** `Engine` in the package root is now a small facade that selects one mode and delegates `prepare`, `review` and `dry_run`. The working composition root is [`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py). Its passes, roles, master/result and presentation live in the same folder, with unchanged prompt/schema and criteria assets. Shared mechanics are in `shared/` and import neither flow. The separate `agent_personas/flow.py` implements the optional configured parallel-round workflow (three rounds by default, `persona_passes` or `--passes N` to change it), loading `personas.json`, common review instructions and thirteen criteria. It owns its contracts, master/result, budget guard and report. Reviewer calls run concurrently within each round; consolidation is serial in fixed order, with proportional role/persona pools and cancellation-aware subprocesses. Frontends dispatch presentation through `presentation.py`; shared code imports neither workflow. Persona behavior is offline-tested and has a successful user-run execution check; finding quality remains unmeasured. Older package-root imports in examples remain supported compatibility exports. The refactor changes ownership/import paths, not the existing algorithm.
 
-**Production boundary update (2026-10-26).** `review_flow.run_review` no longer dispatches host Git/reviews. It returns a no-network `--preflight` report or refuses because release controls are incomplete. Operator configuration is no longer discovered in the current project. Internal flow examples below describe reusable algorithms exercised by synthetic tests, not a bypass around this gate. The public command is `reviewer review PR --provider claude|openai --preflight`; supported sandbox execution is still pending. See the [security contract](security-contract.md).
+**Current execution status (2026-10-28).** The REPL is parked; its modules/tests remain, while bare `reviewer` prints help without loading settings or starting a session. The one-shot CLI now supports explicit host acquisition/review with runtime-selected adapters. `--no-sandbox` or trusted `sandbox = false` selects the host. Default VM dispatch now prepares the worker/image, privately bootstraps the selected adapter and collects bounded reports; live authentication/inference remains untested. Host preflight/dry-run need no model credentials. The supported `sandbox check` exercises no-key deployment, not finding quality on a live review. See [remaining end-to-end wiring](architecture.md#remaining-end-to-end-wiring).
 
 **How to use this guide**
 
@@ -56,8 +56,13 @@ That line tells the installer to generate an executable called `reviewer` that i
 ```python
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)        # parse command line (like picocli)
-    cfg = load_config(args.config)                # read settings
-    runner = ClaudeRunner(cfg.claude_bin, cfg.isolation_flags)
+    if args.command == "sandbox":
+        from .sandbox.check import cli as sandbox_check
+        return sandbox_check(args)                # deployment checks bypass review config
+    if args.command is None:
+        build_parser().print_help()               # REPL is parked
+        return 0
+    cfg = load_config(args.config)                # trusted operator settings
 
     if args.command == "doctor":                  # `reviewer doctor`
         from .security import readiness
@@ -67,8 +72,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "review":                  # `reviewer review <url>`
         ...                                       # parse the PR, apply the options, print the banner in a terminal,
                                                   # call review_flow.run_review(...), print the summary, optionally post
-    Session(cfg, runner).loop()                   # plain `reviewer`: the interactive prompt
-    return 0
 ```
 
 The return value is the process exit code. The last lines of `cli.py` are:
@@ -80,35 +83,36 @@ if __name__ == "__main__":
 
 `__name__` is `"__main__"` only when the file is run directly (`python -m code_reviewer.cli`); when another module imports it, the block is skipped. It is Python's `public static void main` guard, and you will see it at the bottom of many scripts.
 
-### 2.2 The three frontends and the one engine
+### 2.2 Command routing and the one engine
 
 | You type | Entry | Goes to |
 |---|---|---|
-| `reviewer` | `cli.main` | [`repl.Session.loop`](../src/code_reviewer/repl.py): reads commands in a loop, `review <url>` calls `review_flow.run_review` |
-| `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
+| `reviewer` | `cli.main` | Print help; no configuration, model or interactive session |
+| `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): preflight, explicit host acquisition/review, or current VM refusal |
 | `reviewer doctor` | `cli.main` | `security.readiness`: offline release status |
+| `reviewer sandbox check` / `recover` | `cli.main` before review configuration | `sandbox.check.cli`: no-key deployment or dedicated-worker recovery |
 
-Both normal review entry points go through `review_flow.run_review`, which currently returns preflight or refuses before `Engine`/Git/model execution. Inside synthetic tests and guest workloads, `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
+The one-shot review command goes through `review_flow.run_review`, which returns preflight without I/O, executes explicit host requests through the provider factory/Engine, or dispatches VM requests through the shared worker/lifecycle and private bootstrap. Inside synthetic tests and guest workloads, `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
 
 ### 2.3 Tests
 
 `python3 -m unittest discover -s tests -t .` is the "run all tests" command (like `mvn test`). See [12](#12-tests).
 
-### 2.4 Internal single-agent algorithm and legacy preparation, as a call stack
+### 2.4 Internal single-agent algorithm and retained host acquisition, as a call stack
 
 ```
-Historical host path (public dispatch is now gated):
+Explicit host acquisition and internal algorithm (`--no-sandbox`; VM dispatch uses the shared jailed lifecycle):
  cli.main
   ├─ load_config()                         -> Config (settings object)
-  ├─ ClaudeRunner(...)                     -> wrapper that runs `claude -p ...` as a subprocess
-  └─ review_flow.run_review(...)           shared by the one-shot command and the interactive prompt
+  └─ review_flow.run_review(...)           one-shot dispatcher (also retained by parked REPL code)
+      ├─ factory.create_runner(cfg)       -> selected adapter, only for a real host review
       ├─ Engine(cfg, runner, emit=ProgressPrinter()) -> selects SingleAgentFlow (default)
       ├─ engine.prepare(ref)               -> pr_source.load_pr_context -> git_ops (runs gh and git)
       └─ engine.review(ctx) -> SingleAgentFlow.review(ctx)
           ├─ inputs.redact                 email addresses in the PR text -> [email]
           ├─ RunStore.create(...)          directory for this run's files
           ├─ inputs.load_diff              -> diffview.parse_unified_diff
-          ├─ git_ops.export_tree           read-only copy of the PR's code, in its own temporary directory
+          ├─ git_ops.export_tree           separate head copy; model tools are read-only
           ├─ inputs.resolve_criteria       -> criteria.* (+ CriteriaResolver, an LLM call; nested AGENTS.md and .claude/rules files are added without a model)
           ├─ build PassRunner(...)         manual wiring of collaborators (section 10.1)
           ├─ _run_passes: loop, asking StopPolicy whether to continue
@@ -185,7 +189,7 @@ from __future__ import annotations
 
 It makes type annotations lazy (they are stored as text and not evaluated), which lets the code use newer annotation syntax on older Python and refer to classes before they are defined. You can read it as a required incantation.
 
-`engine.py` has `__all__ = ["Engine"]`, which declares its public name (it controls what `from engine import *` pulls in). The root `models.py`, `roles.py` and `templates.py` similarly declare compatibility exports. Other legacy root modules alias their canonical module objects via `sys.modules`, so existing imports and test patch targets refer to the same implementation. New code should import the owning `shared/` or flow module directly.
+`engine.py` has `__all__ = ["Engine"]`, which declares its public name (it controls what `from engine import *` pulls in). The root `models.py` and `templates.py` declare compatibility exports; `roles.py` forwards to the owning module. Other legacy root modules alias their canonical module objects via `sys.modules`, so existing imports and test patch targets refer to the same implementation. New code should import the owning `shared/` or flow module directly.
 
 ### 3.3 The `src/` layout and `tests/__init__.py`
 
@@ -233,7 +237,10 @@ The project deliberately uses only the standard library. This is what each modul
 | `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `run_store.py`, `git_ops.py`, `post.py` |
 | `shutil` | High-level file ops (delete a tree) | `FileUtils` | `run_store.py` |
 | `tarfile` | Read `.tar` archives | commons-compress | `git_ops.py` |
-| `hashlib` | SHA-256 hashing | `MessageDigest` | `flows/single_agent/prompt_contract.py` |
+| `hashlib` | SHA-256 hashing | `MessageDigest` | Prompt hashes and staged VM artifacts |
+| `http.client`, `ssl` | HTTPS API transport | JDK HTTP client/TLS | `backends/openai.py`, `sandbox/acquire.py` |
+| `concurrent.futures`, `threading` | Thread pools, locks and cancellation | `ExecutorService`, locks | Persona rounds and budget reservations |
+| `socket`, `struct` | Private framed VM communication | Sockets, byte buffers | `sandbox/wire.py`, `guest.py`, `connected.py` |
 | `fnmatch` | Shell-style glob matching (`*.min.js`) | `PathMatcher` | `diffview.py` |
 | `itertools` | Iteration helpers (`combinations`) | Streams helpers | `master.py`, `replay.py` |
 | `copy` | Deep copies | copy constructors | `master.py` |
@@ -243,7 +250,9 @@ The project deliberately uses only the standard library. This is what each modul
 
 ### 4.3 External programs, not libraries
 
-The agent drives three command-line tools by running them as processes and reading their output: **`claude`** (Claude Code, in headless mode), **`gh`** (GitHub CLI) and **`git`**. No HTTP client, no GitHub SDK, no LLM SDK is used. The wrappers are [`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py) and [`git_ops.py`](../src/code_reviewer/shared/git_ops.py).
+The Claude adapter invokes the headless CLI; host acquisition uses `gh` and `git`. The OpenAI adapter uses Python's standard-library `http.client` for HTTPS. In-VM public acquisition also uses standard-library HTTPS for metadata and clean Git for objects. No GitHub or model SDK dependency is installed.
+
+VM deployment additionally invokes Lima, Firecracker/jailer, systemd, network tools and the image builder's OS utilities. These are explicit prerequisites of that execution path, not Python dependencies or requirements for intended direct-host operation. See [the deployment prerequisites](sandbox-check.md#prerequisites).
 
 ### 4.4 What you might expect but will not find
 
@@ -254,7 +263,7 @@ The agent drives three command-line tools by running them as processes and readi
 | Jackson POJOs | Plain `dict`/`list` from `json` |
 | Mockito | Hand-written fakes (`FakeRunner`), section 12 |
 | SLF4J/log4j | No logging framework. Progress is printed through events; details go to files in the run directory |
-| Async/threads | None. Everything is sequential |
+| Async/threads | Persona Reviewers use `ThreadPoolExecutor` within each round; merges are serial. Single-agent passes are sequential |
 | A web framework or database | None |
 
 ---
@@ -448,7 +457,7 @@ Java lambdas cannot reassign captured locals; Python inner functions can, if the
 Any object whose class defines `__call__` can be invoked like a function. `ProgressPrinter` (in `progress.py`) and `CriteriaResolver` (in `shared/resolver.py`) do this, so an instance can be passed where a function is expected:
 
 ```python
-engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=options.verbose))   # emit expects a function Event -> None (review_flow.run_review)
+engine = Engine(cfg, runner, emit=ProgressPrinter(verbose=options.verbose))   # internal caller: emit expects Event -> None
 ```
 
 This is how Java would use a class implementing `Consumer<Event>`, minus the interface declaration.
@@ -537,7 +546,7 @@ class PRContext:
 
   In Python, a default value is evaluated **once** and shared. `= []` would give every instance the same list (and `@dataclass` refuses it). `default_factory=list` calls `list()` for each new object. This is the idiom you will see in `Config`, `PassRecord` and others.
 - Helpers from the `dataclasses` module: `asdict(obj)` turns an instance into a nested `dict` (used for JSON output, e.g. `PassRecord.to_dict`) and `replace(obj, ...)` makes a shallow copy (`cli.py` does `cfg = replace(cfg)` to avoid mutating shared settings).
-- There are 22 dataclasses in this project, for example `Config`, `PRContext`, `PassRecord`, `RunResult`, `CallSpec`, `ClaudeResult`, `Event`, `Rule`.
+- Dataclasses in this project include `Config`, `PRContext`, `PassRecord`, `RunResult`, `CallSpec`, `ClaudeResult`, `Event`, `Rule`.
 
 ### 8.4 Decorators
 
@@ -625,12 +634,13 @@ This is the one place where a method is **overridden**. The standard library's `
 
 ### 8.7 Polymorphism without interfaces (duck typing)
 
-Java would define `interface ClaudeRunner` and two implementations. Python does not need that. `Engine` takes `runner: Any`, and anything with a matching `run(...)` method works:
+Java might define a `Runner` interface and several implementations. Python does not need that. `Engine` takes `runner: Any`, and anything with a matching `run(...)` method works:
 
-- Production: `ClaudeRunner` ([`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py)) launches the real `claude` process.
+- CLI adapter: `ClaudeRunner` ([`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py)) launches the real `claude` process.
+- HTTPS adapter: `OpenAIRunner` ([`backends/openai.py`](../src/code_reviewer/backends/openai.py)) runs a fresh request/tool conversation.
 - Tests: `FakeRunner` ([`tests/helpers.py`](../tests/helpers.py)) returns scripted answers.
 
-The two classes share no parent. This structural typing ("if it walks like a duck...") is how all the test doubles work, and why no mocking framework is needed. It also means there is no compile-time check that a replacement is complete; the tests catch that. You will see runtime capability checks such as `hasattr(self.runner, "version")` in `SingleAgentFlow._run_metadata`.
+These classes share no required parent class. This structural typing ("if it walks like a duck...") is how all the test doubles work, and why no mocking framework is needed. It also means there is no compile-time check that a replacement is complete; the tests catch that. You will see runtime capability checks such as `hasattr(self.runner, "version")` in `SingleAgentFlow._run_metadata`.
 
 ### 8.8 Encapsulation, statics and enums
 
@@ -704,7 +714,7 @@ This is what a Spring `@Configuration` class would do. It is also why classes ar
 
 ### 10.2 Events and callbacks (observer pattern, without an interface)
 
-`SingleAgentFlow` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. The CLI passes a `ProgressPrinter`, which prints a line. Other frontends (or tests) could pass a different function. The engine never prints. See [`events.py`](../src/code_reviewer/shared/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
+`SingleAgentFlow` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. Internal callers can pass a `ProgressPrinter`, which prints a line; explicit host dispatch supplies this progress callback; preflight and current VM refusal do not instantiate the engine. Other frontends (or tests) could pass a different function. The engine never prints. The parked REPL is preserved as another internal caller; it is not an active CLI entry point. See [`events.py`](../src/code_reviewer/shared/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
 
 ### 10.3 The central design rule
 
@@ -723,20 +733,22 @@ A typical module here reads top to bottom as: docstring, `from __future__ import
 [`flows/single_agent/flow.py`](../src/code_reviewer/flows/single_agent/flow.py), method `review`. Read it as a recipe; each line delegates to a module:
 
 ```python
-def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
+def review(self, ctx: PRContext, keep_checkout: bool = False,
+           prepared_checkout: Optional[Path] = None) -> RunResult:
     cfg = self.cfg
     ctx, redacted_emails = self.inputs.redact(ctx)           # email addresses in the PR text become [email]
-    self.emit("run_started", repo=ctx.repo, ...)             # tell the frontend
+    self.emit("run_started", repo=ctx.repo)                  # other metadata omitted here
     stats = Stats()                                          # cost accounting
     store = RunStore.create(cfg.runs_path(), ctx)            # directory for artifacts
     store.dump("config.json", self._run_metadata(ctx))       # remember settings and versions
     store.save_pr_text(ctx, redacted_emails)                 # the PR text as it is sent to the model
 
     files, diff_summary = self.inputs.load_diff(ctx)         # parse the diff (tuple return, unpacked)
-    checkout = store.prepare_checkout()                      # a temporary directory outside the run directory
+    checkout = Path(prepared_checkout) if prepared_checkout is not None else store.prepare_checkout()
+    # The implementation validates an externally supplied path before using it.
     try:
-        self.emit("checkout_ready", path=str(checkout), kept=keep_checkout,
-                  **git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout))   # ** spreads a dict into keyword arguments
+        exported = {} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)
+        self.emit("checkout_ready", path=str(checkout), kept=keep_checkout, **exported)
 
         caller = ClaudeCaller(self.runner, cfg, stats)       # all LLM calls go through this
         criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
@@ -749,7 +761,7 @@ def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
             store.cleanup_checkout()
 ```
 
-Notes for a Java reader: `**git_ops.export_tree(...)` expands the returned dict into named arguments (`files=..., skipped_links=...`); assignments such as `ctx, redacted_emails = ...` and `files, diff_summary = ...` unpack a returned tuple; `try/finally` works as in Java, so the checkout is deleted even if an exception escapes the method.
+Notes for a Java reader: `**exported` expands the returned dict into named arguments (`files=..., skipped_links=...`); assignments such as `ctx, redacted_emails = ...` and `files, diff_summary = ...` unpack a returned tuple; `try/finally` works as in Java, so flow-owned checkout cleanup happens even if an exception escapes. A supplied VM snapshot is owned/cleaned by its execution backend; the flow neither re-exports nor deletes it. The standalone exporter makes a separate copy with read-only model tools; VM setup separately enforces a read-only mount.
 
 ### 11.2 `StopPolicy`: a small pure class
 
@@ -772,7 +784,7 @@ and `criteria.resolve_project` simply accepts "a function that takes (list, str)
 
 ### 11.5 `ClaudeRunner`: talking to an external process
 
-[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. This normal CLI path runs one-shot Claude processes. Persona mode uses `flows/agent_personas/runner.py` to supply stdin through a temporary file, poll cancellation and terminate process groups. The separate OpenAI sandbox backend uses a Python HTTPS client instead of Claude subprocesses.
+[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. This adapter implementation runs one-shot processes when called by an internal algorithm; both execution locations use this adapter, with an explicit private credential/proxy environment inside the VM. Persona mode uses `flows/agent_personas/runner.py` to supply stdin through a temporary file, poll cancellation and terminate process groups. The runtime-selectable API adapter uses Python HTTPS; `backends/factory.py` now creates the selected runner after configuration is resolved.
 
 ### 11.6 Reading a regex
 
@@ -830,7 +842,7 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 
 ## 14. Suggested reading order
 
-1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and the three modes (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds the steps the prompt shares).
+1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and command routing (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds the preflight/refusal boundary both review frontends share).
 2. [`flows/single_agent/flow.py`](../src/code_reviewer/flows/single_agent/flow.py): `SingleAgentFlow.review` and `_run_passes`; then [`review_inputs.py`](../src/code_reviewer/shared/review_inputs.py), which builds what the Reviewer is given.
 3. [`models.py`](../src/code_reviewer/models.py) and [`config.py`](../src/code_reviewer/config.py): dataclasses, your gentlest introduction to Python classes.
 4. [`stop_policy.py`](../src/code_reviewer/flows/single_agent/stop_policy.py) with its test: a plain class and its rules.
@@ -838,7 +850,7 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 6. [`llm.py`](../src/code_reviewer/shared/llm.py) and [`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): how a model call is made and its output parsed.
 7. [`findings.py`](../src/code_reviewer/shared/findings.py), [`master.py`](../src/code_reviewer/flows/single_agent/master.py): validation, evidence checks and merging (the densest logic).
 8. [`criteria.py`](../src/code_reviewer/shared/criteria.py), [`diffview.py`](../src/code_reviewer/shared/diffview.py), [`git_ops.py`](../src/code_reviewer/shared/git_ops.py): the input side (criteria discovery, diff parsing, git/gh).
-9. [`summary.py`](../src/code_reviewer/flows/single_agent/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/flows/single_agent/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py) and [`review_flow.py`](../src/code_reviewer/review_flow.py) (the review steps both frontends share): the output side.
+9. [`summary.py`](../src/code_reviewer/flows/single_agent/summary.py) (the shareable summary that is printed and posted), [`report.py`](../src/code_reviewer/flows/single_agent/report.py) (the detailed report), [`repl.py`](../src/code_reviewer/repl.py) and [`review_flow.py`](../src/code_reviewer/review_flow.py) (the current boundary both frontends share): the output side.
 10. `tests/`: executable documentation, starting with `test_engine.py`.
 
 Small supporting modules to read when you need them: [`repl_help.py`](../src/code_reviewer/repl_help.py) (the prompt's banner and help text), [`review_options.py`](../src/code_reviewer/review_options.py) (the `review` options, shared by both frontends, and the one-shot banner), [`dry_run.py`](../src/code_reviewer/flows/single_agent/dry_run.py) (`--dry-run`), [`redact.py`](../src/code_reviewer/shared/redact.py) (email redaction) and [`replay.py`](../src/code_reviewer/replay.py) (a developer tool for evaluating the comparator).
@@ -925,17 +937,17 @@ Runtime preparation now happens before job execution. `sandbox/prepare.py` build
 
 There is now a supported deployment command: `reviewer sandbox check`. `cli.py` dispatches it to `sandbox/check.py` before review configuration loading. That Python module validates and owns the dedicated Lima lifecycle, builds the current trusted source, exercises both flows with simulated model replies, runs no-key connected probes, removes temporary state and saves a private JSON result after shutdown. The second VM is a sequential test workload, not another layer or per-persona VM. See [how to run it](sandbox-check.md) and [alternative designs](sandbox-alternatives.md). It does not yet review a real PR.
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. Normal `reviewer` CLI/REPL review commands now refuse until production controls and sandbox dispatch are qualified. The separate [connected Linux entry point](sandbox-connected.md) injects an OpenAI runner into the same `Engine` and existing flows; it does not duplicate the review algorithm.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. The one-shot CLI can run explicit host reviews; default VM requests use `sandbox/review.py` and the shared lifecycle. The separate [connected Linux entry point](sandbox-connected.md) selects the configured provider runner inside the same `Engine` and existing flows; it does not duplicate the review algorithm.
 
 Follow the boundary by module:
 
-1. For a public PR, the workstation transfers only a validated URL. Inside the guest, `sandbox/acquire.py` reads bounded API metadata, pins hashes and fetches/admits/exports with clean unprivileged Git. The supervisor permits GitHub only during this phase, then kills old tunnels and replaces policy with the inference-only route. Optional `sandbox/capsule.py` instead reads bounded Git object files and pinned base/head metadata on the workstation. It invokes no Git and copies no target config/hooks. The capsule may include other history from that object store; only use the selected non-sensitive repository.
+1. For a public PR, the workstation transfers only a validated URL. Inside the guest, `sandbox/acquire.py` reads bounded API metadata, pins hashes and fetches/admits/exports with clean unprivileged Git. The supervisor permits GitHub only during this phase, then kills old tunnels and replaces policy with the inference-only route. Optional `sandbox/capsule.py` instead reads bounded Git object files and pinned base/head metadata on the workstation. It invokes no Git and copies no target config/hooks. The capsule may include other history from that object store; keep this target material private and outside the reviewer source repository.
 2. On the dedicated Linux/KVM worker (a mountless Lima VM on compatible Macs), `sandbox/connected.py` selects trusted artifacts/settings, installs `network.py`'s TAP/nftables/standard Squid policy and starts one unprivileged VMM with an external deadline. No host home or target directory is mounted.
-3. Inside the guest, initial `guest.py` setup receives input over `wire.py`'s bounded vsock frames. For public URLs, an unprivileged acquisition child fetches and exports before the parent seals read-only mounts and drops privileges. For capsules, `git_input.py` reconstructs, admits and exports before sealing and dropping privileges. Boundary probes run before the host prompts privately for the disposable key.
-4. `guest.py` constructs `Config` from explicit operator settings and calls `Engine(cfg, OpenAIRunner(...)).review(ctx)`. In Java terms, the runner is an injected implementation behind the existing duck-typed interface. No target `review.toml` is loaded. Each call starts a new local conversation; Read/Grep/Glob use `backends/read_tools.py`, and verified TLS reaches OpenAI through the mandatory external proxy.
+3. Inside the guest, initial `guest.py` setup receives input over `wire.py`'s bounded vsock frames. For public URLs, an unprivileged acquisition child fetches and exports before the parent seals read-only mounts and drops privileges. For capsules, `git_input.py` reconstructs, admits and exports before sealing and dropping privileges. No-key runs return after probes. For normal reviews, the worker now signals readiness to the workstation, which reads only the selected credential and sends it through private framed SSH pipes and vsock.
+4. In normal review dispatch, `guest.py` constructs `Config` from the allowlisted operator settings, selects the configured provider runner, then calls `Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)`. In Java terms, the runner is an injected implementation behind the existing duck-typed interface. No target `review.toml` is loaded. Each call starts a fresh context. The API adapter implements bounded tools in `backends/read_tools.py`; the native adapter receives the same explicit tools restriction through its command builder. Both use the mandatory external proxy with the selected provider policy.
 5. The existing flow writes reports in private guest scratch. The guest returns only fixed bounded report artifacts; the host validates and writes private files. Raw prompts stay in the disposable VM. Success, failure, cancellation and deadlines trigger process/network/scratch cleanup; stale policy after a hard crash blocks a new job.
 
-The current connected engineering command uses one pass/worker by default, separately from normal algorithm defaults. Provider is a runtime adapter choice; VM-default and explicit host execution use the same review core. Repository labels do not create another workflow. Normal authenticated dispatch and the proposed `--no-sandbox` flag remain unwired. Existing host acquisition is retained for the direct option. A credential available in a compromised guest can be copied, and local accounting cannot enforce provider spending.
+The current connected engineering command uses one pass/worker by default, separately from normal algorithm defaults. Provider is a runtime adapter choice; VM-default and explicit host execution use the same review core. Repository labels do not create another workflow. Explicit host dispatch and the `--no-sandbox` flag are implemented; VM dispatch is wired; real authentication/inference remains untested. Existing host acquisition is retained for the direct option. A credential available in a compromised guest can be copied, and local accounting cannot enforce provider spending.
 
 ### The launcher is separate from the reviewer
 

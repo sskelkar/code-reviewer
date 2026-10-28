@@ -25,6 +25,10 @@ MAX_EXPORT = 8 * 1024 * 1024
 
 
 def validate_settings(value):
+    if isinstance(value, dict) and 'config' in value:
+        from .settings import config_from_job
+        config_from_job(value, Path('/work'))
+        return value
     keys = {'model', 'prices', 'mode', 'passes', 'parallel', 'budget', 'call_budget', 'probe_only'}
     if not isinstance(value, dict) or set(value) != keys:
         raise ValueError('invalid trusted settings')
@@ -63,6 +67,10 @@ def collect_artifacts(paths, key):
 
 def run_job(sock, root, *, probe_network=network_probes, seal=None):
     settings = validate_settings(receive_json(sock))
+    from .settings import provider
+    selected = provider(settings)
+    if sock is not None:
+        sock.settimeout(settings.get('timeout_s', 900))
     data = receive(sock, MAX_CAPSULE)
     acquired = None
     if data.startswith(b'{'):
@@ -74,7 +82,7 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
         acquired = pin(dict(repo=ctx.repo, number=ctx.number, base=ctx.base_sha,
                             head=ctx.head_sha, merge_base=ctx.merge_base), source['url'])
         from .probes import source_tunnel
-        with source_tunnel() as tunnel:
+        with source_tunnel(selected) as tunnel:
             send_json(sock, {'kind': 'acquired', 'source': acquired})
             if receive_json(sock) != {'kind': 'source-access-revoked'}:
                 raise ValueError('source access revocation not acknowledged')
@@ -85,7 +93,7 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
     snapshot = None
     if seal is not None:
         snapshot = seal(ctx, root, exported=True) if acquired else seal(ctx, root)
-    checks = {'file_tools': file_probes(root), 'network': probe_network()}
+    checks = {'file_tools': file_probes(root), 'network': probe_network(selected) if probe_network is network_probes else probe_network()}
     if acquired:
         from .probes import source_denied
         checks['source_access_revoked'] = source_denied()
@@ -100,13 +108,30 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
         files = {'boundary-report.json': base64.b64encode(json.dumps(checks).encode()).decode()}
         return {'kind': 'result', 'stop_reason': 'probes_passed', 'files': files, 'checks': checks}
     key = secret
-    runner = OpenAIRunner(key, model=settings['model'], prices=TokenPrices(*settings['prices']),
-                          transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
-    cfg = Config(provider='openai', review_mode=settings['mode'], model_reviewer=runner.model, model_comparator=runner.model,
-                 model_resolver=runner.model, model_verifier=runner.model, criteria_mode='merge',
-                 min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
-                 persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],
-                 call_budget_usd=settings['call_budget'], call_timeout_s=120, runs_dir=str(root / 'runs'))
+    if 'config' in settings:
+        from .settings import config_from_job
+        cfg = config_from_job(settings, root)
+    else:
+        cfg = Config(provider='openai', review_mode=settings['mode'], model_reviewer=settings['model'], model_comparator=settings['model'],
+                     model_resolver=settings['model'], model_verifier=settings['model'], criteria_mode='merge',
+                     min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
+                     persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],
+                     call_budget_usd=settings['call_budget'], call_timeout_s=120, runs_dir=str(root / 'runs'))
+    if selected == 'openai':
+        runner = OpenAIRunner(key, model=cfg.model_reviewer,
+                              prices=TokenPrices(cfg.openai_input_price, cfg.openai_cached_input_price, cfg.openai_output_price)
+                              if 'config' in settings else TokenPrices(*settings['prices']),
+                              transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
+    else:
+        from ..shared.claude_cli import ClaudeRunner
+        from .settings import credential_name
+        env = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL',
+               'SSL_CERT_FILE', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL') if name in os.environ}
+        env.update({credential_name(selected, settings['auth']): key,
+                    'HTTPS_PROXY': 'http://%s:%d' % PROXY,
+                    'CLAUDE_CONFIG_DIR': str(root / 'home' / '.claude'),
+                    'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'})
+        runner = ClaudeRunner('/usr/bin/claude', cfg.isolation_flags, env=env)
     if snapshot is not None:
         result = Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)
     else:

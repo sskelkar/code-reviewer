@@ -6,7 +6,7 @@ Guidance for agents working on this repository. Read the [proposal checklist](do
 
 One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same review algorithms, criteria, validation, accounting and reports. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
 
-Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The proposed flag is `--no-sandbox`; it is not implemented yet. Host acquisition is an intended supported feature: preserve it while wiring the direct flow. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
+Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The flag is `--no-sandbox`; trusted operator config may also select `sandbox = false`. Both dispatch paths are implemented; authenticated VM inference remains untested. Host acquisition is an intended supported feature: preserve it while wiring the direct flow. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
 
 The standalone raw-Firecracker experiment was extracted into an independent playground outside this repository. Do not restore that launcher here. The supported VM backend uses the shared jailed lifecycle.
 
@@ -14,11 +14,13 @@ The standalone raw-Firecracker experiment was extracted into an independent play
 
 ## Current implementation
 
-Both single-agent and four-persona algorithms are implemented. The host acquisition implementation and both provider adapters exist. Public CLI/REPL currently provide preflight/refusal only: neither direct-host dispatch nor authenticated VM dispatch is integrated. Do not claim a planned flag works or enable execution just by changing readiness rows.
+Both single-agent and four-persona algorithms are implemented. The CLI provider factory and explicit host acquisition/review dispatch use those same algorithms. The REPL is parked: keep `repl.py`, `repl_help.py` and their tests, but do not wire new features through them. Bare `reviewer` prints help without loading configuration or starting a session. Focus on the one-shot CLI.
+
+The public CLI runs explicit host reviews with either provider, while VM requests use trusted deployment settings and the shared jailed lifecycle. Host dry-run/preflight do not read model credentials; normal host execution reads credentials only after effective options/configuration are validated. The API adapter currently requires one explicit model ID for all roles and three positive operator token rates; its key comes only from OPENAI_API_KEY, never serialized settings. Preflight configuration readiness is separate from qualification evidence; real jobs enforce worker/artifact/admission/confinement checks.
 
 The supported `reviewer sandbox check` uses a dedicated mountless Lima Linux worker on macOS and one jailed Firecracker VM per workload. Checks cover simulated model execution in both flows, bounded input/result transfer, external phase-scoped network policy, non-root/no-new-privileges, read-only code, host-observed confinement/resource limits and cleanup. `--pr` fetches public GitHub input inside the review VM and revokes source access before inference. Optional capsule input remains; private in-VM source authentication is unsupported. `--lifecycle` tests cancellation/supervisor loss; `sandbox recover` resets abandoned dedicated-worker state. Clean cached images contain no target inputs, findings or credentials.
 
-Actual no-key VM checks passed. Authenticated adapter/VM integration remains unfinished. The existing connected transport's implemented inference route is currently specific to one adapter; complete endpoint/authentication support for both without creating separate review products. Custom guest-wide syscall filtering and a custom credential broker are deferred. A VM does not revoke a copied provider credential or enforce a hard provider spending cap.
+Actual no-key VM checks passed. Normal VM dispatch now transports allowlisted settings, selected-adapter credentials and bounded reports through private SSH pipes/vsock. Fixed inference policies select the provider endpoints. API-key and native CLI API-key/OAuth paths are implemented, but real authentication/inference/native-tool qualification remains outstanding. Custom guest-wide syscall filtering and a custom credential broker are deferred. A VM does not revoke a copied provider credential or enforce a hard provider spending cap.
 
 The unused eval framework and host-based doctor implementation have been removed. `doctor` is an offline status report; `doctor --live` refuses. The recorded-envelope parser regressions remain.
 
@@ -59,4 +61,4 @@ Support Python **3.9+**. Run the whole suite on the oldest and newest Python ava
 - Keep relevant code, prompts, README, proposal and explainers consistent. No automatic handover maintenance.
 - Never copy private source, saved-run contents, company/PR identifiers, PII or credentials into this repository. Use synthetic fixtures. Do not inspect previously restricted private material merely to develop the reviewer.
 - Canonical prompt changes require authorized before/after replay evidence and honest results in proposal section 9. Infrastructure changes do not justify paid prompt calls.
-- Preserve no-target-IO preflight and refusal while dispatch is incomplete. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.
+- Preserve no-target-IO/credential-free preflight and concrete VM admission checks; host execution requires the explicit operator selection. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.

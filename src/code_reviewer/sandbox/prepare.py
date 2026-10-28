@@ -58,7 +58,7 @@ def private_cache(path):
         raise ValueError('image cache must be a private root-owned directory')
 
 
-def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE):
+def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE, claude=None, claude_sha=None):
     if os.geteuid() != 0:
         raise ValueError('image preparation requires root in the dedicated Linux worker')
     private_cache(cache)
@@ -74,16 +74,21 @@ def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE):
             inputs = Path(name)
             Artifact(Path(source), source_sha, 20*1024**2).stage(inputs/'source.tar')
             Artifact(Path(builder), builder_sha, 65536).stage(inputs/'build.sh')
+            if claude is not None:
+                Artifact(Path(claude), claude_sha, 300000000).stage(inputs/'claude')
             for label, workload in WORKLOADS.items():
                 identity = dict(format=1, source_sha256=source_sha, builder_sha256=builder_sha,
                                 runtime_sha256=runtime_sha, workload=workload)
+                if claude is not None and label == 'connected':
+                    identity['claude_sha256'] = claude_sha
                 key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
                 entry = cache/key
                 reused = entry.exists()
                 if not reused:
                     with tempfile.TemporaryDirectory(prefix='.build-', dir=cache) as staging:
                         stage = Path(staging)
-                        collect(['sh', str(inputs/'build.sh'), str(inputs/'source.tar'), str(stage/'image'), workload],
+                        extra = [str(inputs/'claude'), claude_sha] if claude is not None and label == 'connected' else []
+                        collect(['sh', str(inputs/'build.sh'), str(inputs/'source.tar'), str(stage/'image'), workload, *extra],
                                 inputs, 180, env={'PATH': '/usr/bin:/bin', 'LANG': 'C', 'PYTHONDONTWRITEBYTECODE': '1'})
                         if runtime_digest() != runtime_sha:
                             raise ValueError('OS runtime changed during image preparation; retry after updates finish')
@@ -107,6 +112,8 @@ def main():
     for field in ('source', 'builder'):
         parser.add_argument('--'+field, type=Path, required=True)
         parser.add_argument('--'+field+'-sha256', required=True)
+    parser.add_argument('--claude', type=Path)
+    parser.add_argument('--claude-sha256')
     parser.add_argument('--keep-job', type=Path, required=True)
     args = parser.parse_args()
     from .recover import JOB, cleanup_stale, verify_idle
@@ -114,7 +121,10 @@ def main():
         raise ValueError('expected the current dedicated worker job directory')
     verify_idle()
     removed = cleanup_stale(keep=args.keep_job)
-    result = prepare_images(args.source, args.source_sha256, args.builder, args.builder_sha256)
+    if (args.claude is None) != (args.claude_sha256 is None):
+        raise ValueError('native runtime path and digest required together')
+    result = prepare_images(args.source, args.source_sha256, args.builder, args.builder_sha256,
+                            claude=args.claude, claude_sha=args.claude_sha256)
     result['stale_directories_removed'] = removed
     print(json.dumps(result))
 

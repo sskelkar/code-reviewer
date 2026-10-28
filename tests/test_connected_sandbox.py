@@ -135,7 +135,7 @@ class ConnectedTests(unittest.TestCase):
     def test_live_job_refuses_before_platform_or_key_access(self):
         with patch.object(connected.sys,'platform','linux'), patch.object(connected.os,'geteuid',return_value=0), \
                 patch.object(connected.os,'access',return_value=True), patch.object(connected.sys.stdin,'isatty',return_value=False):
-            with self.assertRaisesRegex(ValueError,'production review unavailable'):
+            with self.assertRaisesRegex(ValueError,'VM review unavailable'):
                 connected.run(self.root/'vmm',self.root/'kernel',self.root/'initrd',self.root/'input',self.root/'out',
                               dict(self.settings,probe_only=False))
 

@@ -1,4 +1,4 @@
-"""Responses API runner for explicit sandbox experiments; no SDK or host commands."""
+"""Responses API adapter shared by execution paths; no SDK or model command tools."""
 from __future__ import annotations
 
 import copy

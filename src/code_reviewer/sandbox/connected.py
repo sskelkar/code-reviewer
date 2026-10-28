@@ -129,9 +129,14 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
     readiness = ready(receive_json(sock))
     if acquired and readiness['checks'].get('source_access_revoked') is not True:
         raise ValueError('source denial probes did not pass')
+    if 'config' in settings:
+        from .snapshot import CHECKS
+        isolation = readiness['checks'].get('isolation')
+        if not isinstance(isolation, dict) or set(isolation) != CHECKS or any(v is not True for v in isolation.values()):
+            raise ValueError('native guest isolation not confirmed; no credential released')
     print('sandbox: input and boundary probes passed', file=sys.stderr)
     command(['nft', 'list', 'table', 'inet', 'cr_reviewer'])
-    key = '' if settings['probe_only'] else key_reader('Disposable OpenAI API key: ')
+    key = '' if settings['probe_only'] else key_reader('Selected provider credential: ')
     if not settings['probe_only'] and (not isinstance(key, str) or not key or len(key) > 4096
                                        or any(ord(c) < 33 or ord(c) > 126 for c in key)):
         raise ValueError('invalid runtime key')
@@ -140,6 +145,7 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
     if acquired and (not isinstance(value.get('checks'), dict) or value['checks'].get('source_access_revoked') is not True):
         raise ValueError('result does not confirm source revocation')
     result = export_result(value, output, key, settings['probe_only'])
+    result['checks'] = readiness['checks']
     if acquired:
         result['acquisition'] = dict(acquired, source_access_revoked=True)
     return result
@@ -147,10 +153,10 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
 
 def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None, jailer=None, source=None):
     validate_settings(settings)
-    if not settings['probe_only']:
-        from ..security import require_ready
-        require_ready('openai')
-        raise ReviewRefused('qualified credential/execution dispatch is not integrated; no legacy key path')
+    if not settings['probe_only'] and 'config' not in settings:
+        raise ReviewRefused('VM review unavailable: complete operator job settings required; no legacy key path')
+    from .settings import provider
+    selected = provider(settings)
     if sys.platform != 'linux' or os.geteuid() != 0 or not os.access('/dev/kvm', os.R_OK | os.W_OK):
         raise ValueError('connected pilot requires a dedicated Linux/KVM host and root for scoped network setup')
     if Path(output).exists():
@@ -182,10 +188,11 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
             with tempfile.TemporaryDirectory(prefix='reviewer-job-', dir='/tmp') as name:
                 root = Path(name)
                 root.chmod(0o711)
-                with Network(root, 65534, timeout, acquisition=source is not None) as network:
+                with Network(root, 65534, timeout, acquisition=source is not None, provider=selected) as network:
                     print('sandbox: external network policy installed; starting jailed review VM', file=sys.stderr)
                     with VirtualMachine(root, binary, jailer, kernel, initrd, timeout=timeout) as vm:
                         with connect_bootstrap(vm.socket, vm.proc) as sock:
+                            sock.settimeout(timeout)
                             confinement = vm.confinement()
                             result = exchange(sock, settings, data, output, key_reader or getpass.getpass,
                                               network=network, source=source)

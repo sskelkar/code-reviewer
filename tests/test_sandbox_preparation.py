@@ -27,9 +27,9 @@ class PreparationTests(unittest.TestCase):
 
     def fake_build(self, cmd, *args, **kwargs):
         self.calls.append(cmd)
-        image = Path(cmd[-2])
+        image = Path(cmd[3])
         image.mkdir(mode=0o700)
-        (image/'initrd.cpio.gz').write_bytes(b'synthetic image '+cmd[-1].encode())
+        (image/'initrd.cpio.gz').write_bytes(b'synthetic image '+cmd[4].encode())
 
     def context(self, runtime=None):
         stack = ExitStack()
@@ -45,9 +45,9 @@ class PreparationTests(unittest.TestCase):
         stack.enter_context(patch.object(prepare, 'collect', side_effect=self.fake_build))
         return stack
 
-    def run_prepare(self):
+    def run_prepare(self, **kwargs):
         return prepare.prepare_images(self.source, hashlib.sha256(self.source.read_bytes()).hexdigest(),
-                                      self.builder, hashlib.sha256(self.builder.read_bytes()).hexdigest(), cache=self.cache)
+                                      self.builder, hashlib.sha256(self.builder.read_bytes()).hexdigest(), cache=self.cache, **kwargs)
 
     def test_unchanged_inputs_reuse_images_and_changes_invalidate_identity(self):
         with self.context():
@@ -65,6 +65,23 @@ class PreparationTests(unittest.TestCase):
         with self.context(runtime=lambda: 'b'*64):
             self.run_prepare()
             self.assertEqual(len(self.calls), 8)
+
+    def test_native_runtime_digest_invalidates_connected_image_and_is_checked_before_build(self):
+        binary=self.root/'claude'
+        binary.write_bytes(b'synthetic native binary')
+        digest=hashlib.sha256(binary.read_bytes()).hexdigest()
+        with self.context():
+            base=self.run_prepare()
+            native=self.run_prepare(claude=binary,claude_sha=digest)
+            self.assertEqual(base['images']['offline']['path'],native['images']['offline']['path'])
+            self.assertNotEqual(base['images']['connected']['path'],native['images']['connected']['path'])
+            self.assertEqual(len(self.calls),3)
+            self.assertEqual(self.calls[-1][-2].split('/')[-1],'claude')
+            self.assertEqual(self.calls[-1][-1],digest)
+            binary.write_bytes(b'replaced bytes')
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                self.run_prepare(claude=binary,claude_sha=digest)
+            self.assertEqual(len(self.calls),3)
 
     def test_corrupt_image_or_identity_refuses_reuse_instead_of_silently_rebuilding(self):
         with self.context():

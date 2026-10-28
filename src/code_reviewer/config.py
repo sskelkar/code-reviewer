@@ -111,8 +111,31 @@ class Config:
     persona_parallel: int = 4
 
     provider: str = "claude"
+    sandbox: bool = True
+    openai_input_price: float = 0.0
+    openai_cached_input_price: float = 0.0
+    openai_output_price: float = 0.0
+
+    # Trusted deployment inputs; never credentials. Relative paths are refused.
+    vm_artifacts: str = ""
+    vm_lima_home: str = ""
+    vm_instance: str = "reviewer-sandbox"
+    vm_timeout_s: int = 1800
+    vm_claude_binary: str = ""
+    vm_claude_sha256: str = ""
+    vm_claude_auth: str = "api-key"
 
     def validate(self) -> None:
+        if type(self.sandbox) is not bool:
+            raise ConfigError('sandbox must be true or false')
+        for name in ('openai_input_price', 'openai_cached_input_price', 'openai_output_price'):
+            value = getattr(self, name)
+            try:
+                valid = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
+            except OverflowError:
+                valid = False
+            if not valid:
+                raise ConfigError('%s must be finite and nonnegative' % name)
         if self.provider not in ("claude", "openai"):
             raise ConfigError("provider must be claude or openai; no fallback")
         for name in ("call_budget_usd", "run_budget_usd"):
