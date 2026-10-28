@@ -1,95 +1,28 @@
-# Offline Firecracker prototype
+# Reviewer VM development
 
-For the repository-owned Mac command that builds current source, runs both flows and no-key connected probes, saves the result and stops the dedicated worker, start with [`reviewer sandbox check`](../docs/sandbox-check.md). The low-level commands below remain engineering interfaces. [Alternative designs](../docs/sandbox-alternatives.md) records the single-VM options considered; the selected setup remains Lima plus Firecracker.
+Use [`reviewer sandbox check`](../docs/sandbox-check.md) for the supported Mac/Lima/Firecracker check. It owns artifact validation, clean image preparation/reuse, both offline review algorithms, no-key connected probes, private results and dedicated-worker shutdown. Add `--pr` for in-VM public acquisition and source-access revocation, or `--lifecycle` for cancellation/supervisor-loss checks. It never requests a model key or performs inference.
 
-**Current entry-point status:** the [security contract](../docs/security-contract.md) applies to every repository/provider. Public reviews and connected real-key execution are gated off; `reviewer review PR --preflight` reports blockers. Offline smoke and harmless no-key boundary checks below remain engineering tests, not production approval.
+The standalone raw-Firecracker launcher was extracted into an independent external playground at the operator's request. It is no longer packaged or maintained as part of this project. This repository retains the shared jailed VM lifecycle and the helpers it needs in `sandbox/runtime.py`.
 
-This is the first implementation slice of the [one-VM-per-review architecture](../docs/sandbox-architecture.md). It supports a synthetic fake-Claude smoke and a separate **real-Claude startup probe without credentials or network**, and an **offline OpenAI adapter smoke**. Normal `reviewer` commands are unchanged; the separate [controlled connected pilot](../docs/sandbox-connected.md) now has its own Linux launcher, while production qualification remains pending.
+## Build inputs
 
-The whole Python review harness and its fresh headless subprocesses run inside one Firecracker guest. Both flows exercise grounded findings and consolidation, including a four-persona parallel round. The first smoke does not fetch GitHub, authenticate to Claude, contact a provider, publish anything or accept a target repository.
+The dedicated worker needs ARM64 Ubuntu, nested KVM on compatible Macs, Python/Git/BusyBox/cpio and the standard Linux network/service tools listed in the [deployment runbook](../docs/sandbox-check.md#prerequisites). No host directories or credential sockets are mounted. Artifacts are operator-selected and digest-pinned.
 
-## Prerequisites
-
-A disposable Ubuntu 24.04 ARM64 Linux build/test host with Python 3.12, Git, static BusyBox, cpio, gzip and working KVM. On a supported Mac, use a **dedicated mountless Lima VZ VM with nested virtualization**, not a default profile sharing the home directory. The earlier feasibility check established this on M4/macOS 15.8.1. Existing infrastructure is not modified automatically.
-
-Use an approved Firecracker binary and compatible ARM64 kernel, and record their SHA-256 digests from trusted provenance. The successful feasibility artifacts were Firecracker 1.17.0 and Linux 6.1.188; the guest kernel came from Firecracker's official CI bucket and is not a production-qualified image. No downloads are built into these scripts.
-
-## Bundle on the trusted workstation
-
-From this repository, with an activated development environment:
+Bundle trusted reviewer sources on the workstation:
 
 ```bash
 python -m code_reviewer.sandbox.bundle --output /tmp/reviewer-source.tar
 ```
 
-The output must not exist. The bundle contains only `src/code_reviewer` Python/Markdown/JSON files and a digest manifest; it excludes local configuration, runs, tests, target repositories and environment files. Transfer it and `sandbox/firecracker/build-offline-guest.sh` into the disposable build VM using an explicit file copy, with no host directory mounts.
+The bundle includes trusted Python/Markdown/JSON assets and a manifest, not target inputs, runs or environment files. Explicitly transfer it and `firecracker/build-offline-guest.sh` to the dedicated worker. The supported preparer selects clean cached images and checks identity/digests. Manual builder invocations are development interfaces, not alternate review launchers.
 
-## Build inside the disposable Linux VM
-
-```bash
-sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-offline-guest
-```
-
-The output directory must be new. This builds `initrd.cpio.gz`, records runtime versions and writes SHA-256 values. It uses the build VM's installed runtime libraries; this is not a bit-for-bit reproducible production image. No credentials or real repositories belong in the build VM or image.
-
-## Launch on Linux/KVM
-
-The trusted launcher modules must be installed or available through `PYTHONPATH` on the Linux test host. In the prototype, the builder's `root/opt/reviewer/src` also provides that trusted source copy. Supply the actual artifact paths and independently recorded expected digests:
+## Development checks
 
 ```bash
-PYTHONPATH=/tmp/reviewer-offline-guest/root/opt/reviewer/src \
-python3 -m code_reviewer.sandbox.launch \
-  --firecracker /path/to/firecracker --firecracker-sha256 EXPECTED_BINARY_SHA256 \
-  --kernel /path/to/vmlinux --kernel-sha256 EXPECTED_KERNEL_SHA256 \
-  --initrd /tmp/reviewer-offline-guest/initrd.cpio.gz --initrd-sha256 EXPECTED_INITRD_SHA256
-```
-
-Replace all three digest placeholders with lowercase 64-character SHA-256 values. Calculating a digest from an arbitrary downloaded file and passing it to the launcher does **not** establish the file's provenance; establish trust during artifact acquisition. The launcher detects artifact mismatches but is not a signing/attestation system.
-
-Success returns a synthetic JSON summary with two completed single-agent passes, four completed persona passes, and one consolidated finding per mode. The fake executable is invoked three times in single-agent mode and eight times in persona mode. These offline workloads generate/check reports inside the guest and discard them. The separate [connected launcher](../docs/sandbox-connected.md) exports bounded reports.
-
-The VMM is terminated/reaped on cancellation, deadline or output overflow. The guest has no network interface or attached disk. Stop the outer build/test VM after manual checks. The scripts do not create, start, repair or delete Lima/Colima profiles themselves.
-
-## Verification and limits
-
-```bash
-python -m unittest tests.test_sandbox_prototype
-```
-
-The full normal suite must also pass on the supported oldest/newest Python versions. Unit tests use local fake processes and never boot a VM or call a model. Real guest execution is a separate deployment check recorded in the handover.
-
-This prototype has a writable root-owned guest runtime and no production jailer configuration; it is **not suitable for real or untrusted reviews**. Read the [architecture and next gates](../docs/sandbox-architecture.md#next-implementation-gates) before extending it. No image is automatically promoted into a production path, and no ordinary review falls back to this smoke test.
-
-## Real Claude startup probe (offline)
-
-Verify a pinned Linux ARM64 binary against its signed release manifest first; see [runtime/authentication](../docs/sandbox-runtime-auth.md) for provenance, auth choices and limits. No login or model request is performed.
-
-The same builder accepts two additional operator-controlled arguments:
-
-```bash
-sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-runtime-guest \
-  /path/to/verified-linux-arm64-claude EXPECTED_CLAUDE_SHA256
-```
-
-Use a new output directory. Supplying these arguments selects the runtime-probe guest instead of the fake-Claude flow smoke. On the Linux test host, launch it with the usual three verified artifact paths/digests and add `--workload runtime`. This selects a 4096 MiB guest (2 vCPUs); allow at least 6 GiB for the outer Lima VM. The default `--workload smoke` remains 1024 MiB.
-
-A passing runtime result has `authenticated: false`, `auth_method: "none"` and `headless_auth_refused: true`. These are expected successful checks, not a working login. The launcher still accepts no credentials, network interface or PR input. Neither mode tests real model output. Stop the dedicated outer VM afterward.
-
-## OpenAI adapter smoke (offline)
-
-The operator selected OpenAI for controlled sandbox testing before Claude-only production use. This implemented smoke still uses synthetic fixtures; the planned live review uses the selected non-sensitive personal repository. See the [backend design and remaining connected-test gates](../docs/sandbox-openai.md).
-
-```bash
+python -m unittest tests.test_sandbox_prototype tests.test_vm_confinement
 python -m code_reviewer.sandbox.openai_smoke
-sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-openai-guest openai-offline
 ```
 
-Launch that image with the usual verified artifact paths/digests and `--workload openai-offline`. It uses 1024 MiB, no NIC/disks and simulated Responses API replies; no real key is read or transmitted. Both flows exercise the actual adapter and bounded local Read tool. The [connected-pilot plan](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26) adds bounded personal-repository inputs/reports, external destination restrictions and private delivery of a disposable key into the guest. It defers a custom relay and accepts key exposure if that test guest is compromised. That path is now implemented in a separate [connected Linux command](../docs/sandbox-connected.md); these offline commands still accept no key or target repo.
+These simulate models and need no key/network/VM boot. Both algorithms exercise real validation, grounding, consolidation, tool dispatch and reports. The separate native CLI startup probe records argument/authentication compatibility without inference. The whole suite must pass on Python 3.9 and the newest available Python.
 
-## Review before connected implementation
-
-The [2026-10-26 review](../docs/sandbox-architecture.md#review-before-connected-implementation-2026-10-26) records two historical issues: archive pipeline failures can be hidden by the final compression status, and skipped scan files consume IO without charging the decoded-text budget. Both defects are now corrected with regression tests: checked archive stages and raw IO accounting on skipped files. This runbook describes existing offline commands; it provides no live workaround.
-
-## Controlled connected pilot
-
-Use the [dedicated connected runbook](../docs/sandbox-connected.md) for `capsule` input preparation, the builder's `connected` option, no-key boundary probes and the separate Linux `connected` launcher. Offline workloads keep their interfaces; normal review now has a shared release gate. No personal repository/key has been used during implementation checks; the first supported real review requires the qualified product workflow and completed production controls, not a temporary launcher or disposable-key exception.
+Actual no-key deployment evidence belongs in the [VM checklist](../docs/sandbox-todo.md#evidence-2026-10-28). Real reviews require completed dispatch/authentication integration; the normal frontend is currently preflight/refusal only. The [execution contract](../docs/security-contract.md) plans VM-default and explicit direct-host operation with either provider. The [VM architecture](../docs/sandbox-architecture.md) explains the isolated path; [alternatives](../docs/sandbox-alternatives.md) records other designs considered.

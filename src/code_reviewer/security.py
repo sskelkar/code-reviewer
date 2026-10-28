@@ -17,11 +17,11 @@ class Control:
 # Partial controls deliberately block release. Replace a row only alongside the
 # enforcement implementation and its containment evidence, not an operator flag.
 COMMON_CONTROLS: Tuple[Control, ...] = (
-    Control('isolated-acquisition', 'missing', 'PR fetching/parsing is not integrated inside a qualified boundary'),
-    Control('vmm-confinement', 'partial', 'production jailer and host resource containment are not qualified'),
-    Control('immutable-filesystem', 'partial', 'guest runtime/head snapshot are not immutable against native compromise'),
-    Control('guest-execution-policy', 'missing', 'guest execution/syscall allow-list enforcement is not implemented'),
-    Control('crash-recovery', 'partial', 'deadlines and stale-state refusal exist; independent recovery is not qualified'),
+    Control('isolated-acquisition', 'partial', 'public in-VM acquisition and source revocation pass no-key checks; private acquisition and normal review dispatch remain unsupported'),
+    Control('vmm-confinement', 'partial', 'jailed VMM and systemd resource controls pass no-key checks; full lifecycle/release evidence remains incomplete'),
+    Control('immutable-filesystem', 'partial', 'root-owned runtime and read-only admitted input pass native checks; supported live workflow is not integrated'),
+    Control('guest-execution-policy', 'partial', 'non-root/no-new-privileges enforced; custom guest syscall policy is deferred under the simplified scope'),
+    Control('crash-recovery', 'partial', 'independent deadlines, supervisor-loss checks and explicit local recovery pass; full live review integration remains incomplete'),
     Control('private-report-workflow', 'partial', 'bounded export exists; integrated private local retention/rendering is incomplete'),
 )
 PROVIDER_CONTROLS = {

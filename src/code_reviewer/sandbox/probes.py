@@ -10,6 +10,41 @@ from ..backends.read_tools import ReadOnlyTools
 from .network import PROXY
 
 
+def source_tunnel():
+    # Hold an actual acquisition tunnel across the host's phase transition.
+    # A new deny rule alone must not leave established source access usable.
+    with socket.create_connection(PROXY, timeout=3) as denied:
+        denied.sendall(b'CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n')
+        if b' 403 ' not in denied.recv(4096).split(b'\r\n', 1)[0]:
+            raise ValueError('inference access permitted during acquisition')
+    sock = socket.create_connection(PROXY, timeout=20)
+    try:
+        sock.sendall(b'CONNECT api.github.com:443 HTTP/1.1\r\nHost: api.github.com:443\r\n\r\n')
+        response = bytearray()
+        while not response.endswith(b'\r\n\r\n') and len(response) < 8192:
+            data = sock.recv(1)
+            if not data:
+                raise ValueError('source probe tunnel closed early')
+            response.extend(data)
+        if b' 200 ' not in response.split(b'\r\n', 1)[0] or not response.endswith(b'\r\n\r\n'):
+            raise ValueError('source probe tunnel unavailable')
+        sock.settimeout(5)
+        return sock
+    except BaseException:
+        sock.close()
+        raise
+
+
+def source_denied():
+    for domain in ('github.com', 'api.github.com'):
+        with socket.create_connection(PROXY, timeout=3) as sock:
+            destination = domain + ':443'
+            sock.sendall(('CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' % (destination, destination)).encode())
+            if b' 403 ' not in sock.recv(4096).split(b'\r\n', 1)[0]:
+                raise ValueError('acquisition access still permitted')
+    return True
+
+
 def network_probes():
     checks = {}
     for label, host, port in (('direct_public', '1.1.1.1', 443), ('metadata', '169.254.169.254', 80),

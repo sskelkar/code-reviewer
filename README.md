@@ -1,8 +1,8 @@
 # code-reviewer
 
-A pull request review agent built on Claude Code. It runs independent review passes, merges their findings and reports how often each issue was found. You can review the results locally or explicitly post a summary to GitHub.
+A pull request review agent with runtime-selected Claude and OpenAI adapters. It runs independent review passes, merges their findings and reports how often each issue was found. You can review the results locally or explicitly post a summary to GitHub.
 
-**Status:** v0, with production security as the required target for every repository/provider; the current implementation is not production-qualified. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
+**Status:** v0. Both adapters share one review core. VM execution is the intended default, with explicit direct-host execution planned. Authenticated CLI dispatch is not integrated yet. Single-agent reviews have been used on real PRs. Both flows are implemented and tested offline; persona execution also has a successful user-run check. Review quality remains unmeasured. Posting has not been exercised live.
 
 [Quick start](#quick-start) · [Review flows](#review-flows) · [Results](#reading-the-results) · [Configuration](#configuration) · [Documentation](#documentation)
 
@@ -22,14 +22,14 @@ reviewer doctor  # offline release status; currently exits 1 while controls are 
 
 Keep the editable installation and its source checkout: prompts and criteria are loaded from it. Keep the virtual environment active when running `reviewer`. Installation pulls in `tomli` on Python 3.9/3.10; otherwise runtime code uses the standard library.
 
-Check the configured request and production release blockers without fetching code, reading credentials or calling a model:
+Check the configured request and current integration blockers without fetching code, reading credentials or calling a model:
 
 ```bash
 reviewer review OWNER/REPO#123 --mode single-agent --preflight
 reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --preflight
 ```
 
-Preflight returns JSON and exits nonzero while required controls are missing. Both providers are currently blocked. CLI/REPL reviews, `--dry-run`, `doctor --live`, paid replay/eval entry points and the old connected real-key path refuse execution before target/model activity. No flag, repository setting or model choice can waive missing controls. The offline flow algorithms and harmless no-key deployment checks remain testable.
+Preflight returns JSON and exits nonzero while required controls are missing. Both providers are currently blocked. CLI/REPL reviews, `--dry-run`, `doctor --live`, paid replay and the old connected real-key path refuse execution before target/model activity. The planned direct-host option is not implemented yet; neither provider nor repository labels enable execution. The offline flow algorithms and harmless no-key deployment checks remain testable.
 
 On a Mac with a prepared dedicated Lima worker and the pinned runtime artifacts, run the supported deployment command:
 
@@ -38,13 +38,25 @@ reviewer sandbox check --artifacts /path/to/verified-artifacts \
   --lima-home /path/to/dedicated-lima-state --instance reviewer-sandbox
 ```
 
-It builds the current code, runs both flows with simulated replies plus no-key boundary probes, saves a private JSON report and stops the worker. It accepts no repository or API key. See [prerequisites and results](docs/sandbox-check.md); this verifies deployment, not a live PR review or production qualification.
+It builds the current code, runs both flows with simulated replies plus no-key boundary probes, saves a private JSON report and stops the worker. It accepts no API key; optional `--pr` tests acquisition without inference. See [prerequisites and results](docs/sandbox-check.md); this verifies deployment, not a live PR review or production qualification.
 
-Operator settings come only from an explicit `--config` outside Git working trees or `~/.code-reviewer/review.toml`. Current-directory `review.toml` is ignored. Files must be bounded regular files owned by the operator/root and not writable by other users. There is no host-review fallback. Full PR acquisition and supported sandbox execution remain required integration work; see the [security contract](docs/security-contract.md).
+Clean images are reused when their source, builder and OS inputs match. Add `--lifecycle` to test cancellation and supervisor loss, or `--pr https://github.com/OWNER/REPOSITORY/pull/NUMBER` to check public acquisition and source-access revocation inside the review VM without inference. An abandoned dedicated worker can be reset explicitly with `reviewer sandbox recover --lima-home DIR --instance NAME`; see [recovery scope](docs/sandbox-check.md#recover-an-abandoned-worker).
+
+Operator settings come only from an explicit `--config` outside Git working trees or `~/.code-reviewer/review.toml`. Current-directory `review.toml` is ignored. Files must be bounded regular files owned by the operator/root and not writable by other users. A VM failure never selects host execution automatically. Explicit host execution is an intended separate operator choice. Public PR acquisition now has a no-key VM check; authenticated review and supported sandbox dispatch remain required integration work; see the [security contract](docs/security-contract.md).
+
+## Execution location and provider
+
+The planned interface has independent choices:
+
+- `--provider claude|openai` chooses the adapter used by the same review core.
+- `--mode single-agent|agent-personas` chooses the review strategy.
+- VM execution is the default; the proposed `--no-sandbox` flag explicitly selects direct-host acquisition/review without VM startup overhead. **That flag and live dispatch are not implemented yet.**
+
+Any repository uses the chosen settings; there is no production/personal/public reviewer tier. Direct mode preserves the existing host acquisition feature and common review checks, while VM mode adds kernel/filesystem/network isolation. A failed VM request stops rather than switching modes. See the [execution contract](docs/security-contract.md).
 
 ## Review flows
 
-The implemented flow algorithms below are exercised directly by offline tests and guest workloads; the public review entry point is currently gated. Both flows pin the PR's commits, load its diff and criteria, and give fresh Claude sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
+The implemented flow algorithms below are exercised directly by offline tests and guest workloads; the public review entry point is currently gated. Both flows pin the PR's commits, load its diff and criteria, and give fresh model sessions read access to a separate temporary head checkout. Sessions never see earlier passes' findings. **Models propose; Python validates evidence and replies, merges findings, counts agreement and writes every artifact.**
 
 Each new review fetches the current PR head and target-branch tip into private refs, without updating your branches, remote-tracking refs or tags. Those commits stay fixed only for that run. The diff is merge-base to PR head; the checkout is the PR head, not a simulated merge with the latest target.
 
@@ -153,11 +165,9 @@ Project criteria come from the **base commit**, so a PR cannot change the rules 
 
 Reviewers and the persona Verifier have Read/Grep/Glob in a temporary checkout; they do not execute tests, linters or builds. Other model roles have no code tools. The checkout is outside saved-run storage and is deleted afterward unless you pass `--keep-checkout`.
 
-For normal CLI reviews, PR metadata, diff, criteria and files read during review are sent through your Claude Code login. Email redaction covers PR text only; repository files and diffs are not redacted. Saved runs contain code and must be treated accordingly. Use only repositories permitted by your organization's policy.
+PR metadata, diff, criteria and files read during review are supplied to the selected model provider. Email redaction covers PR text only; diffs/files are not redacted. Saved runs contain code and should be stored privately.
 
-This remains a controlled-environment tool. The old host-execution path is no longer reachable through public review entry points; required production controls currently prevent live reviews. The existing [connected sandbox component](docs/sandbox-connected.md) runs either flow inside a disposable Firecracker VM with the OpenAI adapter, bounded pinned local inputs/results, external network restrictions and a disposable runtime key. Its no-key boundary/cleanup checks pass; authenticated inference on a personal repository has not yet been run. It is separate from `reviewer`, accepts local commit pairs rather than PR URLs, and does not post to GitHub. Its weaker pilot-use exception is superseded by the [common security contract](docs/security-contract.md); it is not the final supported entry point. The [offline workloads](sandbox/README.md) separately exercise fake-Claude/simulated-OpenAI reviews and real-Claude unauthenticated startup.
-
-The [security roadmap](docs/security-roadmap.md) tracks production jailer, filesystem/execution/syscall controls and Claude qualification. Production stays Claude-only. Secret scanning and stronger prompt-injection/posting safeguards remain unfinished. Read [privacy and safety](docs/usage.md#privacy-and-safety) and the [hardening backlog](docs/proposal.md#5-safety-v0-baseline) before broader use.
+VM execution adds the shared jailer/resource/deadline lifecycle, read-only admitted input, phase-scoped external networking and private bounded transfer. Its no-key deployment checks pass; authenticated dispatch and adapter integration remain unfinished. Explicit host execution is planned and retains acquisition on the machine; it does not claim VM isolation. See the [VM checklist](docs/sandbox-todo.md) and [privacy reference](docs/usage.md#privacy-and-safety).
 
 ## Development and roadmap
 
@@ -169,21 +179,21 @@ python3 -m unittest discover -s tests -t .
 
 Tests use fake models and temporary repositories, with no network or paid calls. Supported Python is 3.9+; contributors run the full suite on their oldest and newest available Python. Repository rules are in [AGENTS.md](AGENTS.md); code ownership, checks, debugging and replay are in the [development guide](docs/development.md) and [architecture guide](docs/architecture.md).
 
-Current priority: integrate one repository-owned reviewer workflow and close the release gates in the [security contract](docs/security-contract.md). Public/personal repositories and cheaper models get the same security bar. The existing VM, provider and flow code is reusable; handwritten temporary launch scripts and weaker “pilot” exceptions are superseded. Required work includes qualified isolated PR acquisition, trusted configuration, production VM/filesystem/execution controls, provider credentials and crash recovery. See the [roadmap](docs/security-roadmap.md) and [handover](docs/HANDOVER.md). Feature/eval work remains parked behind this security focus.
+Current priority: finish one workflow with runtime-selected provider and explicit execution location. Keep host acquisition for the direct option and the shared jailed lifecycle for the VM default; common criteria, validators, budgets and reports stay shared. The standalone VM experiment now lives outside this repository. See the [roadmap](docs/security-roadmap.md) and [VM checklist](docs/sandbox-todo.md). The unused eval framework was removed; review quality is judged manually.
 
 ## Documentation
 
 | Guide | Contents |
 |---|---|
 | [Usage reference](docs/usage.md) | CLI/REPL commands, reports, project criteria, all settings, storage and troubleshooting |
-| [Security contract](docs/security-contract.md) | Common requirements and release gates for all repositories/providers |
+| [Security contract](docs/security-contract.md) | Shared requirements, VM-default and explicit direct-host execution |
 | [Connected sandbox](docs/sandbox-connected.md) | Existing engineering components, boundary probes and current limitations |
 | [Run the sandbox check](docs/sandbox-check.md) | Supported Mac command: build, both flows, boundary probes, private result and shutdown |
+| [Finish the VM](docs/sandbox-todo.md) | Current bounded checklist, completed controls and next work |
 | [Sandbox alternatives](docs/sandbox-alternatives.md) | Single-VM Mac designs, dedicated Linux and security tradeoffs |
 | [Architecture](docs/architecture.md) | Code map, flow ownership and detailed single-agent diagrams |
 | [Development](docs/development.md) | Setup, tests, common changes, saved-run debugging and Comparator replay |
 | [Prompt contracts](prompts/README.md) | Model inputs, outputs, tools and deterministic validation |
 | [Persona criteria](docs/persona-criteria.md) | Canonical defaults and assignments |
 | [Proposal](docs/proposal.md) | Decisions, experiments and roadmap |
-| [Handover](docs/HANDOVER.md) | Latest state and next-session instructions |
 | [Python walkthrough](docs/project-explainer.md) | Code explained for Java developers |

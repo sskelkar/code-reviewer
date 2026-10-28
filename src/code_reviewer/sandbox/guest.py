@@ -61,10 +61,37 @@ def collect_artifacts(paths, key):
     return result
 
 
-def run_job(sock, root, *, probe_network=network_probes):
+def run_job(sock, root, *, probe_network=network_probes, seal=None):
     settings = validate_settings(receive_json(sock))
-    ctx = prepare_repository(receive(sock, MAX_CAPSULE), root / 'repo')
+    data = receive(sock, MAX_CAPSULE)
+    acquired = None
+    if data.startswith(b'{'):
+        from .acquire import in_guest, pin
+        source = json.loads(data)
+        if not isinstance(source, dict) or set(source) != {'kind', 'url'} or source['kind'] != 'github-pr':
+            raise ValueError('invalid public acquisition request')
+        ctx = in_guest(source['url'], root / 'repo')
+        acquired = pin(dict(repo=ctx.repo, number=ctx.number, base=ctx.base_sha,
+                            head=ctx.head_sha, merge_base=ctx.merge_base), source['url'])
+        from .probes import source_tunnel
+        with source_tunnel() as tunnel:
+            send_json(sock, {'kind': 'acquired', 'source': acquired})
+            if receive_json(sock) != {'kind': 'source-access-revoked'}:
+                raise ValueError('source access revocation not acknowledged')
+            if tunnel.recv(1) != b'':
+                raise ValueError('established source tunnel survived revocation')
+    else:
+        ctx = prepare_repository(data, root / 'repo')
+    snapshot = None
+    if seal is not None:
+        snapshot = seal(ctx, root, exported=True) if acquired else seal(ctx, root)
     checks = {'file_tools': file_probes(root), 'network': probe_network()}
+    if acquired:
+        from .probes import source_denied
+        checks['source_access_revoked'] = source_denied()
+    if snapshot is not None:
+        from .snapshot import probes
+        checks['isolation'] = probes(snapshot)
     send_json(sock, {'kind': 'ready', 'checks': checks})
     secret = receive(sock, 4096).decode('ascii')
     if settings['probe_only']:
@@ -80,12 +107,16 @@ def run_job(sock, root, *, probe_network=network_probes):
                  min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
                  persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],
                  call_budget_usd=settings['call_budget'], call_timeout_s=120, runs_dir=str(root / 'runs'))
-    original = git_ops.export_tree
-    git_ops.export_tree = bounded_export
-    try:
-        result = Engine(cfg, runner).review(ctx)
-    finally:
-        git_ops.export_tree = original
+    if snapshot is not None:
+        result = Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)
+    else:
+        # Unprivileged fixture seam: ordinary tests never mount or change UID.
+        original = git_ops.export_tree
+        git_ops.export_tree = bounded_export
+        try:
+            result = Engine(cfg, runner).review(ctx)
+        finally:
+            git_ops.export_tree = original
     paths = {'report.md': result.report_path, 'summary.md': result.run_dir / 'summary.md',
              'stats.json': result.run_dir / 'stats.json'}
     return {'kind': 'result', 'stop_reason': result.stop_reason, 'checks': checks,
@@ -100,9 +131,6 @@ def main():
     resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
     resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
     resource.setrlimit(resource.RLIMIT_CPU, (900, 900))
-    os.setgroups([])
-    os.setgid(65534)
-    os.setuid(65534)
     with socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM) as server:
         server.bind((socket.VMADDR_CID_ANY, BOOT_PORT))
         server.listen(1)
@@ -112,7 +140,8 @@ def main():
         with sock:
             sock.settimeout(900)
             try:
-                result = run_job(sock, root)
+                from .snapshot import prepare
+                result = run_job(sock, root, seal=prepare)
             except Exception:
                 # Never send exception text: Git/provider errors may contain target data or credentials.
                 result = {'kind': 'failed', 'error': 'guest admission, probes or review failed'}

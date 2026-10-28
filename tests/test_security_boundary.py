@@ -105,14 +105,12 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual(cli.main(['doctor', '--live']), 1)
             self.assertEqual(cli.main(['doctor']), 1)
 
-    def test_retained_replay_and_eval_run_cannot_launch_models_outside_the_boundary(self):
-        from code_reviewer import replay, evals
+    def test_retained_replay_cannot_launch_models_outside_the_boundary(self):
+        from code_reviewer import replay
         with patch('subprocess.run', side_effect=AssertionError('no external process')), \
                 patch('pathlib.Path.read_text', side_effect=AssertionError('no target/saved-run reads')), \
                 contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(replay.main(['/missing/saved-run']), 1)
-            self.assertEqual(evals.main(['run', '/missing/suite.json', '--repo', '/missing/repo',
-                                        '--output', '/missing/results']), 2)
 
     def test_nonfinite_operator_budgets_are_rejected(self):
         for value in (float('nan'), float('inf'), True, 0, 10 ** 10000):

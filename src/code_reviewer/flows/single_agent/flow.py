@@ -60,7 +60,7 @@ class SingleAgentFlow:
 
     # ------------------------------------------------------------------ the story
 
-    def review(self, ctx: PRContext, keep_checkout: bool = False) -> RunResult:
+    def review(self, ctx: PRContext, keep_checkout: bool = False, prepared_checkout: Optional[Path] = None) -> RunResult:
         cfg = self.cfg
         ctx, redacted_emails = self.inputs.redact(ctx)
         self.emit("run_started", repo=ctx.repo, number=ctx.number, title=ctx.title, head=ctx.head_sha, base=ctx.base_sha)
@@ -70,10 +70,12 @@ class SingleAgentFlow:
         store.save_pr_text(ctx, redacted_emails)
 
         files, diff_summary = self.inputs.load_diff(ctx)
-        checkout = store.prepare_checkout()  # a temporary directory outside the run directory
+        checkout = Path(prepared_checkout) if prepared_checkout is not None else store.prepare_checkout()
+        if prepared_checkout is not None and (checkout.is_symlink() or not checkout.is_dir()):
+            raise ValueError('prepared checkout must be a regular admitted directory')
         try:
             self.emit("checkout_ready", path=str(checkout), kept=keep_checkout,
-                      **git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout))
+                      **({} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)))
 
             caller = ClaudeCaller(self.runner, cfg, stats)
             criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)

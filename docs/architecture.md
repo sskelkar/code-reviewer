@@ -8,9 +8,26 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. In the internal Claude flow algorithm, every call is a fresh headless session; the public frontend is currently gated. The connected pilot injects an OpenAI runner with fresh per-call conversation state instead. Models propose; Python validates, accounts and writes state.
 
+## Execution choices (planned)
+
+Provider, review strategy and execution location are independent operator settings. One core supports either provider and either strategy in the selected boundary. VM is the intended default; the proposed `--no-sandbox` explicitly selects host acquisition/review. Repository labels never select behavior. No automatic VM-to-host fallback exists.
+
+```mermaid
+flowchart TD
+    REQUEST["PR + trusted operator options"] --> LOCATION{"Execution location"}
+    LOCATION -->|"VM default"| VM["Shared jailed VM lifecycle + in-VM acquisition"]
+    LOCATION -->|"Explicit host option"| HOST["Existing host/local-clone acquisition; no VM setup"]
+    VM --> CORE["Same Engine and selected review strategy<br/>runs in the chosen boundary"]
+    HOST --> CORE
+    CORE --> ADAPTER["Runtime-selected provider adapter"]
+    ADAPTER --> VALIDATE["Shared validators, accounting and private reports"]
+```
+
+This diagram is the integration target. Current frontend behavior is described below; the host flag is not yet implemented.
+
 ## Public entry-point boundary
 
-`review_flow.run_review` is now a no-target-IO preflight/refusal boundary shared by CLI and REPL. `security.py` reports code-owned release blockers per provider; operator config cannot assert readiness. There is no qualified execution backend yet. Even changing every status row to qualified would not re-enable the legacy host flow: dispatch still refuses until actual sandbox integration is implemented.
+`review_flow.run_review` is now a no-target-IO preflight/refusal boundary shared by CLI and REPL. `security.py` reports code-owned release blockers per provider; operator config cannot assert readiness. Authenticated execution dispatch is not integrated yet. Even changing every status row to qualified would not re-enable the legacy host flow: dispatch still refuses until actual execution integration is implemented.
 
 ```mermaid
 flowchart TD
@@ -18,21 +35,23 @@ flowchart TD
     CFG --> REQUEST["Validate effective options and parse PR identifier<br/>No Git or target-directory inspection"]
     REQUEST --> CHECK{"Preflight?"}
     CHECK -->|yes| JSON["Print provider controls and request settings<br/>Nonzero while release blockers exist"]
-    CHECK -->|no| GATE["Require qualified production controls"]
+    CHECK -->|no| GATE["Check current execution readiness"]
     GATE --> STOP["Currently refuse before fetch / credentials / inference<br/>No legacy host fallback"]
 ```
 
-The low-level connected real-key path, `doctor --live`, and paid replay/eval entry points also enforce the boundary. No-key synthetic deployment checks and direct injected-runner algorithm tests remain available. `config.py` reads only operator-selected/outside-repository configuration through bounded no-follow descriptor opens.
+The low-level connected real-key path, `doctor --live`, and paid replay also enforce the boundary. No-key synthetic deployment checks and direct injected-runner algorithm tests remain available. `config.py` reads only operator-selected/outside-repository configuration through bounded no-follow descriptor opens.
 
 ## Sandbox deployment
 
-The [security contract](security-contract.md) governs the final product for every repository/provider. Existing components below are not yet production-qualified, and temporary personal-pilot launch scripts are withdrawn.
+The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal authenticated dispatch remains unwired.
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [connected pilot](sandbox-connected.md) is a separate Linux-only entry point: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. The earlier key mechanism requested the key after admission/probes; the real-key path is now gated off, and only no-key engineering checks may launch. Fixed bounded report files return over vsock. The regular CLI constructs a runner object but its release boundary prevents host execution; the qualified sandbox dispatch is not implemented yet.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. The [VM supervisor](sandbox-connected.md) runs in the dedicated Linux worker: `capsule` prepares bounded Git objects without host Git execution; `connected` installs external network policy, launches the VM and transfers inputs privately; `guest` reconstructs pinned commits and injects `OpenAIRunner` into the selected `Engine` flow. The earlier key mechanism requested the key after admission/probes; the real-key path is now gated off, and only no-key engineering checks may launch. Fixed bounded report files return over vsock. The regular CLI constructs a runner object but its release boundary prevents host execution; normal execution/provider dispatch is not implemented yet.
 
-Three separate offline workloads exercise fake-Claude review, simulated-OpenAI review, and real-Claude startup/auth refusal. No-key connected deployment checks also pass; actual authenticated inference and personal-repository compatibility remain pending. Production jailer, immutable snapshot, guest execution/syscall policy and authenticated Claude qualification remain future gates. See the [offline runbook](../sandbox/README.md) and connected runbook for their distinct interfaces.
+Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The raw standalone launcher was extracted outside this project. The supported Mac check now uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition now runs unprivileged inside the guest with source access revoked externally before readiness. Authenticated provider operation and user-facing review integration remain pending; recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
 
-The public `reviewer sandbox check` command in `sandbox/check.py` now owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates only a harmless fixture and verifies host network cleanup; it accepts no PR or key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
+The public `reviewer sandbox check` command in `sandbox/check.py` now owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates a harmless fixture or passes an explicit public PR URL into the review VM, and verifies host network cleanup; it accepts no key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
+
+Image preparation is now a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. Normal-command authenticated review/report dispatch is still pending.
 
 ## Code map
 
@@ -54,12 +73,14 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `shared/git_ops.py`, `pr_source.py`, `diffview.py`, `findings.py` | Pinned PR input, diff parsing/exclusions and evidence validation |
 | `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
 | `cli.py`, `repl.py`, `review_flow.py`, `presentation.py`, `review_options.py`, `repl_help.py` | User entry points, common launch sequence, options and help |
-| `progress.py`, `post.py`, `doctor.py`, `replay.py` | Progress, confirmed posting, environment checks and Comparator replay |
+| `progress.py`, `post.py`, `replay.py` | Progress, confirmed posting and Comparator replay; offline release status is handled by `cli.py`/`security.py` |
 | `backends/openai.py`, `backends/read_tools.py` | Optional stdlib Responses adapter and bounded descriptor-based Read/Grep/Glob; injected only by separate sandbox workloads |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
 | `sandbox/check.py`, `check_worker.py` | Supported no-key Mac deployment command and connected Linux fixture/cleanup check |
-| `sandbox/capsule.py`, `git_input.py`, `network.py`, `probes.py` | File-only target transfer, in-guest Git admission/export, external network enforcement and harmless probes |
-| `sandbox/artifacts.py`, `bundle.py`, `image.py`, `launch.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
+| `sandbox/vm.py`, `snapshot.py` | Shared jailed VMM/systemd lifecycle and read-only admitted guest input with native isolation probes |
+| `sandbox/prepare.py`, `recover.py`, `lifecycle.py` | Clean image preparation/reuse, explicit dedicated-worker recovery and opt-in real lifecycle failure checks |
+| `sandbox/acquire.py`, `capsule.py`, `git_input.py`, `network.py`, `probes.py` | Unprivileged in-VM public acquisition/pinning or file-only capsule transfer, bounded admission/export, one-way external network phases and harmless probes |
+| `sandbox/artifacts.py`, `bundle.py`, `image.py`, `runtime.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
 | Legacy package-root modules | Small compatibility exports; edit canonical flow/shared files instead |
 
 Shared code imports no workflow. Flow-owned result types stay inside the flow; `code_reviewer.models.RunResult` remains a compatibility export of the single-agent result.

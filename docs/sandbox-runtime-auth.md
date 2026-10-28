@@ -1,8 +1,6 @@
-# Sandbox Claude runtime and authentication
+# Claude adapter VM startup and authentication
 
-This is the runtime/authentication feasibility record for the [one-VM architecture](sandbox-architecture.md), checked 2026-10-25. The [offline runbook](../sandbox/README.md) covers packaging and boot commands. The ordinary reviewer remains unsandboxed.
-
-**Updated test order:** the operator chose an [OpenAI API backend for controlled personal-repository sandbox testing](sandbox-openai.md) first (scope confirmed 2026-10-26). The Claude startup result below remains valid; Claude connected authentication is deferred until after the OpenAI boundary tests and personal-project pilot. The custom relay is deferred; the pilot accepts a disposable key inside the guest, supplied privately at runtime. Production material remains Claude-only.
+Technical startup/authentication record for the runtime-selected Claude adapter. It uses the same review core as the other adapter; VM/host execution is a separate operator choice. The recorded no-key startup check does not implement authenticated dispatch. See the [shared contract](security-contract.md) and [VM runbook](sandbox-check.md).
 
 ## What this check establishes
 
@@ -52,13 +50,13 @@ Environment switches disabling updates, nonessential traffic and cloud connector
 
 ## Network and credentials: next connected test
 
-The offline Claude probe still has no NIC or credentials. The separate [connected OpenAI launcher](sandbox-connected.md) now has a scoped external network policy and private disposable-key bootstrap; it does not implement Claude authentication. Before introducing a real credential:
+The offline Claude probe still has no NIC or credentials. The shared [VM supervisor](sandbox-connected.md) already supplies external policy and private bootstrap; this adapter's authentication/endpoints still need integration. Before introducing a real credential:
 
-1. Select the intended authentication/billing method with the operator. For Claude-specific authentication qualification, use a minimal harmless prompt and a dedicated credential, not production code or an existing host login file. The earlier OpenAI review pilot uses the selected non-sensitive personal repository.
+1. Select the intended authentication/billing method with the operator. Use a minimal prompt to qualify authentication without fetching a project first; supply the selected credential explicitly rather than copying a host login file.
 2. Implement external default-deny networking for the guest. Allow only the explicitly selected inference/auth endpoints, with mandatory TLS verification; install only approved public CA material if required. A proxy environment variable alone is insufficient because the guest could bypass it.
 3. Supply the credential only at job runtime through a bounded, private transfer. Keep it out of the immutable image, command arguments and captured console/logs. Treat guest compromise as credential exposure; destruction of the VM does not revoke a copied token.
 4. With separate authorization, make one minimal synthetic inference call. Check JSON output, authentication method, provider/billing, deadline and usage. Then verify the actual Reviewer's Read/Grep/Glob restrictions and later persona concurrency in the qualified runtime.
-5. Destroy the guest and verify termination. Confirm the token's supported revocation/rotation procedure before using private data. Do not claim account limits or the Python dollar ledger are an externally enforced spending limit.
+5. Destroy the guest and verify termination. Confirm the token's supported revocation/rotation procedure before authenticated review. Do not claim account limits or the Python dollar ledger are an externally enforced spending limit.
 
 The official network table includes `api.anthropic.com` for direct inference, `claude.ai`/`claude.com` for subscription login, `platform.claude.com` for OAuth exchange/refresh/revocation, and SSO endpoints where applicable. Which routes a setup-token inference actually requires must be measured under policy; do not allow every documented feature endpoint by default. Updates, plugins, MCP, browser integration and documentation lookups are outside this review workload.
 

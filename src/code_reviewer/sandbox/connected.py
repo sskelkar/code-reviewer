@@ -1,19 +1,16 @@
-"""Linux-only controlled OpenAI pilot: one VM, mandatory external egress, private key bootstrap."""
+"""Linux VM supervisor, external network policy and private bootstrap/result transport."""
 from __future__ import annotations
 
 import argparse
 import base64
 import fcntl
 import getpass
-import grp
 import json
 import os
 import pwd
-import resource
 import shutil
 import signal
 import socket
-import subprocess
 import sys
 import tempfile
 import time
@@ -23,8 +20,9 @@ from ..shared.models import ReviewRefused
 from .artifacts import Artifact
 from .capsule import MAX_CAPSULE, regular
 from .guest import ARTIFACTS, MAX_ARTIFACT, MAX_EXPORT, validate_settings
-from .launch import MAX_INITRD_BYTES, MAX_KERNEL_BYTES, boot_config
-from .network import Network, TAP, command
+from .runtime import MAX_INITRD_BYTES, MAX_KERNEL_BYTES
+from .network import Network, command
+from .vm import VirtualMachine
 from .wire import BOOT_PORT, RESULT_LIMIT, receive_json, send, send_json
 
 NETWORK_CHECKS = {'direct_public', 'metadata', 'private', 'host_service', 'other_domain', 'literal_ip',
@@ -114,10 +112,23 @@ def connect_bootstrap(path, proc):
     raise TimeoutError('private bootstrap deadline exceeded')
 
 
-def exchange(sock, settings, data, output, key_reader):
+def exchange(sock, settings, data, output, key_reader, *, network=None, source=None):
     send_json(sock, settings)
-    send(sock, data, MAX_CAPSULE)
-    ready(receive_json(sock))
+    acquired = None
+    if source is not None:
+        from .acquire import pin
+        send_json(sock, {'kind': 'github-pr', 'url': source})
+        value = receive_json(sock)
+        if not isinstance(value, dict) or set(value) != {'kind', 'source'} or value['kind'] != 'acquired':
+            raise ValueError('public acquisition did not complete')
+        acquired = pin(value['source'], source)
+        network.inference()
+        send_json(sock, {'kind': 'source-access-revoked'})
+    else:
+        send(sock, data, MAX_CAPSULE)
+    readiness = ready(receive_json(sock))
+    if acquired and readiness['checks'].get('source_access_revoked') is not True:
+        raise ValueError('source denial probes did not pass')
     print('sandbox: input and boundary probes passed', file=sys.stderr)
     command(['nft', 'list', 'table', 'inet', 'cr_reviewer'])
     key = '' if settings['probe_only'] else key_reader('Disposable OpenAI API key: ')
@@ -126,10 +137,15 @@ def exchange(sock, settings, data, output, key_reader):
         raise ValueError('invalid runtime key')
     send(sock, key.encode(), 4096)
     value = receive_json(sock, RESULT_LIMIT)
-    return export_result(value, output, key, settings['probe_only'])
+    if acquired and (not isinstance(value.get('checks'), dict) or value['checks'].get('source_access_revoked') is not True):
+        raise ValueError('result does not confirm source revocation')
+    result = export_result(value, output, key, settings['probe_only'])
+    if acquired:
+        result['acquisition'] = dict(acquired, source_access_revoked=True)
+    return result
 
 
-def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None):
+def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None, jailer=None, source=None):
     validate_settings(settings)
     if not settings['probe_only']:
         from ..security import require_ready
@@ -141,13 +157,16 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
         raise ValueError('output directory must be new')
     if not settings['probe_only'] and key_reader is None and not (sys.stdin.isatty() and sys.stderr.isatty()):
         raise ValueError('interactive terminal or explicit private key descriptor required')
-    data = regular(Path(capsule), MAX_CAPSULE)
+    if (capsule is None) == (source is None):
+        raise ValueError('select exactly one capsule or public PR input')
+    if source is not None:
+        from .acquire import parse_pr
+        parse_pr(source)
+    data = regular(Path(capsule), MAX_CAPSULE) if capsule is not None else None
     owner = int(os.environ.get('SUDO_UID', str(os.geteuid())))
     pwd.getpwuid(owner)
-    uid = owner if owner else 65534
-    if uid == 0:
-        uid = 65534
-    kvm_gid = grp.getgrnam('kvm').gr_gid
+    if not isinstance(jailer, Artifact):
+        raise ValueError('matching pinned Firecracker jailer required')
     def expired(*args):
         raise TimeoutError('whole-job deadline exceeded')
     def interrupted(*args):
@@ -163,49 +182,16 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
             with tempfile.TemporaryDirectory(prefix='reviewer-job-', dir='/tmp') as name:
                 root = Path(name)
                 root.chmod(0o711)
-                vm = root / 'vm'
-                vm.mkdir(mode=0o700)
-                os.chown(vm, uid, kvm_gid)
-                runtime = root / 'runtime'
-                runtime.mkdir(mode=0o750)
-                os.chown(runtime, 0, kvm_gid)
-                for source, dest in ((binary, runtime / 'firecracker'), (kernel, runtime / 'kernel'), (initrd, runtime / 'initrd')):
-                    if not isinstance(source, Artifact):
-                        raise ValueError('pinned artifact specifications required')
-                    source.stage(dest)
-                    os.chown(dest, 0, kvm_gid)
-                    dest.chmod(0o550 if dest.name == 'firecracker' else 0o440)
-                with Network(root, uid, timeout):
-                    print('sandbox: external network policy installed; starting review VM', file=sys.stderr)
-                    config = boot_config(runtime / 'kernel', runtime / 'initrd', runtime=True)
-                    config['network-interfaces'] = [{'iface_id': 'review', 'host_dev_name': TAP,
-                                                     'guest_mac': '06:00:00:00:00:02'}]
-                    config['vsock'] = {'guest_cid': 3, 'uds_path': str(vm / 'bootstrap.sock')}
-                    path = runtime / 'config.json'
-                    path.write_text(json.dumps(config))
-                    os.chown(path, 0, kvm_gid)
-                    path.chmod(0o440)
-                    def demote():
-                        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-                        resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
-                        os.setgroups([kvm_gid])
-                        os.setgid(kvm_gid)
-                        os.setuid(uid)
-                    proc = subprocess.Popen(['/usr/bin/timeout', '--signal=KILL', str(timeout), str(runtime / 'firecracker'), '--no-api', '--config-file', str(path)],
-                                            cwd=str(vm), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                            stderr=subprocess.DEVNULL, start_new_session=True, preexec_fn=demote,
-                                            env={'PATH': '/usr/bin:/bin', 'LANG': 'C'})
-                    try:
-                        with connect_bootstrap(vm / 'bootstrap.sock', proc) as sock:
-                            result = exchange(sock, settings, data, output, key_reader or getpass.getpass)
+                with Network(root, 65534, timeout, acquisition=source is not None) as network:
+                    print('sandbox: external network policy installed; starting jailed review VM', file=sys.stderr)
+                    with VirtualMachine(root, binary, jailer, kernel, initrd, timeout=timeout) as vm:
+                        with connect_bootstrap(vm.socket, vm.proc) as sock:
+                            confinement = vm.confinement()
+                            result = exchange(sock, settings, data, output, key_reader or getpass.getpass,
+                                              network=network, source=source)
+                            result['vm_checks'] = confinement
                             assign_output(result, output, owner)
                             return result
-                    finally:
-                        try:
-                            os.killpg(proc.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        proc.wait()
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         for sig, handler in handlers.items():
@@ -214,10 +200,12 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('firecracker', 'kernel', 'initrd'):
+    for name in ('firecracker', 'jailer', 'kernel', 'initrd'):
         parser.add_argument('--' + name, type=Path, required=True)
         parser.add_argument('--' + name + '-sha256', required=True)
-    parser.add_argument('--input', type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument('--input', type=Path)
+    inputs.add_argument('--pr', help='public GitHub PR URL; fetched only inside the review VM')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--model', required=True)
     parser.add_argument('--prices', nargs=3, type=float, required=True, metavar=('INPUT', 'CACHED', 'OUTPUT'))
@@ -236,12 +224,13 @@ def main():
                     parallel=args.parallel, budget=args.budget, call_budget=args.call_budget, probe_only=args.probe_only)
     try:
         binary = Artifact(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES)
+        jailer = Artifact(args.jailer, args.jailer_sha256, MAX_KERNEL_BYTES)
         kernel = Artifact(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES)
         initrd = Artifact(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES)
         def read_key(prompt):
             return os.read(args.key_fd, 4097).decode('ascii').rstrip('\r\n')
         result = run(binary, kernel, initrd, args.input, args.output, settings, timeout=args.timeout,
-                     key_reader=read_key if args.key_fd is not None else None)
+                     key_reader=read_key if args.key_fd is not None else None, jailer=jailer, source=args.pr)
         print(json.dumps(result))
         if not args.probe_only:
             print('Review VM stopped. Revoke the disposable test key after this test.', file=sys.stderr)

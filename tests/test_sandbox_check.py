@@ -17,6 +17,8 @@ from code_reviewer.cli import main
 from code_reviewer.sandbox import check
 from code_reviewer.sandbox.check_worker import RESULT_PREFIX
 from code_reviewer.sandbox.connected import FILE_CHECKS, NETWORK_CHECKS
+from code_reviewer.sandbox.vm import CHECKS as VM_CHECKS
+from code_reviewer.sandbox.snapshot import CHECKS as ISOLATION_CHECKS
 
 
 def profile():
@@ -27,8 +29,9 @@ def profile():
 
 
 def boundary():
-    return {'network_cleanup': True, 'initrd_sha256': 'a' * 64,
-            'checks': {'network': dict.fromkeys(NETWORK_CHECKS, True), 'file_tools': dict.fromkeys(FILE_CHECKS, True)}}
+    return {'network_cleanup': True, 'initrd_sha256': 'a' * 64, 'vm_checks': dict.fromkeys(VM_CHECKS, True),
+            'checks': {'network': dict.fromkeys(NETWORK_CHECKS, True), 'file_tools': dict.fromkeys(FILE_CHECKS, True),
+                       'isolation': dict.fromkeys(ISOLATION_CHECKS, True)}}
 
 
 def offline():
@@ -122,6 +125,9 @@ class SandboxCheckTests(unittest.TestCase):
                 member = tarfile.TarInfo(check.FIRECRACKER_MEMBER)
                 member.size, member.type = len(data), kind
                 tar.addfile(member, io.BytesIO(data) if kind == tarfile.REGTYPE else None)
+                member = tarfile.TarInfo(check.JAILER_MEMBER)
+                member.size = len(b'synthetic-jailer')
+                tar.addfile(member, io.BytesIO(b'synthetic-jailer'))
         stage = self.root / 'stage'
         stage.mkdir()
         write(b'synthetic')
@@ -131,6 +137,7 @@ class SandboxCheckTests(unittest.TestCase):
         (self.root / 'vmlinux-6.1.188').write_bytes(b'kernel')
         with patch.object(check, 'FIRECRACKER_SHA', hashlib.sha256(b'synthetic').hexdigest()), \
              patch.object(check, 'ARCHIVE_SHA', hashlib.sha256(archive.read_bytes()).hexdigest()), \
+             patch.object(check, 'JAILER_SHA', hashlib.sha256(b'synthetic-jailer').hexdigest()), \
              patch.object(check, 'KERNEL_SHA', hashlib.sha256(b'kernel').hexdigest()):
             check.stage_inputs(self.root, stage)
         self.assertEqual((stage / 'firecracker').read_bytes(), b'synthetic')
@@ -161,9 +168,17 @@ class SandboxCheckTests(unittest.TestCase):
                     return '502'
                 if args[0] == 'sha256sum':
                     return 'a' * 64 + ' image'
-                if 'code_reviewer.sandbox.launch' in args:
+                if 'code_reviewer.sandbox.runtime' in args:
                     return json.dumps(offline())
+                if 'code_reviewer.sandbox.prepare' in args:
+                    return json.dumps(dict(source_sha256=args[args.index('--source-sha256')+1],
+                        builder_sha256=args[args.index('--builder-sha256')+1], runtime_sha256='c'*64,
+                        stale_directories_removed=0, images={label:dict(path='/var/lib/code-reviewer/images/'+key*64,
+                            sha256='a'*64, reused=False) for label,key in (('offline','a'),('connected','b'))}))
                 if 'code_reviewer.sandbox.check_worker' in args:
+                    if '--offline' in args:
+                        return RESULT_PREFIX + json.dumps(dict(offline=offline(), initrd_sha256='a'*64,
+                                                               vm_checks=dict.fromkeys(VM_CHECKS, True)))
                     return RESULT_PREFIX + json.dumps(boundary())
                 return ''
         target = self.root / 'result'

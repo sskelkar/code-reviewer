@@ -8,8 +8,5 @@ dist/
 review.toml
 .claude/settings.local.json
 
-# Private evaluation material (cases, labels, reports for non-public projects) belongs outside this repository.
-# These patterns are only a safety net.
-evals/private/
-evals/out/
+# Private material belongs outside this repository; this pattern is only a safety net.
 *.private.json

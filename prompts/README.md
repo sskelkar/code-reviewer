@@ -67,10 +67,6 @@ The system prompt continues to define change scope, concrete consequences, evide
 
 `load_default_rules` loads only non-empty sections with ID-bearing headings. Introductory text is not sent as a rule, and nested Markdown headings split sections, so model-facing instructions belong in the rule bodies with bold labels rather than subheadings. The exact criteria block and index are saved per run; template hashes alone do not identify a criteria revision. No live quality improvement is established for the revised defaults yet; comparator replay cannot evaluate Reviewer criteria changes.
 
-## Evaluator-only rubric
-
-`evals/RUBRIC.md` is a grading-policy draft for human evaluators and any future calibrated judge. It is not another Reviewer prompt. Its worked examples, expected issue IDs, later repair references and per-case answer keys must not be added to `<review_criteria>`, the Reviewer checkout, or Reviewer metadata. The production templates and JSON schema are unchanged by this draft. The local eval harness implements the three-check human judgment format and deterministic metrics. It snapshots the rubric and hashes the code/prompts/default criteria for reproducibility. No LLM judge is implemented; the rubric remains provisional until calibrated on actual findings. Evals explicitly use defaults-only criteria, leaving Reviewer templates, schemas and tool permissions unchanged. See `evals/README.md`.
-
 ## Harness duties around the prompts
 
 - **Freeze fresh commits per run.** Fetch the current PR head and target tip into private review refs, ignoring configured remote-tracking mappings and automatic tag following. All passes use that run's pinned commits. Subsequent reviews fetch again. The diff is merge-base to head, and code tools see the head checkout rather than a simulated merge.
@@ -92,9 +88,13 @@ The [sandbox prototype](../docs/sandbox-architecture.md) packages these same ass
 
 The [experimental OpenAI backend](../docs/sandbox-openai.md) reuses these prompts for synthetic sandbox tests. It translates output schemas into the provider's closed/required-field format without mutating common assets; bounded local function definitions supply Read/Grep/Glob. No model-facing prose or production provider selection changes. Offline protocol/guest tests are evidence of plumbing, not live model quality or schema acceptance.
 
-For the implemented [personal-repository OpenAI pilot](../docs/sandbox-architecture.md#agreed-connected-pilot-2026-10-26), reuse the existing prompts and validators. Synthetic fixed replies/finding counts belong only to offline tests; a live review may find no issues. The confirmed design uses external egress restrictions and a disposable key inside the guest, deferring a custom relay. The [connected Linux workload](../docs/sandbox-connected.md) is now implemented with the same prompt prose and validators; production remains Claude-only.
+The runtime-selected provider and execution location reuse the same prompts, validators and review algorithms. Synthetic replies/fixed finding counts belong only to automated checks; an actual review may find no issues. The VM supervisor adds private transport and external policy, while explicit host execution is a planned option. Repository labels never choose another prompt or provider.
 
 ## Production entry-point gate
+
+The shared jailed VM launcher and root-owned read-only input mounts now exercise the same flow assets. `Engine.review(..., prepared_checkout=...)` lets the trusted guest supply its already admitted snapshot, avoiding a second writable export; both flows leave that externally managed snapshot intact. Model-facing prompt prose, scheduling, grounding and voting are unchanged. See the [VM checklist](../docs/sandbox-todo.md).
+
+Reusable image preparation, explicit worker recovery and no-key lifecycle failure checks also preserve these assets unchanged. Cached runtime images contain trusted code/prompts only, never prior review inputs or findings; cache identity includes their source bundle. No prompt replay or paid model test is needed for these infrastructure-only changes. Public acquisition also preserves these prompts: trusted code pins the initial API base/head hashes, admits the trees and revokes GitHub access externally before any model session. Repository text never selects transport policy or commands.
 
 The supported [`reviewer sandbox check`](../docs/sandbox-check.md) command packages these same assets from current source and executes both flows with simulated replies in Firecracker, followed by no-key boundary probes. It adds no model-facing instructions and provides no live-review exception.
 

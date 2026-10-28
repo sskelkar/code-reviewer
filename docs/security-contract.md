@@ -1,42 +1,37 @@
-# Security contract for the reviewer
+# Reviewer execution and security contract
 
-Confirmed by the user on 2026-10-26. This governs all future implementation and supersedes the earlier personal-repository/OpenAI pilot exceptions. The goal is one supported, repository-owned reviewer with production security requirements. It does not declare the existing implementation production-ready.
+Current direction, confirmed 2026-10-28: one reviewer, runtime-selected provider, and an independent choice of execution location. This replaces earlier requirements for mandatory VM execution and different repository/provider “pilot” tiers.
 
-## One security bar
+## Independent runtime choices
 
-Repository ownership, visibility, sensitivity, provider, model, review mode and pass count never select weaker isolation. Public/personal code is still untrusted input. Provider approval for particular data is a separate authorization decision: existing Claude-only restrictions for production material remain in force.
-
-Supported providers need explicitly qualified authentication, endpoints, tool restrictions and cleanup. An unsupported provider/model/runtime combination must fail with a clear reason; it must not run outside the sandbox, broaden network access or discover alternate credentials. A model ID selects inference behavior, not infrastructure authority.
-
-All product behavior belongs in this repository, with tests and documentation: PR acquisition, commit pinning, input admission, review orchestration, provider integration, credential handling, report storage and cleanup. Temporary job directories, clean clones and disposable VMs are expected runtime resources. Temporary handwritten launchers, hard-coded machine paths and undocumented setup are not the user workflow.
-
-## Required boundaries
-
-| Boundary | Requirement |
+| Choice | Meaning |
 |---|---|
-| Operator configuration | Separate trusted runtime/security/executable/provider settings from target repository review criteria. Never execute a repository-selected host binary or load its settings as security policy. |
-| Acquisition | Parse/fetch untrusted Git input within a qualified isolation boundary with clean configuration, bounded resources and approved source access. No target hooks, dependencies, scripts or builds execute. A public repository is not an exception. |
-| Review job | One disposable VM contains the review Python process and its model/tool sessions. Enforce unprivileged execution, immutable runtime/head snapshot, bounded scratch and tested execution/syscall/resource restrictions. Qualify VMM/jailer and guest controls separately. |
-| Network | Enforce default-deny outside the untrusted job. Permit only the required destinations/protocols for the current phase; revoke acquisition access before inference. Model text cannot change policy. |
-| Credentials | Authenticate through a qualified provider-specific path; no images, arguments, target files, logs, shared home/keychain or implicit credential discovery. Resolve guest-compromise exposure and credential lifetime/revocation before release; a disposable key is not a waiver. |
-| Model tools | Read/Grep/Glob within admitted code only. Models propose; deterministic validators ground findings, validate references, account usage and write artifacts. No model authority to launch host commands, install integrations or publish. |
-| Results | Fixed bounded artifacts, private predictable storage, validated frames/paths/types and safe rendering. Reports remain untrusted data; publishing needs separate explicit user authority outside the review job. |
-| Lifecycle | External deadlines and resource limits, cancellation/join before cleanup, recovery of interrupted jobs and stale-state refusal. No active workload or credential authority should survive unnoticed after a failure. |
-| Release evidence | Repeatable hostile-input/containment tests plus both-flow regressions. Record control coverage and limitations; a boot, simulated API test or truthful guest alone cannot establish security. |
+| Provider | Claude or OpenAI adapter; same review algorithms and output contract |
+| Review strategy | Single-agent or agent-personas; independent of provider/execution location |
+| Execution | VM by default; explicit direct-host selection for trusted use without VM startup overhead |
 
-An external allow-list does not prevent disclosure to its allowed provider, and local token-rate estimates are not hard spending limits. Neither provider failure nor model behavior may turn off protections to make a review complete. Absolute protection against every future exploit is not a release claim.
+The proposed direct flag is `--no-sandbox`. It is **not implemented yet**. Host acquisition is an intended feature, not an obsolete fallback. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.
 
-## Implementation and release order
+## Shared requirements
 
-1. Define the repository-owned command/configuration boundary and integrate the existing flows, provider adapters and sandbox lifecycle. Remove dependence on per-run external scripts; missing production controls must be visible release blockers, not silent fallbacks.
-2. Close acquisition, jailer, immutable filesystem, guest execution/syscall, credential and crash-recovery gaps with adversarial tests. Implement acquisition inside the selected qualified boundary rather than retaining the earlier weaker outer-worker fetch exception.
-3. Qualify each provider's real authentication/inference/tool behavior independently. Use synthetic inputs and no credentials for boundary testing first; authorize and minimize any credential-bearing qualification run explicitly, without calling it a production review.
-4. Enable supported real reviews only once the required control evidence exists for that backend/runtime. Keep the same bar when switching repositories or models.
+Both execution paths pin the observed base/head/merge-base for one run, use a separate head snapshot and base-commit criteria, expose only Read/Grep/Glob to code-reading model roles, validate replies/evidence, bound inputs and calls, account usage, and write reports privately. No target hooks, dependencies, builds or scripts run. Publishing remains an explicit operator action.
 
-## Current state
+Keep provider credentials out of target files, images, command arguments, console logs and reports. Adapter-specific authentication/protocol details belong behind the runner interface; they do not create separate reviewer products. Unsupported combinations fail clearly instead of switching provider/model or discovering alternate credentials. Cost estimates are not hard provider spending limits.
 
-The existing two review flows, external TAP/nftables/CONNECT policy, bounded capsules/results, private vsock bootstrap, non-root guest worker and several cleanup checks are reusable implementation. They are not discarded or relabeled as complete production protection.
+## VM execution
 
-The old host-review CLI path is now gated off. CLI/REPL preflight reports release blockers, and live review/dry-run plus retained paid diagnostic/replay/eval entry points refuse before target/model/credential activity. Trusted operator configuration no longer comes from the target directory. The separate connected OpenAI module lacks the complete product entry point and several gates above; it places the API key inside the guest. Public acquisition was performed manually in the outer Linux worker, which does not satisfy the final acquisition requirement. No authenticated review has run in this sandbox. The temporary personal-pilot launch command is withdrawn; do not use it as the final reviewer interface.
+One disposable VM contains acquisition, Python orchestration and all model sessions/personas. On macOS, dedicated mountless Lima supplies Linux/KVM for Firecracker. The external launcher owns pinned artifacts, jailer/resource/deadline controls, phase-scoped networking, bounded private transfers and cleanup/recovery. Source access is removed before inference. Guest code runs unprivileged against read-only admitted input, with no shared home/keychain or host mounts.
 
-See [architecture](sandbox-architecture.md), [security roadmap](security-roadmap.md) and [handover](HANDOVER.md). Historical pilot records are evidence about earlier work, not current permission to weaken this contract.
+A compromised guest can corrupt its findings/accounting and expose a credential available to it. Keep credential lifetime/exposure explicit; no custom credential broker or guest-wide syscall allow-list is mandated by this plan. Preserve tested isolation controls rather than describing a VM as absolute protection.
+
+## Direct-host execution
+
+The operator deliberately selects the host boundary. Acquisition uses the existing host/local-clone path and the same review core. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.
+
+## Current implementation and next work
+
+Public CLI/REPL currently offer preflight/refusal; authenticated VM and explicit direct-host dispatch remain unwired. Both adapters and internal review algorithms exist. Keep those facts visible; do not make status-row edits stand in for implementation.
+
+The supported VM checks cover jailed lifecycle, host/native containment, clean image reuse, bounded public PR acquisition, source-access revocation, private results and recovery without credentials/inference. Next wire an execution selector and provider factory into the common workflow, retain host acquisition for the direct path, and complete VM endpoint/authentication/tool integration for both adapters. Test explicit selection and absence of silent fallbacks.
+
+See [architecture](architecture.md), [VM design](sandbox-architecture.md) and [checklist](sandbox-todo.md). The standalone Firecracker playground is external to this project.

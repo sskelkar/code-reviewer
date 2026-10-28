@@ -1,9 +1,6 @@
-# OpenAI backend for sandbox tests
+# OpenAI adapter implementation
 
-**Current requirement:** the [security contract](security-contract.md) supersedes earlier personal/OpenAI pilot exceptions. This backend is reusable implementation, not a production-qualified workflow. Provider-specific authentication and guest-compromise exposure must meet the same release requirements as other backends.
-
-
-Updated 2026-10-26: test the sandbox using an OpenAI API key and the operator's selected **non-sensitive personal repository**. There is no requirement to author a sample project. Production reviews remain Claude-only; the normal `reviewer` CLI provider is unchanged. Existing synthetic inputs remain offline regressions and boundary probes. The [agreed connected-pilot plan](sandbox-architecture.md#agreed-connected-pilot-2026-10-26) supersedes the earlier synthetic-only live-test scope.
+Runtime-selected adapter behind the same runner interface and review core. Execution location and repository choice do not change its review algorithm. See the [shared execution contract](security-contract.md).
 
 ## Implementation
 
@@ -29,7 +26,7 @@ There is no Bash, code execution, write, web, MCP, skill or LSP tool. Each invoc
 
 POSIX directory-descriptor traversal and no-follow opens reject escaping paths, symlinks, hardlinked files and special files; `.git` is excluded. Reads are capped at 1 MiB per file; enumeration at 10,000 entries/32 directory levels; a text scan at 16 MiB; result rows at 100 and text at 16,000 characters. Grep skips binary, oversized and non-UTF-8 files; raw bytes actually read from skipped files consume its scan allowance too. One-byte lookahead detects overflow and returns a refusal. Rejected tool requests return a generic error without host paths. File/count limits can leave review evidence incomplete: this is an experimental bounded tool implementation, not feature parity with Claude Code.
 
-These checks reduce tool authority; they do not contain arbitrary Python/native execution after guest compromise. The connected pilot adds an unprivileged guest worker and external restrictions. An immutable admitted snapshot/runtime and guest execution/syscall policy remain separate production gates.
+These checks reduce tool authority; they do not contain arbitrary Python/native execution after guest compromise. VM execution adds non-root/no-new-privileges, read-only admitted code and external network restrictions. Explicit host execution does not claim those VM controls.
 
 ## Cost, deadlines and cancellation
 
@@ -50,29 +47,11 @@ python -m code_reviewer.sandbox.openai_smoke
 python -m unittest tests.test_openai_backend
 ```
 
-Build a separate no-network guest from the trusted bundle:
+The supported [sandbox check](sandbox-check.md) builds the offline fixture image and runs both flows through the shared jailed launcher. The raw standalone launcher has been extracted outside this project.
 
-```bash
-sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-openai-guest openai-offline
-```
+## VM transport integration
 
-Launch with the three explicit artifact paths/digests from the [runbook](../sandbox/README.md), adding `--workload openai-offline`. This uses 2 vCPUs/1024 MiB and no NIC or attached disk. Host validation requires the offline OpenAI marker, both completed flows, expected fake call counts and one consolidated synthetic finding per mode. API round trips are internal to a runner call; the harness's call count is not an HTTP-request count.
-
-The default fake-Claude smoke and the real-Claude no-auth startup probe remain available separately. These offline commands accept no real key or connectivity; the separate [connected launcher](sandbox-connected.md) supports the controlled live pilot.
-
-## Connected personal-repository pilot
-
-The [connected runbook](sandbox-connected.md) documents the implemented Linux supervisor, private input/bootstrap, external network policy, runtime key prompt/descriptor and bounded report export. It follows the [agreed sequence](sandbox-architecture.md#connected-implementation-sequence). The ordinary `reviewer` CLI remains unchanged; this is a separate explicitly selected module.
-
-Prepare a bounded capsule from the chosen non-sensitive personal clone and full base/head commit hashes. No Git/config/hooks execute on the host; clean Git reconstruction and tree admission happen inside the guest. The first live review does not require a new synthetic project. Keep the existing synthetic fixtures for automated regressions and no-key boundary tests only. A live review may validly find no defects; fixed smoke finding counts do not apply.
-
-The connected client uses an explicit trusted CONNECT route through a standard Squid process outside the guest. The default backend still ignores ambient proxy variables; `proxy=('192.0.2.1',3128)` is explicitly injected only in the guest worker. TLS targets `api.openai.com`, verifies its certificate using the public CA bundle and never sends the API authorization header in the CONNECT request. External nftables rules block direct guest egress; the proxy permits only the approved CONNECT authority and denies private/reserved destinations, with an additional host packet guard on the proxy UID. This is not a custom inference relay or credential-injection gateway and does not inspect encrypted HTTP content or enforce API paths/model spending.
-
-A dedicated disposable key is requested only after admission and boundary probes pass. It is supplied privately to guest memory, outside the checkout, via one-shot vsock bootstrap; no image, command-line argument, host home/keychain or repo configuration carries it. **Guest compromise can expose/reuse the key and bypass the Python ledger.** The operator must revoke it after testing; VM cleanup does not revoke it.
-
-The two recorded prototype defects are fixed: image generation checks all archive stages; Grep charges raw read bytes even when a file is skipped. Seventeen new offline regressions cover the connected admission/policy/key/export path, plus actual no-key Firecracker boundary/cancellation/deadline checks in the dedicated worker. No real API key, model request or personal repository has been used during implementation checks. Account/model/schema compatibility and finding quality remain unmeasured.
-
-The [production gates](security-roadmap.md) still include a jailer, immutable snapshot against native compromise, guest syscall enforcement, stronger crash recovery and Claude-specific qualification. OpenAI pilot success does not authorize or qualify production-code use.
+The shared [VM supervisor](sandbox-connected.md) supplies explicit trusted proxy routing and private bounded bootstrap/results. The adapter keeps verified TLS to its fixed API destination and excludes the authorization header from CONNECT requests. Host operation uses the same adapter/core without VM transport. Normal authenticated dispatch remains unwired; no repository category grants another execution path.
 
 ## Official API references
 

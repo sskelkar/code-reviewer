@@ -23,7 +23,9 @@ class Engine:
     def prepare(self, ref: PRRef, local_path: Optional[Path] = None) -> PRContext:
         return self._flow.prepare(ref, local_path)
 
-    def review(self, ctx: PRContext, keep_checkout: bool = False) -> Any:
+    def review(self, ctx: PRContext, keep_checkout: bool = False, prepared_checkout: Optional[Path] = None) -> Any:
+        if prepared_checkout is not None:
+            return self._flow.review(ctx, keep_checkout=keep_checkout, prepared_checkout=prepared_checkout)
         return self._flow.review(ctx, keep_checkout=keep_checkout)
 
     def dry_run(self, ctx: PRContext) -> Any:

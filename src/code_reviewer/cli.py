@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument('--lima-home', required=True, type=Path, help='dedicated Lima state directory')
     check.add_argument('--instance', default='reviewer-sandbox', help='prepared dedicated worker (must be stopped)')
     check.add_argument('--output', type=Path, help='new private result directory (default: a random temporary directory)')
+    check.add_argument('--lifecycle', action='store_true', help='also test cancellation and supervisor SIGKILL/deadline (adds about 30 seconds)')
+    check.add_argument('--pr', help='also test public PR acquisition inside the VM and source-access revocation; no key or inference')
+    recover = checks.add_parser('recover', help='restart the dedicated worker and remove abandoned reviewer job state')
+    recover.add_argument('--lima-home', required=True, type=Path, help='dedicated Lima state directory')
+    recover.add_argument('--instance', default='reviewer-sandbox', help='dedicated worker; refuses an active launcher lock')
     return parser
 
 

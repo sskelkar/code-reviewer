@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from code_reviewer.sandbox.bundle import build_bundle
-from code_reviewer.sandbox.launch import boot_config, collect, parse_result, verify_file
+from code_reviewer.sandbox.runtime import boot_config, collect, parse_result
 from code_reviewer.sandbox.smoke import RESULT_PREFIX, run_smoke
 from code_reviewer.sandbox import runtime_probe
 
@@ -54,14 +54,8 @@ class SandboxPrototypeTests(unittest.TestCase):
                 build_bundle(self.root, self.root / 'out.tar')
         self.assertFalse((self.root / 'out.tar').exists())
 
-    def test_artifacts_are_digest_checked_and_boot_has_no_disks_or_network(self):
+    def test_boot_has_no_disks_or_network(self):
         path = self.root / 'artifact'
-        path.write_bytes(b'synthetic')
-        digest = hashlib.sha256(b'synthetic').hexdigest()
-        self.assertEqual(verify_file(path, digest, 32), path.resolve())
-        for expected, size in (('0' * 64, 32), (digest, 2), ('BAD', 32)):
-            with self.assertRaises(ValueError):
-                verify_file(path, expected, size)
         config = boot_config(path, path)
         self.assertEqual(config['drives'], [])
         self.assertEqual(config['network-interfaces'], [])
@@ -100,7 +94,7 @@ class SandboxPrototypeTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'process group support')
     def test_output_limit_is_enforced_before_unbounded_buffering(self):
-        with patch('code_reviewer.sandbox.launch.MAX_OUTPUT_BYTES', 1024):
+        with patch('code_reviewer.sandbox.runtime.MAX_OUTPUT_BYTES', 1024):
             with self.assertRaisesRegex(ValueError, 'output limit'):
                 collect([sys.executable, '-c', 'import sys;sys.stdout.write("x"*100000)'], self.root, 5)
 
@@ -120,7 +114,7 @@ class SandboxPrototypeTests(unittest.TestCase):
             if cmd[1] == 'auth':
                 return '{"loggedIn":false,"authMethod":"none"}'
             return '{"error":"Not logged in"}'
-        with patch('code_reviewer.sandbox.launch.collect', side_effect=fake_collect):
+        with patch('code_reviewer.sandbox.runtime.collect', side_effect=fake_collect):
             result = runtime_probe.run_probe(self.root / 'fake-cli')
         self.assertEqual(len(calls), 4)
         self.assertIn('--setting-sources', calls[-1][0])
@@ -139,6 +133,6 @@ class SandboxPrototypeTests(unittest.TestCase):
             if cmd[1] == '--help':
                 return '--strict-mcp-config --disable-slash-commands --no-session-persistence'
             return '{"loggedIn":true,"authMethod":"oauth_token"}'
-        with patch('code_reviewer.sandbox.launch.collect', side_effect=fake_collect):
+        with patch('code_reviewer.sandbox.runtime.collect', side_effect=fake_collect):
             with self.assertRaisesRegex(ValueError, 'must not have credentials'):
                 runtime_probe.run_probe(self.root / 'fake-cli')

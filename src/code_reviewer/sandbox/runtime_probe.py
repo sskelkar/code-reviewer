@@ -24,8 +24,8 @@ def parse_result(output):
 
 
 def run_probe(binary=Path('/usr/bin/claude')):
-    # Import here so the launcher can use the result validator without a cycle.
-    from .launch import collect
+    # Import lazily so offline result validation does not load process helpers.
+    from .runtime import collect
     with tempfile.TemporaryDirectory(prefix='reviewer-runtime-') as name:
         root = Path(name)
         home = root / 'home'

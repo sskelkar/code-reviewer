@@ -47,15 +47,19 @@ def firewall(proxy_uid=13, resolvers=('127.0.0.53',)):
 }'''.replace('PROXY_UID', str(proxy_uid)).replace('DNS_ADDRESSES', dns)
 
 
-def squid_config(folder):
+def squid_config(folder, phase='inference'):
+    if phase not in ('acquisition', 'inference'):
+        raise ValueError('invalid network phase')
+    domains = 'github.com api.github.com' if phase == 'acquisition' else 'api.openai.com'
+    authority = r'^(github\.com|api\.github\.com):443$' if phase == 'acquisition' else r'^api\.openai\.com:443$'
     # -n prevents reverse-DNS conversion from turning a literal IP into an allowed name.
     return '''http_port 192.0.2.1:3128
 workers 1
 acl source src 192.0.2.2/32
 acl tunnel method CONNECT
 acl secure port 443
-acl provider dstdomain -n api.openai.com
-acl exact_uri url_regex -i ^api\\.openai\\.com:443$
+acl provider dstdomain -n ALLOWED_DOMAINS
+acl exact_uri url_regex -i ALLOWED_AUTHORITY
 acl forbidden dst 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4 ::/128 ::1/128 fc00::/7 fe80::/10
 http_access deny !source
 http_access deny !tunnel
@@ -78,7 +82,7 @@ max_filedescriptors 256
 visible_hostname reviewer-proxy
 forwarded_for delete
 coredump_dir %s
-''' % folder
+'''.replace('ALLOWED_DOMAINS', domains).replace('ALLOWED_AUTHORITY', authority) % folder
 
 
 def command(args, *, text=None, check=True):
@@ -90,10 +94,12 @@ def command(args, *, text=None, check=True):
 
 
 class Network:
-    def __init__(self, root, uid, timeout=900):
+    def __init__(self, root, uid, timeout=900, *, acquisition=False):
         self.root, self.uid, self.timeout = Path(root), uid, timeout
         self.tap = self.table = False
         self.proxy = None
+        self.phase = 'acquisition' if acquisition else 'inference'
+        self.deadline = time.monotonic() + timeout
 
     def __enter__(self):
         try:
@@ -120,45 +126,65 @@ class Network:
             folder.mkdir(mode=0o700)
             user = pwd.getpwnam('proxy')
             os.chown(folder, user.pw_uid, user.pw_gid)
-            config = folder / 'squid.conf'
-            config.write_text(squid_config(folder))
-            os.chown(config, user.pw_uid, user.pw_gid)
-            config.chmod(0o600)
-            # Run in foreground, unprivileged, without enabling the system Squid service.
-            def demote():
-                import resource
-                resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-                os.setgroups([])
-                os.setgid(user.pw_gid)
-                os.setuid(user.pw_uid)
-            self.proxy = subprocess.Popen(['/usr/bin/timeout', '--signal=KILL', str(self.timeout), '/usr/sbin/squid', '-N', '-f', str(config)],
-                                          cwd=str(folder), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                          stderr=subprocess.DEVNULL, start_new_session=True,
-                                          preexec_fn=demote, env={'PATH': '/usr/bin:/bin'})
-            for _ in range(100):
-                if self.proxy.poll() is not None:
-                    raise RuntimeError('mandatory proxy failed to start')
-                try:
-                    with socket.create_connection(PROXY, timeout=.1):
-                        break
-                except OSError:
-                    time.sleep(.05)
-            else:
-                raise RuntimeError('mandatory proxy startup deadline exceeded')
+            self.start_proxy()
             command(['nft', 'list', 'table', 'inet', TABLE])
             return self
         except BaseException:
             self.__exit__(None, None, None)
             raise
 
-    def __exit__(self, *args):
-        failures = []
+    def stop_proxy(self):
         if self.proxy is not None:
             try:
                 os.killpg(self.proxy.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            self.proxy.wait()
+            self.proxy.wait(timeout=10)
+            self.proxy = None
+
+    def inference(self):
+        if self.phase != 'acquisition' or not self.tap or not self.table:
+            raise ValueError('source access can only be revoked once in an active job')
+        # Kill the old proxy group: established GitHub tunnels must close too.
+        self.stop_proxy()
+        self.phase = 'inference'
+        self.start_proxy()
+        command(['nft', 'list', 'table', 'inet', TABLE])
+
+    def start_proxy(self):
+        remaining = int(self.deadline - time.monotonic())
+        if remaining < 1:
+            raise TimeoutError('network lifetime exhausted')
+        folder = self.root / 'proxy'
+        user = pwd.getpwnam('proxy')
+        config = self.root / 'proxy.conf'
+        config.write_text(squid_config(folder, self.phase))
+        config.chmod(0o644)  # Parent/config are root-owned; the proxy cannot replace policy.
+        # Run in foreground, unprivileged, without enabling the system Squid service.
+        def demote():
+            import resource
+            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+            os.setgroups([])
+            os.setgid(user.pw_gid)
+            os.setuid(user.pw_uid)
+        self.proxy = subprocess.Popen(['/usr/bin/timeout', '--signal=KILL', str(remaining), '/usr/sbin/squid', '-N', '-f', str(config)],
+                                      cwd=str(folder), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL, start_new_session=True,
+                                      preexec_fn=demote, env={'PATH': '/usr/bin:/bin'})
+        for _ in range(100):
+            if self.proxy.poll() is not None:
+                raise RuntimeError('mandatory proxy failed to start')
+            try:
+                with socket.create_connection(PROXY, timeout=.1):
+                    break
+            except OSError:
+                time.sleep(.05)
+        else:
+            raise RuntimeError('mandatory proxy startup deadline exceeded')
+
+    def __exit__(self, *args):
+        failures = []
+        self.stop_proxy()
         # Remove the TAP first: a cleanup failure must never leave a live unfiltered guest route.
         if self.tap:
             if command(['ip', 'link', 'del', TAP], check=False).returncode:

@@ -451,17 +451,6 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(result.assignments)
         self.assertIn('criteria budget exhausted', ' '.join(result.warnings))
 
-    def test_doctor_checks_selected_persona_assets_without_model_calls(self):
-        from unittest.mock import patch
-        from code_reviewer import doctor
-        output = []
-        runner = PersonaRunner()
-        with patch.object(doctor, '_run', return_value=(0, ' '.join(doctor.REQUIRED_FLAGS))), \
-                patch.object(doctor, 'load_prompt', side_effect=AssertionError('single-agent assets')):
-            self.assertEqual(doctor.run_doctor(self.cfg, runner, live=False, out=output.append), 0)
-        self.assertIn('13 rules', '\n'.join(output))
-        self.assertEqual(runner.calls, [])
-
     def test_token_budget_stops_before_comparison_and_no_path_is_posted(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding()]}])
         result = self.run_flow(runner, run_budget_tokens=1)

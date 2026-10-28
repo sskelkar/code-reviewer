@@ -60,7 +60,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     runner = ClaudeRunner(cfg.claude_bin, cfg.isolation_flags)
 
     if args.command == "doctor":                  # `reviewer doctor`
-        return run_doctor(cfg, runner, live=args.live)
+        from .security import readiness
+        report = readiness(cfg.provider)
+        print(json.dumps(report, indent=2))
+        return 0 if report["ready"] and not args.live else 1
     if args.command == "review":                  # `reviewer review <url>`
         ...                                       # parse the PR, apply the options, print the banner in a terminal,
                                                   # call review_flow.run_review(...), print the summary, optionally post
@@ -83,7 +86,7 @@ if __name__ == "__main__":
 |---|---|---|
 | `reviewer` | `cli.main` | [`repl.Session.loop`](../src/code_reviewer/repl.py): reads commands in a loop, `review <url>` calls `review_flow.run_review` |
 | `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): the same steps the prompt's `review` command uses (pin the PR, then review or dry-run) |
-| `reviewer doctor` | `cli.main` | [`doctor.run_doctor`](../src/code_reviewer/doctor.py): environment checks |
+| `reviewer doctor` | `cli.main` | `security.readiness`: offline release status |
 
 Both normal review entry points go through `review_flow.run_review`, which currently returns preflight or refuses before `Engine`/Git/model execution. Inside synthetic tests and guest workloads, `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
 
@@ -219,7 +222,7 @@ The project deliberately uses only the standard library. This is what each modul
 
 | Module | Purpose | Java analogue | Mainly used in |
 |---|---|---|---|
-| `subprocess` | Run external programs (`claude`, `git`, `gh`) | `ProcessBuilder` | `claude_cli.py`, `git_ops.py`, `doctor.py` |
+| `subprocess` | Run external programs (`claude`, `git`, `gh`) | `ProcessBuilder` | `claude_cli.py`, `git_ops.py` |
 | `json` | Parse and write JSON | Jackson / Gson | many (`claude_cli`, `run_store`, `engine`, ...) |
 | `pathlib` | File paths as objects; `path / "x"` joins | `java.nio.file.Path` + `Files` | nearly every module |
 | `re` | Regular expressions | `java.util.regex` | `diffview.py`, `criteria.py`, `report.py`, `redact.py` |
@@ -227,8 +230,8 @@ The project deliberately uses only the standard library. This is what each modul
 | `typing` | Type-hint vocabulary (`List`, `Dict`, `Optional`, ...) | Generics syntax | everywhere |
 | `argparse` | Command-line parsing | picocli, commons-cli | `cli.py`, `review_options.py`, `replay.py` |
 | `shlex` | Split a command line honoring quotes | none direct | `repl.py` |
-| `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `run_store.py`, `git_ops.py`, `post.py`, `doctor.py` |
-| `shutil` | High-level file ops (delete a tree) | `FileUtils` | `run_store.py`, `doctor.py` |
+| `tempfile` | Temporary files and directories | `Files.createTempFile/Directory` | `run_store.py`, `git_ops.py`, `post.py` |
+| `shutil` | High-level file ops (delete a tree) | `FileUtils` | `run_store.py` |
 | `tarfile` | Read `.tar` archives | commons-compress | `git_ops.py` |
 | `hashlib` | SHA-256 hashing | `MessageDigest` | `flows/single_agent/prompt_contract.py` |
 | `fnmatch` | Shell-style glob matching (`*.min.js`) | `PathMatcher` | `diffview.py` |
@@ -284,7 +287,7 @@ x = a if cond else b           # ternary: value-if-true first
 - `in` tests membership: `"x" in some_list`, `key in some_dict`, `"ab" in "cab"`.
 - Chained comparisons work: `0 < x <= 1`.
 - Comments are `# ...`. Docstrings are `"""..."""` string literals as the first statement of a module, class or function; they are the Javadoc analogue and are available at runtime.
-- Strings use `'` or `"`; `"""` spans lines; `r"..."` is a raw string (backslashes are literal, used for regexes such as `re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")`). Adjacent string literals inside parentheses are concatenated automatically (see `LIVE_PROMPT` in `doctor.py`).
+- Strings use `'` or `"`; `"""` spans lines; `r"..."` is a raw string (backslashes are literal, used for regexes such as `re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")`). Adjacent string literals inside parentheses are concatenated automatically.
 - Numbers: integers are unbounded; `/` is always floating-point division; `//` is integer division.
 
 ### 5.2 String formatting
@@ -914,13 +917,11 @@ PYTHONPATH=src python3 -c "from code_reviewer.config import Config; print(Config
 | getter | `@property` |
 
 
-## Local evals (parked)
-
-This part of the project was built and then set aside; the project now judges reviews by hand on real pull requests. `python -m code_reviewer.evals` is a second frontend over `Engine`, for pinned local commit pairs instead of GitHub PR metadata. `eval_cases.py` validates the suite and builds `PRContext`; only neutral title/description and the pinned diff/head reach the Reviewer, while expected answers remain evaluator-only. `eval_runner.py` runs a model/pass/repetition matrix with fixed pass attempts and default criteria, preserving interrupted trials and costs. Each trial gets its own temporary head checkout; passes within a trial share it but use fresh Claude sessions.
-
-`eval_judgments.py` validates human decisions against the three grading checks. `eval_grading.py` computes precision, confirmed-known-issue recall and combined reports without a model. Pending/uncertain labels and incomplete trials prevent group quality scores. `rekey` copies saved reviews under revised expectations and resets labels, avoiding paid reruns. Production cases and outputs stay outside this repository, reviewed by Claude and judged by the user locally. Follow [the eval guide](../evals/README.md) for commands and limitations.
-
 ## Sandbox deployment status
+
+Runtime preparation now happens before job execution. `sandbox/prepare.py` builds clean images only when trusted source/builder/copied OS inputs change; a cached image must still match its identity and digest. Job data and keys never enter that cache. `sandbox/recover.py` resets a selected dedicated worker under its launcher lock and removes only recognized owned stale scratch after confirming no job services/mounts/network remain. An opt-in lifecycle check deliberately kills a supervisor to prove the system manager ends the VM on its own deadline. This adds no model role or review pass.
+
+**2026-10-28:** the supported check and connected supervisor share `sandbox/vm.py`, which starts the pinned upstream jailer under a bounded transient systemd unit in the outer worker. This uses the existing Linux service manager, not another AI service or VM. The host observes VMM UID/capabilities/seccomp/namespaces/chroot and resource limits. Inside the review VM, `snapshot.py` seals admitted Git/head input read-only as root, disables privilege escalation, then switches to UID 65534. The trusted `prepared_checkout` argument lets both flows reuse this snapshot without exporting it again or deleting it. No model prompt or review-loop semantics changed. See [the checklist](sandbox-todo.md).
 
 There is now a supported deployment command: `reviewer sandbox check`. `cli.py` dispatches it to `sandbox/check.py` before review configuration loading. That Python module validates and owns the dedicated Lima lifecycle, builds the current trusted source, exercises both flows with simulated model replies, runs no-key connected probes, removes temporary state and saves a private JSON result after shutdown. The second VM is a sequential test workload, not another layer or per-persona VM. See [how to run it](sandbox-check.md) and [alternative designs](sandbox-alternatives.md). It does not yet review a real PR.
 
@@ -928,16 +929,16 @@ The [sandbox architecture](sandbox-architecture.md) wraps the whole review job i
 
 Follow the boundary by module:
 
-1. On the workstation, `sandbox/capsule.py` reads bounded Git object files and pinned base/head metadata. It invokes no Git and copies no target config/hooks. The capsule may include other history from that object store; only use the selected non-sensitive repository.
+1. For a public PR, the workstation transfers only a validated URL. Inside the guest, `sandbox/acquire.py` reads bounded API metadata, pins hashes and fetches/admits/exports with clean unprivileged Git. The supervisor permits GitHub only during this phase, then kills old tunnels and replaces policy with the inference-only route. Optional `sandbox/capsule.py` instead reads bounded Git object files and pinned base/head metadata on the workstation. It invokes no Git and copies no target config/hooks. The capsule may include other history from that object store; only use the selected non-sensitive repository.
 2. On the dedicated Linux/KVM worker (a mountless Lima VM on compatible Macs), `sandbox/connected.py` selects trusted artifacts/settings, installs `network.py`'s TAP/nftables/standard Squid policy and starts one unprivileged VMM with an external deadline. No host home or target directory is mounted.
-3. Inside the guest, `guest.py` drops privileges and receives the capsule over `wire.py`'s bounded vsock frames. `git_input.py` reconstructs clean Git state, admits base/head/merge-base and substitutes a bounded head exporter. Boundary probes run before the host prompts privately for the disposable key.
+3. Inside the guest, initial `guest.py` setup receives input over `wire.py`'s bounded vsock frames. For public URLs, an unprivileged acquisition child fetches and exports before the parent seals read-only mounts and drops privileges. For capsules, `git_input.py` reconstructs, admits and exports before sealing and dropping privileges. Boundary probes run before the host prompts privately for the disposable key.
 4. `guest.py` constructs `Config` from explicit operator settings and calls `Engine(cfg, OpenAIRunner(...)).review(ctx)`. In Java terms, the runner is an injected implementation behind the existing duck-typed interface. No target `review.toml` is loaded. Each call starts a new local conversation; Read/Grep/Glob use `backends/read_tools.py`, and verified TLS reaches OpenAI through the mandatory external proxy.
 5. The existing flow writes reports in private guest scratch. The guest returns only fixed bounded report artifacts; the host validates and writes private files. Raw prompts stay in the disposable VM. Success, failure, cancellation and deadlines trigger process/network/scratch cleanup; stale policy after a hard crash blocks a new job.
 
-The connected command defaults to one pass and one persona worker for a small pilot, separately from normal CLI defaults (single-agent up to six attempts, personas three rounds/four workers). Automated tests simulate inference in both flows, and actual VM checks pass the listed no-key network/admission/cleanup probes. No authenticated model call or personal-repository review has run yet. The earlier staged live test is superseded by the common production security contract; do not run temporary pilot scripts. Production remains Claude-only after its jailer, stronger filesystem/execution/syscall and authentication/tool gates pass. A compromised pilot guest can steal its key and corrupt its reports/accounting; local cost estimates do not enforce provider spending.
+The current connected engineering command uses one pass/worker by default, separately from normal algorithm defaults. Provider is a runtime adapter choice; VM-default and explicit host execution use the same review core. Repository labels do not create another workflow. Normal authenticated dispatch and the proposed `--no-sandbox` flag remain unwired. Existing host acquisition is retained for the direct option. A credential available in a compromised guest can be copied, and local accounting cannot enforce provider spending.
 
 ### The launcher is separate from the reviewer
 
 The “trusted launcher” is [`sandbox/connected.py`](../src/code_reviewer/sandbox/connected.py), ordinary Python that the operator runs in the dedicated Linux worker outside the inner Firecracker VM. Think of a small Java `main` that starts a child runtime and manages its lifecycle, not another AI agent. It sets up network policy, boots the review VM, transfers input/key, validates returned artifacts and destroys the job. “Trusted” describes its place in the security boundary, not proof that it has no defects. `guest.py` and the selected `Engine` flow are the reviewer running inside the inner VM.
 
-The [security contract](security-contract.md) now requires all product orchestration in this repository and one security bar across repositories/providers. Earlier temporary personal-pilot scripts are withdrawn. Automatic acquisition must run within a qualified isolation boundary, rather than relying on the earlier outer-worker fetch exception; the integrated workflow is not implemented yet. Existing `connected.py`/`guest.py` remain reusable components, not proof that all production controls are complete.
+The [execution contract](security-contract.md) defines runtime-selected provider and independent VM/host execution choices. The standalone raw-Firecracker launcher is now an external playground. This repository keeps only its shared runtime helpers in `sandbox/runtime.py` and the supported jailed lifecycle in `sandbox/vm.py`. No handover document is maintained automatically.

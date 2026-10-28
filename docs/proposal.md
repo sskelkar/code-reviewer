@@ -1,6 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
-**Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; live frontends blocked while acquisition, security controls and authenticated dispatch are completed (see [README.md](../README.md) and [HANDOVER.md](HANDOVER.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
+**Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; live frontends blocked while runtime-selected provider/execution dispatch is integrated (see [README.md](../README.md) and [VM checklist](sandbox-todo.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
 (Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
@@ -9,9 +9,9 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 
 **Hypothesis:** repeated blind passes give (a) more real findings than one pass, (b) a useful confidence signal, (c) a point where passes stop adding anything new. The experiment must separate "converged" from "correct", so you label findings and record misses.
 
-**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each by default (configurable with `--passes N`). The persona Comparator merges duplicates, categorizes findings and flags possible conflicts; a targeted Verifier annotates flagged groups only. Building an automated eval harness first turned out to be a distraction; that code is parked (§9).
+**Direction:** make the agent useful on real pull requests and judge it by hand, trying different strategies on the same PRs: the current loop with Haiku, the same loop with Sonnet, then **optional four-persona review** (§12): correctness, code quality, test quality and production safety, three passes each by default (configurable with `--passes N`). The persona Comparator merges duplicates, categorizes findings and flags possible conflicts; a targeted Verifier annotates flagged groups only. The automated eval framework was removed to keep the project focused on real reviews and manual judgment.
 
-**Not yet built:** project context pack; broader per-finding verification; inline PR comments; production sandbox hardening and Claude qualification. An experimental OpenAI raw-API backend and separate connected personal-repository sandbox pilot are implemented; authenticated inference remains untested. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
+**Not yet built:** project context pack; broader per-finding verification; inline PR comments; authenticated VM and explicit direct-host dispatch. Both provider adapters and reusable VM components are implemented; authenticated VM inference remains untested. The existing single-agent reviewer remains the default. The structural refactor and optional persona workflow are implemented; persona quality remains unmeasured. Single-agent prompt/schema/default contents are unchanged.
 
 ## Checklist
 
@@ -21,7 +21,7 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [x] Thorough Reviewer prompt (reports every supported issue, not only the first)
 - [x] Ten default criteria, plus project criteria from the root `AGENTS.md`, plus nested `AGENTS.md` and `.claude/rules` files added by location
 - [x] Reports and the PR summary name the criterion and its source, never an internal ID
-- [x] Interactive REPL and one-shot CLI, summary posted only through explicit CLI authorization or REPL confirmation, dry run, email redaction, `doctor --live` isolation checks
+- [x] Interactive REPL and one-shot CLI, summary posted only through explicit CLI authorization or REPL confirmation, dry run, email redaction; host diagnostic subsequently removed
 - [x] Comparator replay tool; README flow diagrams of a review
 - [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch (the initially unavailable persona boundary is now implemented)
 - [x] Define and load thirteen canonical persona defaults, static focus/assignments and common review instructions
@@ -32,26 +32,21 @@ A Python CLI/REPL, started in a project directory, that reviews a GitHub PR by r
 - [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
 - [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
 
-**Current focus: one supported reviewer with production security for every repository/provider (2026-10-26)**
+**Current focus: one reviewer, runtime provider selection, VM default and explicit host execution (2026-10-28)**
 
-The [security contract](security-contract.md) supersedes the weaker personal/OpenAI pilot exceptions. All product code belongs in this repository; temporary job state is expected, but external handwritten drivers are not a supported entry point. Preserve the existing flows and sandbox mechanics without claiming that integration alone makes them secure.
+Provider and execution location are independent of repository purpose/visibility. Both adapters use the same single-agent/persona core, criteria, validators, budgets and reports. Preserve host acquisition as a supported direct-flow feature; the planned `--no-sandbox` chooses it explicitly without VM startup overhead. It is not implemented yet. VM failures never switch modes automatically.
 
-- [x] Verify nested KVM, both offline review flows, native Claude unauthenticated startup and simulated OpenAI execution
-- [x] Implement reusable bounded input/results, scoped external network policy, private bootstrap, non-root worker and initial deadline/cancellation checks
-- [x] Fix archive-stage status and skipped-file IO accounting defects; preserve failed-review diagnostics
-- [x] Add a shared no-target-IO CLI/REPL preflight and refusal gate; remove current-directory security config and legacy host/model bypass entry points
-- [x] Pin the bytes actually staged for VMM execution and separate root-owned runtime/configuration from writable socket state
-- [x] Replace handwritten deployment drivers with `reviewer sandbox check`: current-code build, both offline flows, no-key connected probes, bounded private result and outer-worker lifecycle
-- [ ] Complete qualified user-facing execution dispatch and predictable private report storage
-- [ ] Implement bounded PR acquisition inside a qualified isolation boundary, with phase-scoped network access and no target execution
-- [ ] Qualify jailer, immutable runtime/snapshot, guest execution/syscall/resource controls and independent crash recovery
-- [ ] Resolve and qualify provider-specific credentials, guest-compromise exposure, egress and native tool behavior; no disposable-key waiver
-- [ ] Run repeatable adversarial containment and both-flow regressions; refuse unsupported or unenforced configurations
-- [ ] Resume the selected public PR through the supported workflow once the necessary controls are qualified; existing Claude-only production data authorization remains
+- [x] Implement both review algorithms, adapters and trusted operator configuration
+- [x] Implement and no-key check the shared jailed VM lifecycle, read-only admitted input, phase-scoped networking, bounded results, image reuse and explicit recovery
+- [x] Check bounded public PR acquisition inside the VM and close existing source tunnels before inference
+- [x] Remove the unused eval framework and old host-based doctor; remove automatic handover maintenance
+- [x] Extract the raw standalone Firecracker experiment outside this project; retain shared supported-runtime helpers
+- [ ] Wire runtime execution/provider selection, retaining host acquisition and using the shared core in both boundaries
+- [ ] Complete VM authentication, endpoint policy and tools for both runtime-selected adapters
+- [ ] Integrate private reports/display and test explicit selection, cleanup and absence of silent fallback
+- [ ] Run an authorized end-to-end review, then return to manual quality comparison
 
-The [architecture](sandbox-architecture.md) records existing mechanics and the [roadmap](security-roadmap.md) orders the release work. The ordinary CLI now refuses live reviews before target/model activity; the separate connected OpenAI component is restricted to no-key probes while production controls remain incomplete. Earlier live-pilot instructions are withdrawn; no real key or model request has been used in the sandbox.
-
-The user chose to continue with Lima plus Firecracker after considering the extra Mac compatibility layer. [Alternative designs](sandbox-alternatives.md) records direct disposable Lima/Apple VMs and a dedicated Linux Firecracker host, without claiming identical security guarantees. No second backend will be built now. The [supported deployment check](sandbox-check.md) is a concrete runnable step, not completion of the live review workflow.
+See the [execution contract](security-contract.md), [architecture](architecture.md), [roadmap](security-roadmap.md) and [VM checklist](sandbox-todo.md). Current public commands remain preflight/refusal until dispatch is implemented. No project category receives another provider or review policy.
 
 **Report improvement TODOs (recorded; details in §10.2)**
 - [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
@@ -70,10 +65,10 @@ The user chose to continue with Lima plus Firecracker after considering the extr
 - [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
 
 **Security backlog (promoted to current work; roadmap determines order)**
-- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; ordinary reviews still rely on Claude Code restrictions and a temporary checkout
+- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; normal authenticated dispatch remains unwired; explicit host operation is an intended option
 - [ ] **Prompt-injection safeguards for text coming from the code under review:** randomized delimiters, warnings when the PR or files contain instruction-like text, a test suite that plants instructions in the diff, PR text and repository files and checks they are ignored, sanitizing text posted to the PR (links, images, HTML, @mentions), and a capability split so the component that reads untrusted code cannot post
 - [ ] Secret scanning and removing `.env*`, key files and `.git` from the checkout; read-only permissions
-- [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; re-run `doctor --live` after every Claude Code upgrade
+- [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; qualify authenticated tool restrictions inside the VM after Claude Code upgrades
 - [ ] Company approval for sending code through the enterprise login
 - [ ] **Audit trail of review sessions, for governance** (§7 lists what each run already saves). Still to build:
   - who ran it and from where (user, machine, tool version), recorded in every run;
@@ -84,7 +79,7 @@ The user chose to continue with Lima plus Firecracker after considering the extr
   - a command that lists and summarizes past runs (what was reviewed, when, by whom, cost, what was posted).
 
 **Later features**
-- [ ] Inline PR comments; MCP server or `/review-pr` skill; provider-agnostic backend; optional LLM executive summary; resume of interrupted runs; revive evals if they become useful
+- [ ] Inline PR comments; MCP server or `/review-pr` skill; provider-agnostic backend; optional LLM executive summary; resume of interrupted runs
 
 ## 1. Architecture
 
@@ -167,7 +162,7 @@ claude -p --model haiku --safe-mode --restricted --tools "Read,Grep,Glob" \
 
 - **Read-only tools for the Reviewer (Resolver and Comparator get none: `--tools ""`), no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
 - Fresh session per call; never `--resume`. The review uses a copy of the PR head (files only, no git history) in its own temporary directory, **outside the run directory**: earlier findings, the master list and reports are not inside its tool working directory. Access outside that directory is enforced by Claude Code; this is not an OS sandbox. The copy is deleted at the end of the run, also when it fails.
-- **Isolation is verified, not assumed:** `reviewer doctor --live` plants a canary file next to the working directory and checks that it can be neither read (relative or absolute path) nor found by search.
+- **Isolation needs deployment evidence:** use the supported no-key VM checks for native/file/network containment. The old host-based model-reported diagnostic has been removed; authenticated Claude tool qualification is still required.
 - **The Reviewer cannot see PR comments, reviews or other passes' findings.** Only an allow-list of PR fields is fetched (title, description, commits, SHAs; a test fails if comments are added), and its tools are Read, Grep and Glob. `--dry-run` prints exactly what it would be given and saves the exact prompts (`input/reviewer.*.md`) and the PR text (`input/pr.json`) for every run. Email addresses in the PR title, description and commit messages are replaced with `[email]` before sending (`redact_emails`, on by default; the diff and repository files are not redacted, and names and chat links are not covered). PR descriptions can still contain bot summaries.
 - No `--max-turns` flag exists in CLI 2.1.301: bound each call with `--max-budget-usd` plus a wall-clock timeout.
 - Structured output validated by the harness; model output is never executed.
@@ -221,15 +216,15 @@ Config in `review.toml` (snake_case): `review_mode`, `model_reviewer`, `model_co
 
 **Default criteria revision (2026-10-18; not yet tried live).** Replaced the twelve broad defaults with ten repository-assessable criteria, each with inspection scope, reporting conditions and exclusions. Input bounds, related database writes requiring atomicity, contract-document updates, test levels and unnecessary or misleading mocking are explicit. Missing test-file changes, a fixed test-pyramid ratio, multiple writes alone, or mocking alone are not findings. Tests check loading and delivery through the real prompt path, not review quality; no before/after experiment exists, so no improvement is claimed. Rule IDs were renumbered, so IDs in older saved runs mean different topics: compare runs by their saved criteria blocks.
 
-**Parked: local eval harness (2026-10-19).** An offline harness (`python -m code_reviewer.evals`: `init`, `plan`, `run`, `label`, `grade`, `rekey`), a human-label rubric (`evals/RUBRIC.md`: correct and supported, introduced by the change, specific and useful) and eight pinned public cases (four regression/repair pairs from open-source projects, `evals/CASES.md`) were built. No model was ever run through it, and the answer keys for the public cases are agent-curated and provisional. It was set aside as a distraction: the goal now is to use the agent on real pull requests and judge the results by hand. The code stays for later; do not extend it. If it is revived, record a reason for each wrong finding (missing project knowledge, unverified assumption, misread code, pre-existing issue, style preference), because that tells which fix to build, and add a mode that freezes the project's resolved criteria (the harness uses defaults only).
+**Removed: local eval framework (2026-10-28).** The unused experiment runner, grading/label commands, rubric, cases and framework-specific tests were deleted at the user's request. No model-quality result was established by that framework. Judge real reviews manually for now.
 
 **Third finding: agreement is not correctness.** A finding raised by 4 of 6 passes was wrong. The project had a data-access rule the reviewer did not know; the rule existed in the repository, but only in files that were not review criteria and that nothing linked to, and no pass searched for it. Correlated mistakes across passes are the main weakness of agreement-based confidence. Responses: nested `AGENTS.md` and `.claude/rules` files are now added by location (§2), and the project context pack and Verifier are planned (§12). The saved raw output does not record which tools a pass called, so what each pass searched is unknown.
 
-**Flow ownership refactor (2026-10-20; historical step before persona runtime, no model-quality result).** Moved current orchestration, Reviewer/Comparator, master/result, reports, prompt loader and unchanged assets into `flows/single_agent/`. Shared Claude/git/diff/grounding/criteria-discovery/storage/statistics code lives in `shared/`. `Engine` preserves its API and selects one flow; CLI/REPL `--mode` overrides `review_mode` (default `single-agent`). Reserved `agent-personas` fails without loading single-agent assets, preparing a PR or calling Claude. Legacy imports remain bridges, including identical module objects for existing patch targets. A synthetic FakeRunner comparison before/after matched exact model inputs/schemas/settings, criteria, merged findings, pass accounting/stopping, summary and normalized report. Pinned SHA-256 fixtures guard unchanged prompt/schema/criteria bytes. Audit preserved the original positional `Config` model argument and the `Engine` public export; these compatibility contracts are tested. All 244 offline tests pass on Python 3.9 and 3.13, including eleven new flow-selection/isolation/compatibility tests; documentation links/anchors and `git diff --check` pass. No real reviews or production material were accessed. The parked eval tool was not run or extended; its source fingerprint traversal was adjusted only to include relocated subpackages rather than silently omitting them.
+**Flow ownership refactor (2026-10-20; historical step before persona runtime, no model-quality result).** Moved current orchestration, Reviewer/Comparator, master/result, reports, prompt loader and unchanged assets into `flows/single_agent/`. Shared Claude/git/diff/grounding/criteria-discovery/storage/statistics code lives in `shared/`. `Engine` preserves its API and selects one flow; CLI/REPL `--mode` overrides `review_mode` (default `single-agent`). Reserved `agent-personas` fails without loading single-agent assets, preparing a PR or calling Claude. Legacy imports remain bridges, including identical module objects for existing patch targets. A synthetic FakeRunner comparison before/after matched exact model inputs/schemas/settings, criteria, merged findings, pass accounting/stopping, summary and normalized report. Pinned SHA-256 fixtures guard unchanged prompt/schema/criteria bytes. Audit preserved the original positional `Config` model argument and the `Engine` public export; these compatibility contracts are tested. All 244 offline tests pass on Python 3.9 and 3.13, including eleven new flow-selection/isolation/compatibility tests; documentation links/anchors and `git diff --check` pass. No real reviews or production material were accessed.
 
 **Persona criteria assets (2026-10-20; initial asset step, before runtime wiring).** Authored thirteen canonical rules, common review instructions and four static focus/assignment definitions under `flows/agent_personas/`. Added entry-point/artifact wiring, test discovery/failure propagation and query/index compatibility to the ten existing concerns, with repository-evidence/reporting boundaries. Three offline asset-contract tests check complete static coverage, unique/shared identities and shared-parser rendering/disabling. The single-agent asset hash checks remain unchanged. All 247 tests pass on Python 3.9 and 3.13; all 24 Markdown files pass local link/anchor/fence checks. No saved production runs, paid model calls or eval experiments were used; no review-quality improvement is claimed.
 
-**Persona runtime wiring (2026-10-20; no quality result).** The optional flow now loads its own assets, classifies accepted project rules with coverage-validated fallback, freezes four Reviewer inputs, runs twelve fixed slots, merges/categories/flags conflicts, and conditionally annotates flagged groups with grounded evidence. All calls and retry attempts check budget. Synthetic tests exercise the new contracts and frontends; single-agent prompt/schema/criteria bytes and synthetic baseline behavior remain unchanged. Invalid model file paths now fail deterministic grounding instead of crashing either flow. No actual persona model calls, production material or eval runs were used. All 278 offline tests pass on Python 3.9 and 3.13, including thirty-one persona-flow tests; 77 Python modules parse/import, and 34 Markdown files pass local link/anchor/fence checks. The single-agent synthetic baseline matches. Full verification details are recorded in the handover.
+**Persona runtime wiring (2026-10-20; no quality result).** The optional flow now loads its own assets, classifies accepted project rules with coverage-validated fallback, freezes four Reviewer inputs, runs twelve fixed slots, merges/categories/flags conflicts, and conditionally annotates flagged groups with grounded evidence. All calls and retry attempts check budget. Synthetic tests exercise the new contracts and frontends; single-agent prompt/schema/criteria bytes and synthetic baseline behavior remain unchanged. Invalid model file paths now fail deterministic grounding instead of crashing either flow. No actual persona model calls, production material or eval runs were used. All 278 offline tests pass on Python 3.9 and 3.13, including thirty-one persona-flow tests; 77 Python modules parse/import, and 34 Markdown files pass local link/anchor/fence checks. The single-agent synthetic baseline matches. Current containment evidence is recorded in the [VM checklist](sandbox-todo.md).
 
 **Final pre-pilot audit (2026-10-20; no quality result).** Found and fixed retained sightings from a slot interrupted during consolidation: staged master changes now roll back without changing earlier completed slots. Also repaired the scheduled-pass Markdown table and stale docs/README diagram branches. Two added synthetic regressions bring the suite to 280 passing tests on Python 3.9 and 3.13 (thirty-three persona-flow tests). The single-agent synthetic baseline still matches. No model-facing prompt edits, live calls, private saved-run reads, production access, commits or pushes were needed. This supports a controlled Claude/user pilot, not a claim of model accuracy; the project context pack remains the next separate feature after manual comparison.
 
@@ -259,7 +254,7 @@ Validation for the stdin/cost-certainty fix: **296 tests pass** on Python 3.9.6 
 | Phase | Deliverable |
 |---|---|
 | **P0** | This proposal: engine + REPL + one-shot CLI + confirmed summary comment; manual evaluation |
-| P1 | Evals: parked (see §9). Judge by hand on real PRs |
+| P1 | Judge review quality manually on real PRs; the unused eval framework was removed |
 | P2 | Conflict-only advisory Verifier ships with persona mode (§12). Broader per-finding verification remains later; initial annotations do not suppress claims or change agreement scores |
 | P3 | **Optional four-persona review (§12), implemented/offline-tested**: configurable passes per persona (default 3), shared Comparator and advisory conflict verification; then project context pack. Reviewers remain blind to other passes |
 | P4 | Inline PR comments; MCP server / `/review-pr` skill |
@@ -287,7 +282,7 @@ Suggested sequence if pursued: first attach skills to the existing four personas
 - **Represent authority, scope and conflicting instructions in context.** The project context pack should distinguish repository contracts/conventions from planning claims and retain source paths and applicability. Do not treat conflicting general/specific guidance as an arbitrary strategy choice, or invent precedence when the repository does not establish it. Record unresolved ambiguity visibly.
 - **Measure specialization and verification cost.** Track discovery persona separately from finding category; cross-focus findings are allowed, but do not by themselves prove specialization helps. Watch Verifier pool headroom across further runs before changing allocations. Compare useful findings, false positives and cost rather than raw finding counts alone.
 
-Suggested immediate follow-up: make existing verification qualifications visible at each finding, then investigate criteria/context traceability. Continue manual quality comparisons; the project context pack remains the next substantial feature. Pluggable skills (§10.1), broader verification and the parked eval harness are not prerequisites. This entry records work to revisit; it does not authorize prompt changes, new paid reviews or automatic finding suppression.
+Suggested immediate follow-up: make existing verification qualifications visible at each finding, then investigate criteria/context traceability. Continue manual quality comparisons; the project context pack remains the next substantial feature. Pluggable skills (§10.1), broader verification and an automated eval framework are not prerequisites. This entry records work to revisit; it does not authorize prompt changes, new paid reviews or automatic finding suppression.
 
 ## 11. Assumptions and open questions
 
@@ -431,7 +426,7 @@ The Comparator validates one mapping/category set per incoming finding, known re
 
 Offline tests cover configured parallel rounds, input independence, routing/fallback, agreement, conflicts/aliases/rejected-only references, advisory evidence validation, limits, interruption, CLI/REPL/manual labels, posting-format dispatch and dry runs. The single-agent synthetic before/after comparison still matches. New prompts need authorized manual comparison before drawing review-quality conclusions; replay of the old Comparator schema cannot validate persona Reviewer/classifier/Verifier quality. No private saved runs, paid model calls or eval experiments were used.
 
-Compare single-agent Haiku, single-agent Sonnet and persona Haiku on the same real PRs, recording useful findings, false positives, misses, conflict handling and cost manually. At the default, twelve focused passes versus 3–6 general passes changes both focus and spend, so this is a strategy comparison, not an isolated proof that specialization alone helped. No new paid review is authorized by documenting this plan. Do not revive, extend or run the parked eval harness.
+Compare single-agent Haiku, single-agent Sonnet and persona Haiku on the same real PRs, recording useful findings, false positives, misses, conflict handling and cost manually. At the default, twelve focused passes versus 3–6 general passes changes both focus and spend, so this is a strategy comparison, not an isolated proof that specialization alone helped. No new paid review is authorized by documenting this plan. No automated eval framework is maintained.
 
 **Project context pack (after persona mode).** Extract identifiers touched by the diff, search base-commit documentation/agent-instruction files, and add relevant capped passages as a separate reference block. Deterministic, no model call, stable per persona/pass, saved with inputs. Ranking, size cap, search scope and citation design remain future work; it must respect the distinction between authoritative contracts and planning claims.
 

@@ -1,3 +1,0 @@
-# The public set's largest diff (1746 changed lines) now fits the default cap (3000), so this file is optional.
-# It pins the cap for every public suite in a combined comparison.
-max_diff_lines = 3000

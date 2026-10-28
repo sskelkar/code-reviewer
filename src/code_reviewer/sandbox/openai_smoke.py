@@ -38,7 +38,7 @@ def run_offline():
 
 
 def parse_result(text):
-    from .launch import parse_result as validate_smoke
+    from .runtime import parse_result as validate_smoke
     from .smoke import RESULT_PREFIX as SMOKE_PREFIX
     records = [line[len(RESULT_PREFIX):] for line in text.splitlines() if line.startswith(RESULT_PREFIX)]
     if len(records) != 1:
@@ -51,5 +51,29 @@ def parse_result(text):
     return data
 
 
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--private', action='store_true', help='return no-key check result over the private VM channel')
+    args = parser.parse_args()
+    if not args.private:
+        print(RESULT_PREFIX + json.dumps(run_offline(), sort_keys=True), flush=True)
+        return
+    import socket
+    from .snapshot import drop_privileges
+    from .wire import BOOT_PORT, receive, send_json
+    drop_privileges()
+    with socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM) as server:
+        server.bind((socket.VMADDR_CID_ANY, BOOT_PORT))
+        server.listen(1)
+        server.settimeout(90)
+        sock, _ = server.accept()
+        with sock:
+            sock.settimeout(180)
+            send_json(sock, run_offline())
+            if receive(sock, 1) != b'':
+                raise ValueError('invalid check acknowledgement')
+
+
 if __name__ == '__main__':
-    print(RESULT_PREFIX + json.dumps(run_offline(), sort_keys=True), flush=True)
+    main()

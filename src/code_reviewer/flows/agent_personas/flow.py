@@ -71,7 +71,7 @@ class AgentPersonasFlow:
         return DryRun(ctx, store.root, assigned, summary, self.cfg.model_reviewer, passes_per_persona=self.cfg.persona_passes,
                       parallel=self.cfg.persona_parallel, budget_pools=Budget(self.cfg).snapshot())
 
-    def review(self, ctx: Any, keep_checkout: bool = False) -> RunResult:
+    def review(self, ctx: Any, keep_checkout: bool = False, prepared_checkout: Any = None) -> RunResult:
         from .report import render_report, render_summary
         cfg = self.cfg
         ctx, redacted = self.inputs.redact(ctx)
@@ -88,7 +88,9 @@ class AgentPersonasFlow:
         result = RunResult(ctx, cfg, store.root, MasterList(), stats, self.inputs.default_criteria(files), slots, store.report_path,
                            diff_summary=summary, diagnostics=caller.diagnostics)
         self.emit('budget_allocated', pools=budget.snapshot())
-        checkout = store.prepare_checkout()
+        checkout = Path(prepared_checkout) if prepared_checkout is not None else store.prepare_checkout()
+        if prepared_checkout is not None and (checkout.is_symlink() or not checkout.is_dir()):
+            raise ValueError('prepared checkout must be a regular admitted directory')
         self.emit('run_started', repo=ctx.repo, number=ctx.number, title=ctx.title, head=ctx.head_sha, base=ctx.base_sha)
         try:
             store.dump('config.json', {'config': cfg.to_dict(), 'prompt_hashes': {
@@ -97,7 +99,7 @@ class AgentPersonasFlow:
                 'versions': {'python': platform.python_version(),
                     'claude_code': self.runner.version() if hasattr(self.runner, 'version') else 'unknown'}})
             self.emit('checkout_ready', path=str(checkout), kept=keep_checkout,
-                      **git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout))
+                      **({} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)))
             result.criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
             result.warnings.extend(result.criteria.warnings)
             if any(r.source == 'project' for r in result.criteria.rules):

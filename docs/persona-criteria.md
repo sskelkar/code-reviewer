@@ -34,6 +34,6 @@ No universal deployment model, database guarantee, external policy or documentat
 
 ## Next step
 
-Loading, project-rule distribution, frozen prompts, the configured round-robin scheduler, Comparator/conflict records, advisory verification and reports are implemented as specified in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps). Review the implementation and use authorized manual comparisons before drawing quality conclusions. Offline tests check plumbing, not semantic routing or review accuracy. The eval harness stays parked.
+Loading, project-rule distribution, frozen prompts, the configured round-robin scheduler, Comparator/conflict records, advisory verification and reports are implemented as specified in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps). Review the implementation and use authorized manual comparisons before drawing quality conclusions. Offline tests check plumbing, not semantic routing or review accuracy. Review quality is judged manually; the unused eval framework has been removed.
 
 In persona mode, `disabled_default_rules` accepts canonical persona IDs and the ten legacy `GEN-*` aliases mapped in proposal §12; unknown IDs fail clearly. Disabling a shared rule removes it from every persona. Single-agent IDs and behavior remain unchanged.

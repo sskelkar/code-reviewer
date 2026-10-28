@@ -1,6 +1,6 @@
 # Usage reference
 
-For an already prepared Mac/Lima worker, `reviewer sandbox check --artifacts DIR --lima-home DIR --instance NAME` builds the current code, runs both flows with simulated replies and no-key boundary probes, saves a private report and stops the worker. See the [deployment command](sandbox-check.md) for prerequisites. This accepts no repository/key and does not enable live reviews.
+For an already prepared Mac/Lima worker, `reviewer sandbox check --artifacts DIR --lima-home DIR --instance NAME` builds the current code, runs both flows with simulated replies and no-key boundary probes, saves a private report and stops the worker. See the [deployment command](sandbox-check.md) for prerequisites. It accepts no key; optional `--pr` tests in-VM public acquisition and does not enable live reviews.
 
 Start with the [README quick start](../README.md#quick-start). This guide covers commands, interpreting results, project criteria, configuration, storage and troubleshooting.
 
@@ -21,9 +21,9 @@ The same command works in the REPL as `review OWNER/REPO#123 --preflight`. The R
 
 ### Live review is gated
 
-CLI/REPL review, `--dry-run`, `doctor --live`, the connected real-key module path, and retained paid replay/eval commands now refuse before target or model activity. `--post`, personal/public code, model/provider selection and operator config cannot bypass missing controls. `--preflight` cannot be combined with `--post` or `--dry-run`. No host-review fallback exists.
+CLI/REPL review, `--dry-run`, `doctor --live`, the connected real-key module path, and retained paid replay now refuse before target or model activity. Repository labels do not choose execution behavior. The intended explicit host flag is not implemented yet. `--preflight` cannot be combined with `--post` or `--dry-run`. There is no automatic host fallback; explicit host mode is planned.
 
-Both internal review algorithms remain implemented and covered by offline tests; the descriptions of their reports, agreement and saved artifacts below explain that behavior. They are not instructions to bypass the release gate. Prior host-CLI runs are historical evidence. Once a qualified sandbox backend is integrated, the supported frontend must use it rather than revive the old host path. See the [security contract](security-contract.md).
+Both internal review algorithms remain implemented and covered by offline tests; the descriptions of their reports, agreement and saved artifacts below explain that behavior. They are not instructions to bypass the release gate. Prior host-CLI runs are historical evidence. The integration target is VM execution by default and explicit direct-host execution via the proposed `--no-sandbox` flag. Keep host acquisition for that direct path; use the same core and runtime-selected adapter in either boundary. See the [security contract](security-contract.md).
 
 ### Review options
 
@@ -169,7 +169,6 @@ A persona budget/failure limit disables only that persona. Criteria exhaustion f
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
 | `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's read-only checkout of the PR, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless `--keep-checkout` |
 | `refs/code-reviewer/*` in your local clone | The PR head and base commits fetched for a review. Your branches and working tree are never changed |
-| `~/.code-reviewer/doctor-last.json` | Raw reply from `reviewer doctor --live` |
 
 The temporary checkout is deleted when the run ends, even if the run fails (keep it with `--keep-checkout`). To clean up, delete run directories you no longer need. To remove the fetched refs from a clone:
 
@@ -188,7 +187,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 ## Privacy and safety
 
 - **What is sent to Claude:** the PR title, description and commit messages, the diff, the criteria text, and any repository files the Reviewer reads. It goes through your Claude Code login. Make sure your company policy allows that for the repository, and do not point the agent at repositories or PRs containing customer, rider or other personal data.
-- **What the Reviewer and persona Verifier can do:** read files in a separate checkout of the PR. They cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so earlier passes' findings are not next to it. `reviewer doctor --live` checks these restrictions, including that a planted file outside the working directory cannot be read or searched. This is a Claude Code restriction, not an OS sandbox.
+- **What the Reviewer and persona Verifier can do:** read files in a separate checkout of the PR. They cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so earlier passes' findings are not next to it. The former host-based `doctor --live` implementation has been removed. Runtime containment checks use the [sandbox deployment command](sandbox-check.md); the tool allow-list alone is not an OS boundary.
 - **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub for the review (a test fails if comments are ever added to it). Posting a comment separately lists the PR's comments to find the tool's own earlier one; that list is never given to the model. Use `reviewer review <url> --dry-run` to see exactly what would be sent, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
 - **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. `--dry-run` shows the text exactly as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
 - **Untrusted PR text:** the PR description and code are treated as data and the model is told never to follow instructions found in them. That reduces the risk of prompt injection but cannot eliminate it. Read findings critically.
@@ -204,9 +203,6 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
 | `FileNotFoundError` points to `prompts/resolver.system.md` after updating the reviewer | Exit any already-running `reviewer` REPL and launch it again. An editable install does not reload modules in a running Python process. Current prompts live under `src/code_reviewer/flows/<flow>/prompts/`; do not copy assets back to the old location. If a fresh launch still uses old paths, check which `reviewer` executable/virtual environment is active |
 | `--passes applies to single-agent` after updating | An older REPL is still running: exit and restart it. Current persona mode accepts `--passes N` as passes per persona (default 3), so `--mode agent-personas --passes 1` schedules four total review slots |
-| `doctor`: `claude is installed` fails | Install Claude Code, or set `claude_bin` in `review.toml` |
-| `doctor`: required flags missing | Your Claude Code is too old or different. Compare `claude --help` with `isolation_flags` and the flags in `src/code_reviewer/shared/claude_cli.py` |
-| `doctor --live`: a tool other than Read, Grep, Glob and `StructuredOutput` is available, the canary or hook was not ignored, or a file outside the working directory could be read or searched (`LEAK`) | Isolation is not working. Do not review untrusted PRs until this is fixed. (`StructuredOutput` is expected: it is how the JSON answer is returned.) |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Restart an old REPL after updating the reviewer. A new review fetches the latest branch tips; commits are pinned only within a run |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
@@ -221,6 +217,4 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Sandbox prototype status
 
-Normal `reviewer` commands now go through the shared release gate; live reviews are unavailable until the qualified sandbox workflow is integrated. The separate [connected Linux component](sandbox-connected.md) contains both-flow OpenAI execution mechanics, but its real-key path is now gated off; only harmless no-key checks are enabled. It accepts a bounded local Git-object capsule with full base/head hashes, not a PR URL; its explicit settings do not load target `review.toml`. The earlier private runtime-key mechanism and bounded report export remain internal code; live dispatch is refused until the shared production gates and qualified workflow are complete. No-key boundary/cleanup checks pass; authenticated personal-project inference has not been run.
-
-The [offline workloads](../sandbox/README.md) separately exercise fake-Claude and simulated-OpenAI review, plus [real-Claude startup](sandbox-runtime-auth.md) without credentials/network. The [architecture](sandbox-architecture.md) and [security roadmap](security-roadmap.md) distinguish implemented pilot controls from pending production jailer/filesystem/execution/syscall and Claude qualification. The regular CLI has no `--sandbox` switch or automatic fallback.
+Normal commands currently provide preflight/refusal. VM-default and explicit direct-host dispatch are being integrated into one reviewer with runtime-selected provider. The existing VM component supports bounded local input or public URL acquisition in no-key checks; authentication and normal report dispatch are still incomplete. See the [execution contract](security-contract.md) and [VM runbook](sandbox-check.md).

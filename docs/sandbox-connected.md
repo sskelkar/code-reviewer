@@ -1,102 +1,45 @@
-# Connected sandbox implementation and engineering checks
+# VM supervisor and private transport
 
-Use [`reviewer sandbox check`](sandbox-check.md) for the supported Mac build/check/shutdown lifecycle. It generates its harmless input inside the dedicated worker and needs no key or existing project clone. The lower-level components below remain useful for development; authenticated PR review is not enabled by this check.
-
-**Current direction:** the [security contract](security-contract.md) supersedes the weaker personal-repository pilot scope. The code below is reusable engineering implementation, not the production-qualified user entry point. Do not run the temporary personal-pilot scripts. Every repository/provider must meet the same release gates; production data still requires its approved provider.
-
-Implemented 2026-10-26 as an initial OpenAI-connected path in the [architecture](sandbox-architecture.md). The ordinary `reviewer` command now reports `--preflight` readiness and refuses live reviews until the security gates and sandbox dispatch are implemented. The separate Linux module runs the selected review flow inside one Firecracker VM but lacks the full production controls and integrated PR workflow. Commands below document the engineering components; they are not authorization for a credential-bearing review before those gaps are resolved.
+Use [`reviewer sandbox check`](sandbox-check.md) for the supported Mac build/check/shutdown lifecycle. It needs no model key or local clone. Optional `--pr` checks public acquisition inside the review VM without inference. This document explains the components, not a separate reviewer product or a repository-specific tier.
 
 ## What is implemented
 
-- Bounded local input capsule containing pinned commits and Git objects, with no target Git config, hooks, remotes, worktree scripts or host-side Git invocation.
-- One connected VM: 2 vCPUs, 4096 MiB RAM, 512 MiB private scratch, no attached disks or host filesystem mounts. Guest Python runs as UID/GID 65534 with core dumps disabled and finite CPU/file/process/descriptor limits. Scratch is `nosuid,nodev,noexec`.
-- A scoped TAP and nftables rules outside the guest. Direct forwarding, guest DNS, IPv6 and host-service access are blocked; only the standard proxy port is reachable from the guest.
-- A per-job **standard Squid CONNECT proxy**, not a custom inference/credential relay. It permits exactly the `api.openai.com:443` CONNECT authority, denies literal IPs/other domains/ports and private destinations, and disables access/cache logs and caching. A separate nftables output guard for the dedicated proxy UID permits only configured IPv4 DNS resolvers and public HTTPS connections; private/reserved destinations and IPv6 are refused at packet level as well. This worker must not run unrelated jobs under the same `proxy` account. DNS resolution happens outside the guest and is checked on use. The client explicitly uses this route and verifies provider TLS; no CA substitution or TLS decryption is performed.
-- A private one-shot Firecracker vsock bootstrap. Inputs/settings enter first; the guest admits them and probes the boundary; the host checks policy again before requesting/releasing the disposable key. The key travels only in memory over this channel, never in an image or command argument. It is not put in the reviewed tree.
-- Bounded allow-listed report export and cleanup on success, error, timeout, Ctrl-C, SIGTERM and SIGHUP. Independent GNU `timeout` wrappers bound the VMM/proxy if the Python launcher disappears. Residual TAP/firewall state after a hard kill refuses a new job rather than being silently overwritten.
+The shared VM lifecycle uses a matching jailer, reduced privileges, finite resources/deadlines and a read-only runtime bind mount. Guest code runs non-root with no-new-privileges, read-only admitted code and 512 MiB scratch. External TAP/nftables/standard CONNECT policy restricts traffic by acquisition/inference phase. Existing source tunnels close when the phase changes. Fixed bounded report artifacts return privately, and the supervisor cleans up processes/network/scratch.
 
-The network policy controls CONNECT destinations and resolved network addresses; it does **not** inspect encrypted HTTP authority/content, enforce API URL paths/model spending, or certify provider/CDN behavior against domain fronting. The permitted provider can receive admitted code. A compromised guest can obtain/reuse its disposable key, corrupt results and bypass the Python accounting. Those controlled-pilot risks do not become a production security guarantee.
+Public URL acquisition parses/fetches only inside the review VM. Optional capsule transfer admits pinned Git objects without host-side Git/config/hooks. These feed the same review core; see [acquisition limits](sandbox-check.md#public-pr-acquisition-check).
+
+The current private key/bootstrap code is not enabled for live dispatch. Both runtime-selected adapters must fit the same workflow, with their actual protocol, credentials, endpoints and tool behavior integrated. The ordinary CLI/REPL still offers preflight/refusal only. Explicit direct-host operation is planned separately from this VM transport; see the [execution contract](security-contract.md).
 
 ## What “trusted launcher” means
 
-The launcher is our own small Python program, [`sandbox/connected.py`](../src/code_reviewer/sandbox/connected.py), started by the operator with `python3 -m code_reviewer.sandbox.connected`. It runs **outside the review microVM, inside the dedicated Linux worker**. On a compatible Mac, that worker is the mountless Lima VM; on native Linux it is the dedicated KVM host. “Trusted” means this program is part of the security boundary and comes from operator-approved reviewer sources/settings. It does not mean its code is immune to bugs.
+`sandbox/connected.py` is ordinary deterministic Python running in the dedicated Linux worker outside the review VM. On compatible Macs that worker is mountless Lima; on native Linux it is the KVM host. It selects trusted artifacts/settings, installs external network policy, launches the jailed VM, exchanges bounded private frames, validates exported files and cleans up. Scoped setup needs root; VMM/proxy processes have reduced privileges.
 
-It is ordinary deterministic code, not an LLM agent, a separate always-running service or a container. It selects pinned runtime artifacts, creates the external network policy, starts Firecracker, transfers bounded input over the private channel, requests the disposable key after admission/probes, collects fixed report artifacts and cleans up. Scoped network setup requires root on the dedicated worker; the VMM and proxy run with reduced privileges. The actual reviewer Python program, model conversations and Read/Grep/Glob loop run **inside** the review microVM. Repository files and model replies cannot instruct the launcher to execute arbitrary commands or change its policy.
-
-### Public-repository acquisition: final requirement
-
-A public PR must not require an existing workstation clone or a handwritten external fetch driver. The repository-owned workflow must acquire and pin commits inside a qualified isolation boundary with clean configuration, bounded resources and no target hooks/dependency/build/script execution. Source-network access must be scoped to acquisition and removed before inference.
-
-A manual fetch in the dedicated outer Linux worker was used to stage the earlier personal pilot. That was an explicit earlier tradeoff, now superseded by the common production requirement. The existing `connected.py` still accepts only capsules and does not implement automated PR acquisition. The prepared input/probe result is engineering evidence, not a completed review or proof of final acquisition isolation.
+`guest.py` runs the actual review Python and selected adapter inside the VM. Repository rules and model output cannot ask the launcher to execute arbitrary host commands or change execution location. No custom inference relay, credential-injection service or publication daemon is involved.
 
 ## Prerequisites
 
-Use the dedicated mountless Ubuntu 24.04 ARM64 Linux VM from the [offline runbook](../sandbox/README.md), with at least 6 GiB RAM, nested KVM and no personal credentials. Native Linux/KVM removes the outer Lima layer. This image builder currently supports ARM64 only.
+The dedicated ARM64 Ubuntu worker needs nested KVM on compatible Macs, Python, Git, static BusyBox, cpio, systemd 255/cgroup v2, matching pinned jailer, iproute2/nftables and Squid 6 with its dedicated proxy user. The system Squid service must not occupy the job port. Full prerequisites/artifacts are in the [deployment runbook](sandbox-check.md#prerequisites). The command does not install tools, mount the workstation home or alter unrelated workers.
 
-Linux host tools: `ip`/iproute2, `nft`/nftables, **Squid 6** (`proxy` account and `/usr/sbin/squid`), GNU coreutils `timeout`, Python, Git, static BusyBox and GNU cpio. These are explicit OS/infrastructure prerequisites, not new Python dependencies. The launcher does not install them, modify the system Squid service, enable general IP forwarding or clear unrelated firewall rules. Tests used Squid 6.14. Other Squid major versions need separate qualification.
+Only one connected job runs per worker. Existing TAP/firewall names, unsupported runtime, occupied resources or unconfirmed cleanup cause refusal. VM failure never selects direct-host mode automatically.
 
-Run the connected launcher with root only on this dedicated Linux worker, for scoped TAP/firewall setup and process privilege dropping. It drops the VMM to the invoking sudo user (or nobody), with KVM group access, and Squid to its own `proxy` account. Missing KVM permissions, occupied policy names or an overlapping `192.0.2.0/30` route refuse startup. Only one connected job per worker runs at a time.
-
-Keep Firecracker/kernel/initrd artifacts operator-selected and content-pinned. The current CI kernel and copied Ubuntu runtime remain prototype artifacts, not independently qualified production images.
-
-## Prepare the selected personal repository
-
-On the trusted workstation, using a **normal complete local clone** with a `.git` directory, provide full pinned base/head commit hashes:
+## Optional existing-clone capsule input
 
 ```bash
 python -m code_reviewer.sandbox.capsule \
-  --repo /path/to/personal-clone \
-  --base FULL_BASE_COMMIT_HASH --head FULL_HEAD_COMMIT_HASH \
-  --title 'Describe this change' --description 'Optional intent and expected behavior' \
-  --output /tmp/personal-review-input.tar
+  --repo /path/to/clone --base FULL_BASE_HASH --head FULL_HEAD_HASH \
+  --title 'Describe the change' --output /tmp/review-input.tar
 ```
 
-This command reads files only and never runs Git or target code. The capsule is private (mode 0600); transfer it explicitly to the Linux worker without mounting the clone or home. **It contains the chosen clone's Git object store, potentially including other branches/history**, not just changed files. Select only a non-sensitive personal repository and keep the capsule/results outside this project and out of public storage. Model file tools see only the exported head checkout; the admitted base is also used for diff/criteria discovery.
+The capsule contains the selected clone's bounded Git object store, potentially including other branches/history. Keep it private and outside this project. No host Git or target code executes. Symlink/hardlink objects, alternates, unsupported layouts and oversized inputs are refused. Each admitted tree has existing path/blob/count/byte limits; no submodule/LFS content is downloaded. Public URL acquisition avoids this manual input step; private URL authentication remains unsupported.
 
-Limits: 128 MiB capsule, 32 MiB per object file and 10,000 object entries. Symlink/hardlink objects, alternate stores, worktree `.git` files and unsupported object layouts are refused. For the implemented existing-clone import path, the importer invokes no host Git; reconstruction/tree parsing happens in the guest using a new bare repository and clean config/templates. Automatic acquisition still needs the qualified boundary described above. Both selected commits and their merge-base must exist locally. Each admitted tree is limited to 5,000 entries, 2 MiB per blob and 32 MiB aggregate blobs; checkout export checks paths/types and the same byte/count limits. There is currently no automated GitHub fetch, submodule/LFS download or PR URL interface; repository-owned isolated acquisition is a required implementation change. The first live review can contain zero findings.
+This importer is retained alongside the intended direct-host acquisition feature. A capsule enters the VM; direct-host acquisition/review remains on the machine by explicit operator choice.
 
-## Build the connected runtime
+## Network and credential limits
 
-Bundle the trusted harness as in the offline runbook, explicitly copy that source tar and the builder into the disposable Linux worker, then:
+CONNECT authority and resolved-address checks do not inspect encrypted HTTP paths/content, enforce model spending or certify provider/CDN behavior. TLS remains end-to-end. The selected provider receives admitted prompt/code content. Host execution does not claim the VM's network isolation.
 
-```bash
-sh /tmp/build-offline-guest.sh /tmp/reviewer-source.tar /tmp/reviewer-connected-guest connected
-```
+Credentials belong outside images, CLI arguments, target files and logs. A credential available in a compromised guest may be copied/reused; Python budgets are estimates and VM teardown does not revoke it. Authentication/lifetime/revocation handling must be explicit without preemptively building another credential service.
 
-This includes the public CA bundle and connected guest entry point, **no target repository or key**. Record the artifact digests. Trusted image generation now checks every `find`/`cpio`/compression stage and publishes only after success; the old pipeline failure defect is fixed.
+## Checks
 
-The builder's `root/opt/reviewer/src` supplies the trusted launcher source copy on Linux. Do not run that copy from a target-controlled checkout or load its `review.toml`. All connected settings come from explicit operator arguments; target rules remain review data.
-
-## Check admission and network without a key
-
-On the Linux worker:
-
-```bash
-sudo env PYTHONPATH=/tmp/reviewer-connected-guest/root/opt/reviewer/src \
-python3 -m code_reviewer.sandbox.connected \
-  --firecracker /path/to/firecracker --firecracker-sha256 EXPECTED_BINARY_SHA256 \
-  --kernel /path/to/vmlinux --kernel-sha256 EXPECTED_KERNEL_SHA256 \
-  --initrd /tmp/reviewer-connected-guest/initrd.cpio.gz --initrd-sha256 EXPECTED_INITRD_SHA256 \
-  --input /tmp/personal-review-input.tar --output /tmp/personal-boundary-result \
-  --model synthetic-probe --prices 1 0.5 2 --probe-only
-```
-
-The probe's dummy model/rates are not used for inference. It accepts no key, makes no HTTP model request, and exports only `boundary-report.json`. It tests local file-tool refusal and direct public/private/metadata/DNS/IPv6/host-port/other-proxy-destination denial. A successful approved-provider check opens verified TLS to OpenAI through the proxy, then closes it; it does not authenticate, retrieve model data or send a prompt.
-
-The output directory must be new. Missing/failed probes or host policy prevent key release and prevent a review from starting. This is repeatable evidence for the listed probes, not an attestation that a malicious guest report is truthful or that every possible escape is prevented.
-
-## Credential-bearing review is disabled
-
-The former real-key path in `connected.run` now checks the common production release gate **before** platform checks, input access, network/VM setup or key prompting. `probe_only=False` is refused while controls are missing. The temporary external pilot launcher is withdrawn. CLI/REPL use the same code-owned gate; use `reviewer review PR --provider openai --preflight` to inspect blockers without target activity. There is no configuration flag that certifies readiness.
-
-Root-owned runtime artifacts are now copied and hashed in one bounded pass using pinned source descriptors. A changed source, symlink/hardlink, special file, oversize input or hash mismatch refuses staging; partial output is removed and an existing destination is never replaced. The VMM's writable socket directory is separate from root-owned runtime/configuration files. This closes the earlier verified-path/reopen race but does not substitute for a production jailer or complete host confinement.
-
-No-key checks above remain available as engineering tests. Real authentication/inference and private report workflow must be integrated and qualified before the supported entry point is enabled. No real key or model call has been used so far.
-
-## Validation and remaining scope
-
-Offline unit tests cover malformed capsules/frames, target config/hook exclusion, clean Git reconstruction, export paths, key-release ordering, literal key rejection, standard proxy policy, archive failures, binary scan IO, and both flows with simulated API replies. They never alter host networking or call a model.
-
-Real deployment checks use the dedicated disposable Linux worker and harmless fixtures. No personal repository, real key or paid call is used by those checks. See the [handover](HANDOVER.md) for actual outcomes. Guest native execution/syscall allow-listing, a production jailer, an immutable/read-only checkout against native compromise, crash recovery and Claude-specific authentication/native tool qualification remain pending. No production review or OpenAI finding-quality claim is implied.
-
-Infrastructure sources: [Firecracker TAP networking](https://github.com/firecracker-microvm/firecracker/blob/main/docs/network-setup.md), [vsock](https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md), [Squid access control](https://www.squid-cache.org/Doc/config/http_access/) and [ACL matching](https://www.squid-cache.org/Doc/config/acl/). We intentionally do not use the upstream quick-start's broad NAT/forwarding rules.
+The no-key deployment check validates host VMM confinement, native/file-tool denials, direct/forbidden network access, approved TLS, bounded transfer and cleanup. `--pr` additionally checks source acquisition and revocation, including an established tunnel. `--lifecycle` tests cancellation and supervisor loss. Unit tests simulate external operations and never boot a VM or call a model. See [evidence](sandbox-todo.md#evidence-2026-10-28).

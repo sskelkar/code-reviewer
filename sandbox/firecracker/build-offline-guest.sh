@@ -1,16 +1,17 @@
 #!/bin/sh
 # Test-only image builder. Run inside the disposable Ubuntu ARM64 Lima VM.
 set -eu
+umask 022
 if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != aarch64 ]; then
     echo 'Requires the disposable Ubuntu ARM64 Linux build VM.' >&2
     exit 2
 fi
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
-    echo 'usage: build-offline-guest.sh trusted-source.tar output-directory [openai-offline | connected | verified-claude-binary expected-sha256]' >&2
+    echo 'usage: build-offline-guest.sh trusted-source.tar output-directory [sources-only | openai-offline | openai-private | connected | verified-claude-binary expected-sha256]' >&2
     exit 2
 fi
-if [ "$#" -eq 3 ] && [ "$3" != openai-offline ] && [ "$3" != connected ]; then
-    echo 'The third argument must be openai-offline or connected.' >&2
+if [ "$#" -eq 3 ] && [ "$3" != sources-only ] && [ "$3" != openai-offline ] && [ "$3" != openai-private ] && [ "$3" != connected ]; then
+    echo 'The third argument must be sources-only, openai-offline, openai-private or connected.' >&2
     exit 2
 fi
 bundle=$(realpath "$1")
@@ -18,18 +19,7 @@ output=$(realpath -m "$2")
 [ ! -e "$output" ] || { echo 'Output directory must be new.' >&2; exit 2; }
 mkdir -m 700 "$output"
 root="$output/root"
-mkdir -p "$root/usr/bin" "$root/usr/lib" "$root/bin" "$root/dev" "$root/proc" "$root/sys" "$root/tmp" "$root/opt/reviewer"
-ln -s usr/lib "$root/lib"
-cp /bin/busybox "$root/bin/busybox"
-ln -s busybox "$root/bin/sh"
-cp /usr/bin/python3 "$root/usr/bin/python3"
-cp /usr/bin/git "$root/usr/bin/git"
-# This first image derives from the installed Ubuntu runtime. Record its versions
-# and artifact hashes; it is repeatable scaffolding, not a reproducible production image.
-cp -a /usr/lib/aarch64-linux-gnu "$root/usr/lib/"
-cp -a /usr/lib/python3.12 "$root/usr/lib/"
-cp -a /usr/lib/locale "$root/usr/lib/"
-cp -a /usr/lib/ld-linux-aarch64.so.1 "$root/usr/lib/"
+mkdir -p "$root/opt/reviewer"
 # Never invoke tar extraction on an unchecked archive, even in this prototype.
 python3 - "$bundle" "$root/opt/reviewer" <<'PYBUILD'
 import hashlib,json,sys,tarfile
@@ -62,6 +52,21 @@ for name,digest in manifest['files'].items():
     if hashlib.sha256((root/name).read_bytes()).hexdigest()!=digest:
         raise ValueError('source digest mismatch: '+name)
 PYBUILD
+if [ "$#" -eq 3 ] && [ "$3" = sources-only ]; then
+    exit 0
+fi
+mkdir -p "$root/usr/bin" "$root/usr/lib" "$root/bin" "$root/dev" "$root/proc" "$root/sys" "$root/tmp"
+ln -s usr/lib "$root/lib"
+cp /bin/busybox "$root/bin/busybox"
+ln -s busybox "$root/bin/sh"
+cp /usr/bin/python3 "$root/usr/bin/python3"
+cp /usr/bin/git "$root/usr/bin/git"
+# Images derive from installed trusted OS files. The preparer hashes those inputs
+# before/after a build so security updates invalidate cached images.
+cp -a /usr/lib/aarch64-linux-gnu "$root/usr/lib/"
+cp -a /usr/lib/python3.12 "$root/usr/lib/"
+cp -a /usr/lib/locale "$root/usr/lib/"
+cp -a /usr/lib/ld-linux-aarch64.so.1 "$root/usr/lib/"
 workload=smoke
 if [ "$#" -eq 3 ]; then
     workload=openai_smoke
@@ -97,8 +102,14 @@ INIT
 if [ "$workload" != smoke ]; then
     sed -i "s/code_reviewer.sandbox.smoke/code_reviewer.sandbox.$workload/" "$root/init"
 fi
+if [ "$#" -eq 3 ] && [ "$3" = openai-private ]; then
+    sed -i 's/code_reviewer.sandbox.openai_smoke$/code_reviewer.sandbox.openai_smoke --private/' "$root/init"
+fi
 if [ "$workload" = guest ]; then
-    mkdir -p "$root/etc/ssl/certs" "$root/work"
+    mkdir -p "$root/etc/ssl/certs" "$root/work" "$root/usr/lib/git-core"
+    # Fetch is HTTPS-only. Copy the one trusted transport helper, not arbitrary
+    # Git helpers/templates/hooks from the build worker.
+    cp -L /usr/lib/git-core/git-remote-http "$root/usr/lib/git-core/git-remote-https"
     cp /etc/ssl/certs/ca-certificates.crt "$root/etc/ssl/certs/"
     cat > "$root/init" <<'CONNECTED'
 #!/bin/sh

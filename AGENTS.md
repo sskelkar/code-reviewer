@@ -1,80 +1,62 @@
 # AGENTS.md
 
-Guidance for AI agents working on this repository. Start here, then read [`docs/HANDOVER.md`](docs/HANDOVER.md) for the current state and what to do next.
+Guidance for agents working on this repository. Read the [proposal checklist](docs/proposal.md#checklist), [architecture](docs/architecture.md) and [VM checklist](docs/sandbox-todo.md) for current work. Create a handover document only when the user explicitly requests one.
 
-## What this project is
+## Product direction
 
-`code_reviewer` is a multi-pass pull request review agent. A deterministic Python harness runs several independent, fresh-context Claude Code headless (`claude -p`) review passes over a GitHub PR, merges the findings into a master list, scores each by how many passes found it, and prints a report and a shareable summary. It is a learning project for a controlled environment.
+One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same review algorithms, criteria, validation, accounting and reports. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
 
-**Central design rule: language models only propose; plain code validates and decides.** Every model reply goes through a validator, and the harness writes every file itself.
+Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The proposed flag is `--no-sandbox`; it is not implemented yet. Host acquisition is an intended supported feature: preserve it while wiring the direct flow. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
+
+The standalone raw-Firecracker experiment was extracted into an independent playground outside this repository. Do not restore that launcher here. The supported VM backend uses the shared jailed lifecycle.
+
+**Models propose; deterministic code validates and decides.** Every model reply is validated and the harness writes every artifact. Read/Grep/Glob are the only model code tools; no tests, builds, scripts or arbitrary model commands execute.
+
+## Current implementation
+
+Both single-agent and four-persona algorithms are implemented. The host acquisition implementation and both provider adapters exist. Public CLI/REPL currently provide preflight/refusal only: neither direct-host dispatch nor authenticated VM dispatch is integrated. Do not claim a planned flag works or enable execution just by changing readiness rows.
+
+The supported `reviewer sandbox check` uses a dedicated mountless Lima Linux worker on macOS and one jailed Firecracker VM per workload. Checks cover simulated model execution in both flows, bounded input/result transfer, external phase-scoped network policy, non-root/no-new-privileges, read-only code, host-observed confinement/resource limits and cleanup. `--pr` fetches public GitHub input inside the review VM and revokes source access before inference. Optional capsule input remains; private in-VM source authentication is unsupported. `--lifecycle` tests cancellation/supervisor loss; `sandbox recover` resets abandoned dedicated-worker state. Clean cached images contain no target inputs, findings or credentials.
+
+Actual no-key VM checks passed. Authenticated adapter/VM integration remains unfinished. The existing connected transport's implemented inference route is currently specific to one adapter; complete endpoint/authentication support for both without creating separate review products. Custom guest-wide syscall filtering and a custom credential broker are deferred. A VM does not revoke a copied provider credential or enforce a hard provider spending cap.
+
+The unused eval framework and host-based doctor implementation have been removed. `doctor` is an offline status report; `doctor --live` refuses. The recorded-envelope parser regressions remain.
 
 ## Where to read
 
 | Need | File |
 |---|---|
-| Current state, decisions, next steps | [`docs/HANDOVER.md`](docs/HANDOVER.md) |
-| One-VM-per-review design, lifecycle and offline prototype | [`docs/sandbox-architecture.md`](docs/sandbox-architecture.md) |
-| OpenAI adapter and personal-repo sandbox pilot; production stays Claude-only | [`docs/sandbox-openai.md`](docs/sandbox-openai.md) |
-| Real Claude guest startup, authentication choices and connected-test gates | [`docs/sandbox-runtime-auth.md`](docs/sandbox-runtime-auth.md) |
-| Strict production security plan, effort estimates and release gates | [`docs/security-roadmap.md`](docs/security-roadmap.md) |
-| Design reasoning, roadmap, experiment results | [`docs/proposal.md`](docs/proposal.md) |
-| Quick start and both review flows | [`README.md`](README.md) |
-| Commands, configuration, reports and troubleshooting | [`docs/usage.md`](docs/usage.md) |
-| Code map and detailed flow diagrams | [`docs/architecture.md`](docs/architecture.md) |
-| Tests, common changes, debugging and replay | [`docs/development.md`](docs/development.md) |
-| Prompts and what the harness enforces around them | [`prompts/README.md`](prompts/README.md) |
-| Python walkthrough for Java developers | [`docs/project-explainer.md`](docs/project-explainer.md) |
-| Archived long proposal (history only) | [`docs/proposal-full.md`](docs/proposal-full.md) |
+| Current plan and experiments | [docs/proposal.md](docs/proposal.md) |
+| Architecture, execution choices and module ownership | [docs/architecture.md](docs/architecture.md) |
+| VM design and controls | [docs/sandbox-architecture.md](docs/sandbox-architecture.md) |
+| Supported no-key deployment command | [docs/sandbox-check.md](docs/sandbox-check.md) |
+| Remaining VM integration work | [docs/sandbox-todo.md](docs/sandbox-todo.md) |
+| Shared requirements and execution boundaries | [docs/security-contract.md](docs/security-contract.md) |
+| Commands/configuration/reports | [docs/usage.md](docs/usage.md) |
+| Tests/debugging | [docs/development.md](docs/development.md) |
+| Model-facing contracts | [prompts/README.md](prompts/README.md) |
+| Python walkthrough | [docs/project-explainer.md](docs/project-explainer.md) |
 
-## Setup and tests
+## Setup and checks
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-python -m pip install --upgrade pip       # Python 3.9's bundled pip cannot do an editable install
+python -m pip install --upgrade pip
 pip install -e .
 python3 -m unittest discover -s tests -t .
+PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 ```
 
-- Supported Python: **3.9 and up**. Run the tests on both the oldest and newest Python you have before finishing (the system `/usr/bin/python3` is 3.9: `PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .`).
-- Standard library only (plus `tomli` below Python 3.11). No test dependencies: `unittest`, a `FakeRunner`, throwaway git repos and a fake `claude` binary. Tests never call a real model.
-- `reviewer doctor --live` checks the real Claude Code setup (costs a few cents). Do not run it or any real review without the user asking.
+Support Python **3.9+**. Run the whole suite on the oldest and newest Python available before finishing a change. Standard library only, plus `tomli` below Python 3.11; do not add dependencies. Tests use FakeRunners, fake executables and throwaway repositories: no real models, credentials, networking or VM boots. Real inference requires the user's request. Check deployment separately from unit tests.
 
-## Code conventions
+## Code and working rules
 
-- Every module starts with `from __future__ import annotations`. No `match` statements and no `X | Y` types at runtime (Python 3.9).
-- Keep modules small and single-purpose; see the code map in `docs/architecture.md`. `Engine` is a stable mode-selection facade. `flows/single_agent/flow.py:SingleAgentFlow.review` is the current composition root. Reviewer/Comparator live in that flow's `roles.py`; the shared Resolver is in `shared/resolver.py`. The optional `agent_personas/flow.py` is its own composition root, with static persona defaults, project-rule classification, configured round-robin scheduling, conflict flags and advisory verification; common mechanics belong in `shared/`. Package-root compatibility modules are not the implementation to edit.
-- Match the surrounding code's naming, comment density and idiom. Docstrings explain why, not what.
-- A model's output is never trusted: validate it, count what you drop, and show the counts in the report.
-- Do not add dependencies.
-
-## Rules for working here
-
-1. **Do not commit or push unless the user explicitly asks.** Leave changes in the working tree so the user can review `git diff`. State what changed and which files to look at.
-2. **Keep code, prompts and docs in sync in the same change.** If behavior changes, update the README, `docs/proposal.md` and `prompts/README.md` where they describe it, and the explainer if it mentions it.
-3. **No company or PR identifiers in the repository.** The saved runs under `~/.code-reviewer/runs/` contain code and PR text from private repositories. Never copy repository names, PR numbers, ticket IDs, run directory names or code from them into files here. Describe them generically ("a larger PR in a real repository").
-4. **No PII or secrets** in code, tests, fixtures or docs. Use made-up data.
-5. **Prompt changes need evidence.** Compare before and after on saved runs with `python -m code_reviewer.replay <run dir> [--model] [--repeat]` (see `docs/development.md`) and record honest results in `docs/proposal.md` section 9, including when a change did not help.
-6. **Tests with every change**, and run the whole suite, not just the module you touched.
-7. Security was deliberately loosened for v0 (controlled environment). The hardening backlog is `docs/proposal.md` section 5. Do not silently widen what the reviewer can read or run: it has only Read, Grep and Glob inside a temporary checkout.
-
-## Roles and ownership of decisions
-
-Single-agent model roles are the **Criteria Resolver** (picks the project's criteria files from `AGENTS.md`), the **Reviewer** (one fresh session per pass, blind to other passes) and the **Comparator** (maps each pass's findings onto a master list). The harness decides everything else: grounding checks, rule IDs, confidence tiers, when to stop, what is posted.
-
-Persona mode additionally classifies project rules (Resolver model setting), extends its own Comparator to categories/conflict flags, and runs a targeted annotation-only Verifier (`model_verifier`) on flagged groups. No quiet-pass stopping in persona mode: `persona_passes` slots per persona (default 3), overridden per run by `--passes N`. Agreement stays per discovering persona; annotations never suppress findings or change votes/severity. Persona Reviewers run concurrently within each round (`persona_parallel`, default 4, range 1–4), then consolidate serially in fixed persona order. Calls/retries reserve from independent pools: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder equally among personas. Budget/failure limits are per persona; shared Comparator exhaustion stops new review work. No borrowing; unknown cost consumes the reserved allowance conservatively. Cancel and join workers before checkout cleanup. Tests use synthetic code/FakeRunners, never production material or real model calls.
-
-## Current sandbox boundary (2026-10-26)
-
-The user authorized implementing the [connected personal-repo pilot](docs/sandbox-connected.md). It now has one VM, scoped external nftables/standard CONNECT policy, bounded Git-object input and report output, private runtime key bootstrap, non-root guest/resource limits and cleanup. The custom API relay/credential broker stays deferred. Production remains Claude-only; ordinary CLI commands still run outside the sandbox. No real key/model/personal repository has been used in implementation checks. Keep synthetic fixtures for automated regressions and harmless probes only; no mandatory new sample review project. The two recorded builder/scan defects are fixed.
-
-Guest compromise can expose/reuse the disposable test key and bypass estimated budgets. The operator must revoke it after testing. Read the runbook's exact network/credential/production limits before a live run; never silently weaken policy or fall back to host execution. Production jailer, immutable snapshot against native compromise, guest syscall enforcement and Claude-specific qualification remain separate gates. Commit/push only when explicitly requested; the current user request authorizes committing and pushing after the correctness/documentation review.
-
-## Superseding security requirement (2026-10-26)
-
-Read [docs/security-contract.md](docs/security-contract.md) before sandbox work. The user requires one repository-owned reviewer workflow and the same production security bar for all repositories/providers/models. Earlier personal/public/OpenAI pilot exceptions and external temporary launchers are superseded. Temporary runtime directories/VMs remain appropriate; product orchestration must be checked-in code with tests/docs. Preserve existing components but do not claim production readiness or run a weaker path when controls are missing. Qualified isolated acquisition, trusted operator configuration, jailer/immutable filesystem/guest execution policy, provider credentials and crash recovery are release gates. Existing provider authorization for production material remains separate and Claude-only. No new commit/push is authorized by this requirement alone.
-
-## Implemented release boundary (2026-10-26)
-
-`security.py` and `review_flow.py` now gate public CLI/REPL reviews. `review PR --provider claude|openai --preflight` reports blockers with no target/Git/model/credential activity; live reviews and legacy host dry-runs refuse. `doctor` is an offline release-status report, not a host-executable probe; `doctor --live`, paid replay and target-reading eval entry points are gated too. No readiness/unsafe-bypass flag exists. Operator config is explicit or global only, outside Git working trees, with bounded no-follow opens and owner/write-permission validation. Current-directory `review.toml` is ignored.
-
-Keep both internal algorithms covered with injected FakeRunners. Frontend presentation tests use `tests.helpers.synthetic_frontend` only as a test seam; production boundary tests must never use that seam. The connected module currently permits no-key probes only; live dispatch refuses even if status rows are changed without actual integration. `sandbox/artifacts.py` hashes staged bytes and keeps runtime/configuration root-owned outside the VMM-writable socket directory. These are partial milestones, not production readiness. Next close isolated acquisition, jailer/filesystem/execution/credential/recovery gaps and wire qualified dispatch; never restore the legacy host path to make the PR run.
+- Every module starts with `from __future__ import annotations`; no `match` statements or runtime `X | Y` types.
+- Keep modules focused. `Engine` selects a flow; `flows/single_agent/flow.py` and `flows/agent_personas/flow.py` own their algorithms. Common mechanics live in `shared/`. Root compatibility modules are forwarding imports, not implementation files.
+- Persona Reviewers run concurrently within each round, then consolidate serially in fixed order. Configured passes default to three per persona. Budgets remain independent: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder divided among personas; no borrowing. Verification annotates flagged conflicts without suppressing findings or changing votes/severity. Cancel/join workers before checkout cleanup.
+- Validate model output, count dropped data and report the counts. Operator settings remain separate from repository review criteria.
+- Do not commit/push unless explicitly requested. Leave changes reviewable in the working tree.
+- Keep relevant code, prompts, README, proposal and explainers consistent. No automatic handover maintenance.
+- Never copy private source, saved-run contents, company/PR identifiers, PII or credentials into this repository. Use synthetic fixtures. Do not inspect previously restricted private material merely to develop the reviewer.
+- Canonical prompt changes require authorized before/after replay evidence and honest results in proposal section 9. Infrastructure changes do not justify paid prompt calls.
+- Preserve no-target-IO preflight and refusal while dispatch is incomplete. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.
