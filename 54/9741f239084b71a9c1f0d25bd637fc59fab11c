@@ -1,0 +1,192 @@
+tests/test_vm_review.py
+  s_68cd0db0a8fc3a::t_782e0e6430bb31 275
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 226-245
+  s_68cd0db0a8fc3a::t_1b8a7df2da5921 1-225,246-274,276-286
+src/code_reviewer/shared/claude_cli.py
+  s_68cd0db0a8fc3a::t_8fd96e0b676698 165-166,172,210
+AGENTS.md
+  s_68cd0db0a8fc3a::t_6a198bccfd3fb9 17
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 9,19,23,64
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 18
+src/code_reviewer/backends/openai.py
+  s_68cd0db0a8fc3a::t_345ae006ffc37e 1
+tests/test_isolation_and_dry_run.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 185
+sandbox/firecracker/build-offline-guest.sh
+  s_68cd0db0a8fc3a::t_b0fb8ff55e0d00 2,9,71,75-82,84,92
+src/code_reviewer/flows/single_agent/dry_run.py
+  s_68cd0db0a8fc3a::t_0828d9450cc064 29,34-35,53,76
+src/code_reviewer/security.py
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 39,42-44,46,53
+  s_68cd0db0a8fc3a::t_998db8256ed5e5 20,22,24-25
+src/code_reviewer/sandbox/connected.py
+  s_68cd0db0a8fc3a::t_f8ffa78a93d600 132-136,139,156-159,191
+  s_68cd0db0a8fc3a::t_232b81fb220bf0 148
+  s_68cd0db0a8fc3a::t_d13f9cc7632423 195
+sandbox/README.md
+  s_68cd0db0a8fc3a::t_575cd54f225fa1 28
+review.example.toml
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 2,85-95
+  s_68cd0db0a8fc3a::t_6a198bccfd3fb9 4-12
+tests/test_options.py
+  s_68cd0db0a8fc3a::t_7c46bc84e700aa 2-3,8,10,49-52,54-59
+  s_68cd0db0a8fc3a::t_c48afc953cd506 53
+docs/security-roadmap.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 3,8
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 7
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 9-10,25
+tests/test_persona_flow.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 419,495
+docs/sandbox-openai.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 54
+tests/test_flow_selection.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 65,90
+src/code_reviewer/sandbox/check.py
+  s_68cd0db0a8fc3a::t_b0fb8ff55e0d00 168-190,192-193
+  s_68cd0db0a8fc3a::t_63e0a2433388dc 191,214
+docs/sandbox-architecture.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 72
+  s_68cd0db0a8fc3a::t_575cd54f225fa1 3,7,12-13,22,34-36,49-51,57,59,68,70
+src/code_reviewer/presentation.py
+  s_68cd0db0a8fc3a::t_95b3efde3c5245 18-22,27-29
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 9,13,26,30,38-43,52,56,58,60-62,66,70,72,97,114,150
+  s_68cd0db0a8fc3a::t_6a198bccfd3fb9 11,34-37,44-49,71,96
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 7,93-94
+  s_68cd0db0a8fc3a::t_2ced58e671ae47 68-69,115-117,120,191,193,197
+  s_68cd0db0a8fc3a::t_e2039936540fc2 67
+src/code_reviewer/flows/single_agent/flow.py
+  s_68cd0db0a8fc3a::t_0828d9450cc064 127
+src/code_reviewer/sandbox/settings.py
+  s_68cd0db0a8fc3a::t_705d449c131c6d 1-60,63-65,67-90
+  s_68cd0db0a8fc3a::t_cafc0cf86c7e25 61-62,66
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 36,66-67,99,128
+  s_68cd0db0a8fc3a::t_345ae006ffc37e 35,98
+  s_68cd0db0a8fc3a::t_7c46bc84e700aa 133
+src/code_reviewer/sandbox/guest.py
+  s_68cd0db0a8fc3a::t_8fd96e0b676698 28-31,70-73,85,96,111-134
+src/code_reviewer/sandbox/channel.py
+  s_68cd0db0a8fc3a::t_b0fb8ff55e0d00 1-42
+docs/usage.md
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 34,38,47,192,222-225
+  s_68cd0db0a8fc3a::t_f1b39e574a3ce2 18,20,22,24,26,43,190,221,226-252
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 193
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 5,30
+README.md
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 69,82,121,133
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 150
+  s_68cd0db0a8fc3a::t_47d07b59eb3605 184
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 67
+  s_68cd0db0a8fc3a::t_f1b39e574a3ce2 5,20,32,35,53,57,61
+  s_68cd0db0a8fc3a::t_6a198bccfd3fb9 11,34,36-40,139,178
+  s_68cd0db0a8fc3a::t_dfc129b666f4a4 33,166
+tests/test_connected_sandbox.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 138
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_2ced58e671ae47 59-61,65,86,93,101,115,192,240-243,253-255,266,549,637,639-640,643,736-737,747-748,750-751,845,853,944
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 9,95,940,950
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 62-64,90
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 460,740,764
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 91,107-108,717
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 104,787,946-947
+src/code_reviewer/sandbox/prepare.py
+  s_68cd0db0a8fc3a::t_b0fb8ff55e0d00 61,77-78,82-83,90-91,115-116,124-127
+docs/sandbox-todo.md
+  s_68cd0db0a8fc3a::t_d7b6e9e860d8bf 41
+  s_68cd0db0a8fc3a::t_f1b39e574a3ce2 17,20-22,30,38
+  s_68cd0db0a8fc3a::t_575cd54f225fa1 39-40
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_95b3efde3c5245 31,42-49,56-58
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 12-14,22,32,55,59-68
+  s_68cd0db0a8fc3a::t_345ae006ffc37e 1,30
+  s_68cd0db0a8fc3a::t_57f4c2453e3b99 40-41,50
+docs/development.md
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 107
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 22
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 47-48
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 24,74
+  s_68cd0db0a8fc3a::t_4b424ef3716533 23
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 37,44
+  s_68cd0db0a8fc3a::t_47d07b59eb3605 8
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 101
+  s_68cd0db0a8fc3a::t_575cd54f225fa1 254-255
+  s_68cd0db0a8fc3a::t_f1b39e574a3ce2 3,14,45-47,50,69
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 48,83
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_b6ceeee5d7f404 119-126
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 114-117,129-138
+  s_68cd0db0a8fc3a::t_1343b3412c3eb7 118
+src/code_reviewer/sandbox/network.py
+  s_68cd0db0a8fc3a::t_8fd96e0b676698 50,53-59,102-103,167
+src/code_reviewer/backends/factory.py
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 1-43
+src/code_reviewer/sandbox/probes.py
+  s_68cd0db0a8fc3a::t_64953c965fe82f 52,62,84
+  s_68cd0db0a8fc3a::t_8fd96e0b676698 13,17-19,50-51
+tests/helpers.py
+  s_68cd0db0a8fc3a::t_0828d9450cc064 128-130
+  s_68cd0db0a8fc3a::t_345ae006ffc37e 118
+tests/test_summary.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 108
+src/code_reviewer/flows/agent_personas/runner.py
+  s_68cd0db0a8fc3a::t_782e0e6430bb31 38
+src/code_reviewer/sandbox/review_worker.py
+  s_68cd0db0a8fc3a::t_f8ffa78a93d600 1-57
+tests/test_security_boundary.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 36,56-57,67,99
+prompts/README.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 87
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 101
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 91
+  s_68cd0db0a8fc3a::t_3e5d7e150656ed 102-103
+  s_68cd0db0a8fc3a::t_dee647f0e1abc9 89,95
+docs/sandbox-connected.md
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 35
+  s_68cd0db0a8fc3a::t_b9911c25299222 11
+tests/test_host_execution.py
+  s_68cd0db0a8fc3a::t_60742a0b1367ec 1-144
+src/code_reviewer/cli.py
+  s_68cd0db0a8fc3a::t_345ae006ffc37e 60,98-99,107-109
+  s_68cd0db0a8fc3a::t_98b2823af6159c 1,20,35,42,50,81-83
+  s_68cd0db0a8fc3a::t_95b3efde3c5245 100-106
+  s_68cd0db0a8fc3a::t_88e438ab1f8df9 97,123
+docs/sandbox-alternatives.md
+  s_68cd0db0a8fc3a::t_7ebeec0c7d086c 16
+src/code_reviewer/sandbox/review.py
+  s_68cd0db0a8fc3a::t_232b81fb220bf0 1-13,15-65,67,69-138,141-153,157-159
+  s_68cd0db0a8fc3a::t_a1221df5d6a2ae 14,154-156
+  s_68cd0db0a8fc3a::t_c04834a804c728 66,68,139-140
+tests/test_review_banner.py
+  s_68cd0db0a8fc3a::t_c48afc953cd506 62
+  s_68cd0db0a8fc3a::t_7c46bc84e700aa 35,37
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_f1b39e574a3ce2 33,35
+  s_68cd0db0a8fc3a::t_04e167e3e0ff27 13
+docs/sandbox-runtime-auth.md
+  s_68cd0db0a8fc3a::t_674ecbd1512284 43,53,56-57
+tests/test_sandbox_preparation.py
+  s_68cd0db0a8fc3a::t_6014fbc02d735e 30,32,48,50,69-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "549741f239084b71a9c1f0d25bd637fc59fab11c",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
