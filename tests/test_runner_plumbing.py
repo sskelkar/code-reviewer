@@ -3,6 +3,7 @@ import json
 import os
 import stat
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -73,6 +74,22 @@ class RunnerPlumbingTests(TempDirTestMixin, unittest.TestCase):
         result, _ = self.run_runner(self.fake(SLEEPER), timeout_s=1)
         self.assertFalse(result.ok)
         self.assertTrue(result.timed_out)
+
+    @unittest.skipUnless(os.name == 'posix', 'process-group cleanup requires POSIX')
+    def test_single_call_timeout_also_terminates_native_child_processes(self):
+        ready=self.tmp/'child-started'
+        canary=self.tmp/'child-survived'
+        child="import time;from pathlib import Path;time.sleep(2);Path(%r).write_text('alive')" % str(canary)
+        script='#!'+sys.executable+'\nimport subprocess,sys,time\nfrom pathlib import Path\n'
+        script+='subprocess.Popen([sys.executable,"-c",%r])\nPath(%r).write_text("ready")\ntime.sleep(10)\n' % (child,str(ready))
+        binary=self.tmp/'spawning-claude'
+        binary.write_text(script)
+        binary.chmod(0o700)
+        result,_=self.run_runner(str(binary),timeout_s=.5)
+        self.assertTrue(ready.exists())
+        self.assertTrue(result.timed_out)
+        time.sleep(1.8)
+        self.assertFalse(canary.exists(),'native helper outlived timeout and continued executing')
 
     def test_missing_binary_raises(self):
         with self.assertRaises(ClaudeError):

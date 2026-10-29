@@ -35,6 +35,51 @@ class HostExecutionTests(unittest.TestCase):
             status = cli.main(['review', 'example/project#1', *args])
         return status, out.getvalue(), err.getvalue()
 
+    def test_run_directories_are_private_under_a_permissive_umask(self):
+        import os
+        from code_reviewer.shared.run_store import RunStore
+        from tests.helpers import make_repo
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name)
+            ctx=make_repo(root)
+            mask=os.umask(0)
+            try:
+                store=RunStore.create(root/'runs',ctx)
+                from code_reviewer.shared import git_ops
+                with patch.object(git_ops, '_run'):
+                    git_ops.ensure_cache_clone(git_ops.PRRef('github.com','example','project',1), root/'cache')
+                store.dump('config.json',{'synthetic':True})
+                passes=store.pass_dir(1)
+            finally:
+                os.umask(mask)
+            for directory in (store.root,store.input_dir,passes,root/'cache'):
+                self.assertEqual(directory.stat().st_mode & 0o777,0o700)
+
+    def test_real_native_adapter_reaches_both_host_flows_through_cli(self):
+        import sys
+        ctx=make_repo(self.root)
+        binary=self.root/'fake-native'
+        binary.write_text('#!'+sys.executable+'\nimport json\n'
+                          'print(json.dumps({"type":"result","structured_output":{"findings":[]},"total_cost_usd":0.001}))\n')
+        binary.chmod(0o700)
+        for mode in ('single-agent','agent-personas'):
+            cfg=replace(self.cfg,claude_bin=str(binary),review_mode=mode)
+            with patch.object(Engine,'prepare',return_value=ctx):
+                status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
+            self.assertEqual(status,0,(mode,err))
+            self.assertIn('full report:',out)
+
+    def test_invalid_host_manifest_is_a_configuration_error_instead_of_traceback(self):
+        ctx=make_repo(self.root)
+        manifest=self.root/'manifest.json'
+        for content in ('not-json','[]','{"criteria_files":7}'):
+            manifest.write_text(content)
+            cfg=replace(self.cfg,criteria_mode='merge',criteria_manifest=str(manifest))
+            with patch.object(Engine,'prepare',return_value=ctx),patch.object(factory,'create_runner',return_value=FakeRunner([])):
+                status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
+            self.assertEqual(status,1)
+            self.assertIn('criteria_manifest',err)
+
     def test_default_vm_request_never_creates_host_runner_or_prepares_target(self):
         with patch.object(factory, 'create_runner', side_effect=AssertionError('no credentials/runner')), \
              patch.object(Engine, 'prepare', side_effect=AssertionError('no host acquisition')):

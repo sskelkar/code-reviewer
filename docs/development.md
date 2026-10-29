@@ -17,13 +17,13 @@ There are no third-party runtime dependencies (only `tomli` on Python below 3.11
 
 Supported Python is 3.9 and up. Before sending a change, run the tests on the oldest and newest Python you have (for example `python3.9 -m unittest discover -s tests -t .` and `python3.13 -m unittest discover -s tests -t .`). There is no CI yet.
 
-## Release-boundary checks
+## Configuration and execution checks
 
-`reviewer review example/project#1 --provider claude --preflight` reports the current production blockers without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; qualification remains a separate field. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline release status; `doctor --live` refuses until a qualified sandbox diagnostic exists. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
+`reviewer review example/project#1 --provider claude --preflight` reports configuration errors without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; `runtime_checked: false` states that the backend has not run. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline configuration status; `doctor --live` refuses; use `sandbox check` for no-key deployment checks. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
 
 The REPL is parked: its modules and regression tests remain, but bare `reviewer` only prints help and does not start a session. New end-to-end work targets the one-shot CLI.
 
-`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch out the production gate. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the planned explicit host and default VM execution paths.
+`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the planned explicit host and default VM execution paths.
 
 Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.toml`, recommend 0600). The loader no longer considers cwd and rejects linked/non-regular/oversized/foreign-writable files. Canonical prompt prose is unchanged by this milestone, so no paid prompt replay is warranted.
 
@@ -39,13 +39,13 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_diffview`, `test_criteria`, `test_findings`, `test_master`, `test_stop_policy` | Pure logic: diff parsing, criteria discovery and validation, grounding, merging, stop rules |
 | `test_claude_cli_and_templates` | Envelope parsing, command building, prompt rendering and escaping, config validation |
 | `test_summary`, `test_welcome`, `test_review_banner`, `test_options`, `test_stats` | The shareable summary and the comment built from it, the prompt's welcome banner and the one-shot review banner (a test fails if a REPL command or a `review` option is missing from its banner), option parsing and help text, token budget accounting |
-| `test_redact`, `test_replay` | Email redaction (patterns, nothing leaks to the model or to disk, can be turned off, the diff is not redacted) and the comparator replay tool |
+| `test_redact`, `test_replay` | Email redaction (patterns, nothing leaks to the model or to disk, can be turned off, the diff is not redacted) and parked comparator-replay helpers |
 | `test_isolation_and_dry_run` | The checkout lives outside the run directory and is always deleted, the saved prompts equal what the model received, a defaults-only dry run matches equivalent review inputs and calls no model, and only an allow-list of PR fields is fetched from GitHub |
 | `test_live_envelope` | Parsing of a recorded Claude result (`tests/fixtures/live_envelope_haiku.json`); no live call |
-| `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout, exit codes |
+| `test_runner_plumbing` | `ClaudeRunner` against a fake `claude` executable: stdin, flags, working directory, timeout/process-tree cleanup, exit codes |
 | `test_persona_criteria` | Static assignment coverage, unique/shared rule identities, reporting sections and shared-parser rendering/disabling |
-| `test_host_execution` | Actual one-shot host dispatcher, both adapters/strategies with simulated model transport, real temporary Git, credential-free preflight/dry-run, validation, secret exclusion and no VM-to-host fallback |
-| `test_security_boundary` | default VM/diagnostic/replay refusal before target/model/credential activity, no override certification, trusted config discovery/descriptor opens, and staged-byte artifact pinning |
+| `test_host_execution` | Private run/cache creation, actual fake-native subprocess integration, invalid manifest handling and the actual one-shot host dispatcher, both adapters/strategies with simulated model transport, real temporary Git, credential-free preflight/dry-run, validation, secret exclusion and no VM-to-host fallback |
+| `test_security_boundary` | invalid VM setup, unsupported diagnostics and parked replay refusal before target/model/credential activity, trusted config discovery/descriptor opens, and staged-byte artifact pinning |
 | `test_connected_sandbox` | Checked archive failures, raw scan-IO budgets, bounded capsules without host Git/config/hooks, clean guest Git/export, frame limits, key-release ordering, artifact/key refusal, proxy/firewall policy and both guest flow report paths with fake API replies |
 | `test_openai_backend` | Simulated Responses continuations, reasoning/tool items, costs/refusals/unknown usage/cancellation, bounded local read-tool authority, fixed HTTP endpoint and both full flows |
 | `test_sandbox_prototype` | Stable bounded trusted-source bundles, artifact digests, no-network boot config, both real flows using fake headless processes, result framing, output limits, child-process timeout cleanup, fresh runtime-probe environments and rejection of unexpected authentication |
@@ -66,7 +66,7 @@ Things to know when writing tests:
 |---|---|
 | Change what a role is asked | Edit the selected flow's `prompts/` ([prompts/README.md](../prompts/README.md) lists the contracts and variables). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
 | Change output structure | Edit the flow's `prompts/schemas/`, `shared/findings.py` or the flow's `master.py`, and its report |
-| Tune how single-agent duplicate findings are merged | Edit `src/code_reviewer/flows/single_agent/prompts/comparator.*.md` (or set `model_comparator`), then replay saved runs: `python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> --repeat 3 [--model sonnet]`. It supports single-agent runs only (persona runs are rejected before model calls) and re-runs the comparator on each pass's saved findings (about $0.004 per replay with Haiku), prints the recorded grouping and each replay's grouping, and lists the pairs of findings that are now merged or split. Judge the borderline cases yourself, and repeat the replay because the model is not deterministic |
+| Tune single-agent duplicate grouping | Edit its Comparator prompt or model and compare authorized before/after reviews. Comparator replay is parked; its offline helpers/tests remain, but its CLI performs no IO or model calls. |
 | Add or change default rules | Edit the selected flow's `criteria/*.md` using ID-bearing headings (`GEN-*` for single-agent, persona-prefixed IDs for personas). Persona allocation also lives in `personas.json`; shared rules retain one canonical definition. Tests check identity and coverage |
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration) |
 | Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
@@ -84,7 +84,7 @@ Things to know when writing tests:
 
 ## Debugging a review
 
-Every run directory is a full record. Useful files:
+Host run directories retain the detailed artifacts below. VM runs export only `report.md`, `summary.md` and `stats.json`; guest prompts/raw replies remain ephemeral. Do not expect host-only logs or `--keep-checkout` from a VM run. Useful host files:
 
 | File | Question it answers |
 |---|---|
@@ -100,19 +100,19 @@ Every run directory is a full record. Useful files:
 | `config.json` | Settings, Claude Code version, prompt hashes |
 | `stats.json` | Every call with tokens, cost, duration |
 
-Re-run with `--keep-checkout` to keep the exact checkout the Reviewer saw (its location is printed).
+For an explicitly selected host review, re-run with `--no-sandbox --keep-checkout` to keep the exact checkout the Reviewer saw (its location is printed).
 
 ## Verifying against the real Claude CLI
 
-The offline tests cannot prove how Claude Code behaves. The previous host-based doctor implementation was removed; the CLI keeps only a refusal for `doctor --live`. Once a qualified sandbox diagnostic/review path exists, check after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These use paid model calls; agents need the user's request before running them. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
+The offline tests cannot prove how Claude Code behaves. The previous host-based doctor implementation was removed; the CLI keeps only a refusal for `doctor --live`. Use the implemented normal VM path with explicit authorization after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These use paid model calls; agents need the user's request before running them. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
 
-## Offline VM prototype
+## VM deployment checks
 
 The [sandbox runbook](../sandbox/README.md) separates ordinary offline unit tests from explicit Linux/KVM deployment checks. No VM boots, infrastructure changes or paid calls are part of `unittest discover`. The [architecture](sandbox-architecture.md) records the agreed one-VM-per-review boundaries and remaining security gates.
 
 The [VM architecture](sandbox-architecture.md) separates actual reviews from synthetic automated tests/canaries. Actual review input needs no authored sample project. The recorded builder-status and scan-IO defects are fixed with regressions; retain no target code, identifiers, keys or findings as test fixtures. Routine documentation checks do not boot a VM or authorize a live call; deployment evidence is recorded in the [VM checklist](sandbox-todo.md#evidence-2026-10-28).
 
-The [connected runbook](sandbox-connected.md) separates root Linux infrastructure checks from the standard test suite. Tests never install tools, alter host networking, boot a VM, read a real key or call a model. Deployment checks have exercised actual proxy/firewall/VM startup, no-key denial probes, cancellation before key release and short-deadline cleanup.
+The [connected runbook](sandbox-architecture.md) separates root Linux infrastructure checks from the standard test suite. Tests never install tools, alter host networking, boot a VM, read a real key or call a model. Deployment checks have exercised actual proxy/firewall/VM startup, no-key denial probes, cancellation before key release and short-deadline cleanup.
 
 Use the repository-owned [sandbox check command](sandbox-check.md) for repeatable Mac deployment checks instead of external temporary drivers. Its unit regressions are `tests/test_sandbox_check.py`; ordinary unittest discovery never starts Lima. Real deployment checks build the current source, run offline flow and connected no-key workloads sequentially, and stop the dedicated worker even on handled failure. The tool does not provision a missing worker or download runtime artifacts.
 

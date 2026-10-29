@@ -10,7 +10,7 @@ Current direction, confirmed 2026-10-28: one reviewer, runtime-selected provider
 | Review strategy | Single-agent or agent-personas; independent of provider/execution location |
 | Execution | VM by default; explicit direct-host selection for trusted use without VM startup overhead |
 
-The direct flag is `--no-sandbox`; trusted operator config can also set `sandbox = false`. Explicit host dispatch is implemented. Host acquisition is an intended feature, not an obsolete fallback. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.
+The direct flag is `--no-sandbox`; trusted operator config can also set `sandbox = false`. Explicit host dispatch is implemented. Host acquisition is supported. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.
 
 ## Shared requirements
 
@@ -35,3 +35,10 @@ The REPL is parked with code/tests retained. The one-shot CLI provides credentia
 The supported VM checks cover jailed lifecycle, host/native containment, clean image reuse, bounded public PR acquisition, source-access revocation, private results and recovery without credentials/inference. The execution selector and provider factory are wired to host acquisition/core. Normal-command VM dispatch, trusted deployment settings, provider-scoped endpoint policy, private credential transport and bounded report presentation are implemented. Simulated tests cover both providers/strategies; authorized live authentication/inference and native tool qualification remain outstanding. Preflight separates offline configuration readiness from qualification evidence.
 
 See [architecture](architecture.md), [VM design](sandbox-architecture.md) and [checklist](sandbox-todo.md). The standalone Firecracker playground is external to this project.
+
+
+## Supported limits and later work
+
+The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout`, `--dry-run` and the operator-file `criteria_manifest` override are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.
+
+The REPL and comparator replay are parked, with helpers/tests retained. Private source authentication and future review-quality experiments are separate milestones. Custom syscall filters, credential brokers, per-persona VMs and distributed infrastructure are outside this scope. None is an implicit prerequisite for the currently agreed boundary. Native authentication/tool behavior and real model/report integration still need an authorized live check.

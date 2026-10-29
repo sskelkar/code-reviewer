@@ -4,6 +4,10 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import os
+import signal
+import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -174,52 +178,48 @@ class ClaudeRunner:
             return "unknown"
         return (proc.stdout or proc.stderr).strip() or "unknown"
 
-    def run(
-        self,
-        *,
-        system_prompt: str,
-        user_prompt: str,
-        schema: Dict[str, Any],
-        model: str,
-        tools: str,
-        cwd: Optional[Path],
-        budget_usd: float,
-        timeout_s: int,
-        add_dirs: Sequence[str] = (),
-    ) -> ClaudeResult:
-        cmd = build_command(
-            self.claude_bin,
-            system_prompt=system_prompt,
-            schema=schema,
-            model=model,
-            tools=tools,
-            budget_usd=budget_usd,
-            isolation_flags=self.isolation_flags,
-            add_dirs=add_dirs,
-        )
-        try:
-            proc = subprocess.run(
-                cmd,
-                input=user_prompt,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=str(cwd) if cwd else None,
-                timeout=timeout_s,
-                env=self.env,
-            )
-        except subprocess.TimeoutExpired:
-            return ClaudeResult(ok=False, error="timed out after %ss" % timeout_s, timed_out=True)
-        except FileNotFoundError as exc:
-            raise ClaudeError("claude binary not found: %s" % self.claude_bin) from exc
+    def run(self, **kwargs) -> ClaudeResult:
+        return self.run_cancellable(None, **kwargs)
 
-        result = parse_envelope(proc.stdout)
-        if proc.returncode != 0 and result.ok:
-            result.ok = False
-            result.error = "claude exited with status %d: %s" % (proc.returncode, (proc.stderr or "").strip()[-300:])
-        elif result.raw is None and not result.ok:
-            stderr = (proc.stderr or "").strip()[-300:]
-            if stderr:
-                result.error = "%s (stderr: %s)" % (result.error, stderr)
-        return result
+    def run_cancellable(self, cancelled, *, system_prompt: str, user_prompt: str, schema: Dict[str, Any],
+                        model: str, tools: str, cwd: Optional[Path], budget_usd: float, timeout_s: int,
+                        add_dirs: Sequence[str] = ()) -> ClaudeResult:
+        cmd = build_command(self.claude_bin, system_prompt=system_prompt, schema=schema, model=model, tools=tools,
+                            budget_usd=budget_usd, isolation_flags=self.isolation_flags, add_dirs=add_dirs)
+        # A temporary stdin file avoids partial-pipe writes across communicate polls.
+        with tempfile.TemporaryFile(mode='w+b') as prompt:
+            prompt.write(user_prompt.encode('utf-8'))
+            prompt.seek(0)
+            try:
+                proc = subprocess.Popen(cmd, stdin=prompt, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        text=True, encoding='utf-8', errors='replace', cwd=str(cwd) if cwd else None,
+                                        env=self.env, start_new_session=os.name == 'posix')
+            except FileNotFoundError as exc:
+                raise ClaudeError('claude binary not found: %s' % self.claude_bin) from exc
+            started = time.monotonic()
+            try:
+                while True:
+                    if cancelled is not None and cancelled.is_set():
+                        raise KeyboardInterrupt
+                    if time.monotonic() - started >= timeout_s:
+                        return ClaudeResult(ok=False, error='timed out after %ss' % timeout_s, timed_out=True)
+                    try:
+                        out, err = proc.communicate(timeout=.1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                result = parse_envelope(out)
+                if proc.returncode and result.ok:
+                    result.ok, result.error = False, 'claude exited with status %d: %s' % (proc.returncode, err[-300:])
+                elif result.raw is None and not result.ok and err:
+                    result.error = '%s (stderr: %s)' % (result.error, err[-300:])
+                return result
+            finally:
+                if os.name == 'posix':
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                elif proc.poll() is None:
+                    proc.kill()
+                proc.communicate()

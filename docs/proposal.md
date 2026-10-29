@@ -1,7 +1,6 @@
 # Multi-Pass Code Review Agent: Proposal (v0)
 
 **Status:** both review flows implemented; sandbox components and supported no-key deployment command implemented; VM-default and explicit-host dispatch wired; authenticated VM inference awaits live verification (see [README.md](../README.md) and [VM checklist](sandbox-todo.md)) · **Owner:** Sojjwal Kelkar · **Context:** learning project, production security target
-(Archived long version: [proposal-full.md](proposal-full.md))
 
 ## TL;DR
 
@@ -15,73 +14,19 @@ A one-shot Python CLI that reviews a GitHub PR with **N independent review passe
 
 ## Checklist
 
-**Done**
-- [x] Multi-pass engine: independent fresh-context passes, Comparator merge, confidence by agreement, stop policy, budgets
-- [x] Evidence checks: quote/anchor grounding, rule-ID repair, the Reviewer's self-check
-- [x] Thorough Reviewer prompt (reports every supported issue, not only the first)
-- [x] Ten default criteria, plus project criteria from the root `AGENTS.md`, plus nested `AGENTS.md` and `.claude/rules` files added by location
-- [x] Reports and the PR summary name the criterion and its source, never an internal ID
-- [x] Interactive REPL and one-shot CLI, summary posted only through explicit CLI authorization or REPL confirmation, dry run, email redaction; host diagnostic subsequently removed
-- [x] Comparator replay tool; README flow diagrams of a review
-- [x] Separate `single_agent` flow ownership and assets from `shared` mechanics; add explicit mode dispatch (the initially unavailable persona boundary is now implemented)
-- [x] Define and load thirteen canonical persona defaults, static focus/assignments and common review instructions
-- [x] Implement the optional four-persona flow (§12), project-rule distribution, frozen prompts, source-aware agreement and advisory conflict verification
+Current scope: one-shot GitHub PR review, either provider, either strategy, VM by default and explicit host mode. The REPL and comparator replay are retained as parked code, outside the supported CLI workflow. [Usage](usage.md) is the command/configuration reference; [architecture](architecture.md) explains wiring; [VM checks](sandbox-todo.md) records deployment evidence.
 
-**Use it for real (you)**
-- [ ] Review real PRs from your project with the current setup (Haiku) and judge each finding yourself (`mark`, `missed`)
-- [ ] Review the same PRs with Sonnet (`--model sonnet`) and compare findings, misses and cost
-- [ ] Before reading a review, write down what a good review of that PR should say (avoids anchoring on the model's output)
+- [x] Both review algorithms, default/project criteria, structured-output/evidence validation and reports
+- [x] Runtime provider selection, trusted operator configuration and explicit host acquisition/review
+- [x] VM-default dispatch, pinned public PR acquisition, private runtime credentials and bounded report return
+- [x] Shared jailed VM lifecycle, read-only admitted input, phase-scoped external networking, resource/deadline limits, clean images and recovery
+- [x] Offline tests for adapters/flows/dispatch/refusal/cleanup, plus real no-key VM checks
+- [ ] Run an authorized real PR with the selected credential; check actual model/tool behavior, usage, report return and cleanup
+- [ ] Compare review quality manually on real PRs; use §10.2 for report improvements supported by those runs
 
-**Current focus: one reviewer, runtime provider selection, VM default and explicit host execution (2026-10-28)**
+**Later, only when needed:** restore and requalify the REPL and comparator replay; authenticated private source acquisition in VM mode; the optional review skills/context/verification ideas in §10/§12. These are not release requirements for the current public-PR VM flow. Host mode already supports repositories accessible through the operator's GitHub CLI.
 
-Provider and execution location are independent of repository purpose/visibility. Both adapters use the same single-agent/persona core, criteria, validators, budgets and reports. Preserve host acquisition as a supported direct-flow feature; `--no-sandbox` (or trusted `sandbox = false`) now chooses it explicitly without VM startup overhead. VM failures never switch modes automatically.
-
-- [x] Implement both review algorithms, adapters and trusted operator configuration
-- [x] Implement and no-key check the shared jailed VM lifecycle, read-only admitted input, phase-scoped networking, bounded results, image reuse and explicit recovery
-- [x] Check bounded public PR acquisition inside the VM and close existing source tunnels before inference
-- [x] Remove the unused eval framework and old host-based doctor; remove automatic handover maintenance
-- [x] Extract the raw standalone Firecracker experiment outside this project; retain shared supported-runtime helpers
-- [x] Wire runtime provider selection and explicit host execution using preserved acquisition and the shared core; preflight/dry-run read no credentials
-- [x] Wire default VM dispatch around the same core and selected adapter
-- [x] Implement private credential handoff and provider-scoped endpoint selection; live authentication/tool qualification remains below
-- [x] Integrate bounded private reports/display; test explicit selection, cleanup and no fallback with simulated adapters
-- [ ] Run an authorized one-shot end-to-end review, then return to manual quality comparison
-
-See the [execution contract](security-contract.md), [architecture](architecture.md), [roadmap](security-roadmap.md) and [VM checklist](sandbox-todo.md). The REPL is parked with code/tests retained; bare `reviewer` shows help. Focus integration on the one-shot CLI, which now dispatches both execution paths; live VM inference still needs verification; [the architecture guide lists the concrete missing wiring](architecture.md#remaining-end-to-end-wiring). No project category receives another provider or review policy.
-
-**Report improvement TODOs (recorded; details in §10.2)**
-- [ ] Display all applicable verification qualifications beside each finding in full reports and summaries
-- [ ] Distinguish supported defects from unverified suggested remedies
-- [ ] Link related implementation findings and regression-test gaps without automatically merging them
-- [ ] Investigate missing criterion citations and distinguish out-of-focus findings from attribution failures
-- [ ] Preserve source authority, scope and unresolved instruction conflicts in project context
-- [ ] Assess persona specialization and Verifier budget headroom across manual comparisons
-
-**Feature backlog after the security focus**
-- [ ] Manually compare the implemented persona mode (§12) with single-agent on authorized real PRs; no persona quality result exists yet
-- [ ] Project context pack (§12): documentation passages about the identifiers the diff touches, supplied as reference material
-- [ ] Broader Verifier (§12): consider extending verification beyond flagged conflicts after learning from the initial advisory implementation
-- [ ] Reviewer prompt: before reporting a finding that depends on an assumption, check the comment above the code, its tests and the repo documentation; unverified assumptions go to `notes`
-- [ ] Record the tool calls each pass made (closes the "what did it search?" blind spot)
-- [ ] Option to limit unscoped `.claude/rules` files that apply to every PR
-
-**Security backlog (promoted to current work; roadmap determines order)**
-- [ ] **Sandbox the entire review job:** follow the [one-VM architecture](sandbox-architecture.md), including read-only runtime/snapshot, bounded scratch and externally enforced network policy. The offline prototype passes; normal VM/host dispatch is wired; authenticated VM inference remains untested
-- [ ] **Prompt-injection safeguards for text coming from the code under review:** randomized delimiters, warnings when the PR or files contain instruction-like text, a test suite that plants instructions in the diff, PR text and repository files and checks they are ignored, sanitizing text posted to the PR (links, images, HTML, @mentions), and a capability split so the component that reads untrusted code cannot post
-- [ ] Secret scanning and removing `.env*`, key files and `.git` from the checkout; read-only permissions
-- [ ] Check `--max-budget-usd` overrun and clean timeout kill against the real CLI; qualify authenticated tool restrictions inside the VM after Claude Code upgrades
-- [ ] Company approval for sending code through the enterprise login
-- [ ] **Audit trail of review sessions, for governance** (§7 lists what each run already saves). Still to build:
-  - who ran it and from where (user, machine, tool version), recorded in every run;
-  - a tamper-evident manifest per run (hashes of the inputs, prompts, raw model replies and outputs, chained or signed) so a saved run can be shown unchanged;
-  - an append-only log of what was posted to a PR: the exact text, target, time, and who confirmed;
-  - the resolved model IDs, the criteria files actually used and the tool calls each pass made, per run;
-  - a retention policy and access control for `~/.code-reviewer/runs/`, which holds company code, plus an option to store it centrally;
-  - a command that lists and summarizes past runs (what was reviewed, when, by whom, cost, what was posted).
-
-**Later features**
-- [ ] Resume the retained REPL only if explicitly requested
-- [ ] Inline PR comments; MCP server or `/review-pr` skill; provider-agnostic backend; optional LLM executive summary; resume of interrupted runs
+No automated eval framework, per-persona VMs, distributed scheduler, custom credential broker, enterprise certification service or new VM backend is planned. The standalone Firecracker playground lives outside this project. No automatic handover maintenance.
 
 ## 1. Architecture
 
@@ -149,38 +94,19 @@ Failures become `ungrounded`: excluded, logged, counted. This catches fabricated
 
 **Master finding:** canonical text (highest severity seen) · `seen_in_passes` · `rejected_in_passes` (with reasons, never deleted) · wording variants. A finding only ever rejected is kept but not scored.
 
-## 5. Safety (v0 baseline)
+## 5. Safety and execution scope
 
-**Production hardening is now the priority.** The [sandbox architecture](sandbox-architecture.md) and [security roadmap](security-roadmap.md) describe the agreed one-job-VM design and remaining release gates. This section describes today's controlled-environment baseline; none of the planned isolation controls is active yet. Older backlog sketches are superseded by the roadmap where they differ, including stage-specific network access for inference and whole-process isolation.
+Both execution paths use the same criteria, validators, fresh model contexts, read-only model tools and estimated budgets. The selected provider receives PR text, diff, criteria and files read by the model. Email redaction covers PR text only; secret scanning and automatic removal of sensitive source files are not implemented. Prompt-injection framing reduces risk but does not prove findings or prevent every attack. Posting is explicit through `--post` and separate from model tool execution.
 
-Reviewer invocation (simplified; the user prompt is sent on stdin, system text via `--append-system-prompt`; verify per §9):
+VM mode adds one jailed Firecracker VM, read-only admitted input, non-root/no-new-privileges, external network phases, bounded scratch/resources/private transfer, deadlines and cleanup. Lima supplies Linux/KVM on compatible Macs. It imports no host home/keychain and never falls back to the host. A compromised guest may corrupt findings/accounting or expose its runtime credential; local estimates are not hard provider spending caps. See the [execution contract](security-contract.md) and [VM architecture](sandbox-architecture.md) for enforced controls and limitations.
 
-```
-claude -p --model haiku --safe-mode --restricted --tools "Read,Grep,Glob" \
-  --strict-mcp-config --disable-slash-commands --permission-prompts none \
-  --no-session-persistence --output-format json --json-schema '<schema>' \
-  --max-budget-usd 0.5
-```
-
-- **Read-only tools for the Reviewer (Resolver and Comparator get none: `--tools ""`), no shell or network.** `--safe-mode` disables CLAUDE.md, hooks, skills, plugins and MCP, which matters for reproducibility and because `-p` skips the trust dialog on an untrusted checkout. `--bare` is **not** usable (API-key auth only, not your login).
-- Fresh session per call; never `--resume`. The review uses a copy of the PR head (files only, no git history) in its own temporary directory, **outside the run directory**: earlier findings, the master list and reports are not inside its tool working directory. Access outside that directory is enforced by Claude Code; this is not an OS sandbox. The copy is deleted at the end of the run, also when it fails.
-- **Isolation needs deployment evidence:** use the supported no-key VM checks for native/file/network containment. The old host-based model-reported diagnostic has been removed; authenticated Claude tool qualification is still required.
-- **The Reviewer cannot see PR comments, reviews or other passes' findings.** Only an allow-list of PR fields is fetched (title, description, commits, SHAs; a test fails if comments are added), and its tools are Read, Grep and Glob. `--dry-run` prints exactly what it would be given and saves the exact prompts (`input/reviewer.*.md`) and the PR text (`input/pr.json`) for every run. Email addresses in the PR title, description and commit messages are replaced with `[email]` before sending (`redact_emails`, on by default; the diff and repository files are not redacted, and names and chat links are not covered). PR descriptions can still contain bot summaries.
-- No `--max-turns` flag exists in CLI 2.1.301: bound each call with `--max-budget-usd` plus a wall-clock timeout.
-- Structured output validated by the harness; model output is never executed.
-- Prompt-injection framing for PR text (§3) reduces risk but isn't a guarantee. The real protection is that a steered Reviewer has no way to act, and nothing is posted without your confirmation.
-- **Company data policy** must cover sending code through the enterprise login. That is a company decision, not an agent feature. Avoid repos with customer or rider data.
-- **Hardening backlog (not v0; tracked in the Checklist at the top, including OS-level sandboxing of the checkout and prompt-injection safeguards):** secret scanning and removing `.env*`/keys/`.git` from the tree, symlink scrubbing, read-only chmod, randomized delimiters and injection-pattern warnings, sanitizing posted text (images/links/HTML/mentions), capability-split designs, full isolation test suite.
+Host mode is an explicit trusted-use choice. It retains a separate exported checkout and adapter tool restrictions, but does not provide VM filesystem/kernel/network isolation. Native CLI flag/tool behavior still needs authenticated deployment verification. The API adapter implements bounded Read/literal Grep/Glob directly in Python. Both native sequential and persona calls share process-group cancellation and timeout cleanup.
 
 ## 6. Interface
 
-**REPL (`reviewer`)**: run in the project directory; `review <PR URL>` (asks if the URL's repo differs from the local remote; github.com assumed).
-- Live status, one line per stage/pass: `pass 2: 1 new, 6 matched, 0 ungrounded · $0.21 · quiet streak 0/2`. `--verbose` adds stage-level detail (live tool streaming is not implemented). Ctrl-C stops and gives a report from the passes that finished.
-- At the end: the review summary (the text `post` would send), one line about the run, and the path of the full report. Then `show F-007`, `drop F-007`, `mark F-007 real|nit|wrong`, `missed "<description>"`, `summary`, `post`, `open`, `quit`. On start, a welcome banner lists every command grouped by when it is used.
-- **`post` is gated in code:** preview (the same text as the review summary the tool printed: all confidence tiers by default for now, dropped findings removed, "AI-generated" label, model/pass metadata) → `Post to repo#n? [y/N]` → one summary comment via `gh`, with a hidden run marker so re-runs update it. Org policy on AI comments to be checked.
-- **One-shot CLI** `reviewer review <url>` for scripts; posts **only** with `--post`. In a terminal it prints a short banner first (this run's settings and the options you can add; not when output is piped). To mark, drop or post after reading the summary, use the interactive prompt.
+`reviewer review PR [--provider claude|openai] [--mode single-agent|agent-personas]` is the supported review command. VM is default; `--no-sandbox` explicitly selects host execution. `--preflight` and `doctor` share credential-free offline configuration checks. A ready configuration does not establish artifact, worker, account or containment readiness. Actual VM dispatch enforces those checks at runtime. `--dry-run` is host-only. Nothing is posted unless `--post` is supplied.
 
-**MCP / Claude Code (later):** thin wrapper over the same engine (events + `start_review`). Tools must be async (reviews take 10–30 min): `start_review → run_id`, `get_review_status`, `get_review_report` (summary + path), `post_review` (separate tool, never auto-approved). Treat findings as data (they quote PR text). A `/review-pr` skill that shells out to the CLI is the simpler alternative.
+Bare `reviewer` prints help. The retained REPL's interactive labels, filtering and post-preview commands are parked; they are not part of today's one-shot interface. Comparator replay is also parked. Their helpers/tests remain for a later, explicitly requested milestone. No plugin/MCP service or always-running controller is needed by the current product.
 
 ## 7. Report, confidence, cost
 
@@ -255,15 +181,12 @@ The VM-default dispatcher now shares worker/image preparation and jailed lifecyc
 
 ## 10. Roadmap
 
-| Phase | Deliverable |
+| Stage | Work |
 |---|---|
-| **P0** | This proposal: engine + REPL + one-shot CLI + confirmed summary comment; manual evaluation |
-| P1 | Judge review quality manually on real PRs; the unused eval framework was removed |
-| P2 | Conflict-only advisory Verifier ships with persona mode (§12). Broader per-finding verification remains later; initial annotations do not suppress claims or change agreement scores |
-| P3 | **Optional four-persona review (§12), implemented/offline-tested**: configurable passes per persona (default 3), shared Comparator and advisory conflict verification; then project context pack. Reviewers remain blind to other passes |
-| P4 | Inline PR comments; MCP server / `/review-pr` skill |
-| P5 | Provider-agnostic backend (raw API); optional LLM executive summary |
-| Anytime | Security hardening (§5 and the checklist: sandboxed checkouts, prompt-injection safeguards) before any use beyond a controlled environment |
+| Now | Verify the complete VM review with an explicitly supplied provider credential; fix demonstrated integration defects |
+| Next | Compare single-agent/persona review quality manually on real PRs; address the report follow-ups in §10.2 |
+| Later, if needed | Restore/requalify REPL and comparator replay; add private source authentication to VM acquisition |
+| Optional experiments | The pluggable review-skills idea below, context packs and broader verification in §12; none is a current release requirement |
 
 ### 10.1 Possible future improvement: pluggable review skills
 
@@ -290,14 +213,9 @@ Suggested immediate follow-up: make existing verification qualifications visible
 
 ## 11. Assumptions and open questions
 
-**Assumptions:** github.com host via `gh`/git · Python 3 · default criteria are Markdown files in this repo · learning use on repos without customer/rider data.
+The normal VM command currently supports public github.com PRs on the prepared Apple Silicon Mac/Lima deployment. Private source authentication, VM dry-run and normal-command capsule input are unsupported. Host mode uses the operator's configured GitHub access. Operators choose the provider/account according to their own authorization requirements; repository labels do not select behavior.
 
-**Open:**
-1. Is sending company code through the enterprise Claude Code login approved for this? (Company decision; avoid repos with customer or rider data until answered.)
-2. Is the success bar in §9 right?
-3. After real manual comparisons, are the extra findings from twelve persona passes worth their cost? Four personas with three passes each is the default; the pass count is user-configurable, not a measured optimum.
-
-The earlier questions about giving every persona every project rule and choosing between two or three passes are settled: defaults are statically assigned, project rules are distributed with complete coverage and overlap where relevant, and each persona has N scheduled pass slots (`persona_passes`, default 3, overridden by `--passes N`; §12).
+The remaining empirical questions are whether the authenticated runtime behaves as expected and whether additional passes/personas find enough useful issues to justify their time/cost. N passes and the persona budget ratios are configurable starting choices, not measured optima. Default/project rule distribution and advisory conflict handling are implemented decisions described below.
 
 ## 12. Agreed persona design and next steps
 

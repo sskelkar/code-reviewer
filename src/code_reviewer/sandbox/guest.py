@@ -142,6 +142,10 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
             result = Engine(cfg, runner).review(ctx)
         finally:
             git_ops.export_tree = original
+    with result.report_path.open('a', encoding='utf-8') as report:
+        report.write('\n## VM export\n\nOnly report.md, summary.md and stats.json are retained locally. '
+                     'Artifact paths elsewhere in this report refer to ephemeral guest files; '
+                     'raw prompts, replies and checkout files are destroyed with the VM.\n')
     paths = {'report.md': result.report_path, 'summary.md': result.run_dir / 'summary.md',
              'stats.json': result.run_dir / 'stats.json'}
     return {'kind': 'result', 'stop_reason': result.stop_reason, 'checks': checks,

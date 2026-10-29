@@ -79,7 +79,17 @@ class VMReviewTests(unittest.TestCase):
         self.assertEqual(code,0)
         value = json.loads(out.getvalue())
         self.assertTrue(value['ready'])
-        self.assertFalse(value['qualified'])
+        self.assertFalse(value['runtime_checked'])
+
+    def test_unsupported_manifest_and_deadline_refuse_during_offline_configuration(self):
+        with patch.object(settings.sys,'platform','darwin'):
+            for name,value in (('criteria_manifest','manifest.json'),('vm_timeout_s',1801)):
+                cfg=self.cfg()
+                setattr(cfg,name,value)
+                with patch.object(Path,'read_text',side_effect=AssertionError('no manifest/target IO')):
+                    errors=review.configuration_errors(cfg,self.ref,self.options)
+                self.assertTrue(errors)
+                self.assertIn('host-only' if name=='criteria_manifest' else '1800','; '.join(errors))
 
     def test_normal_cli_selects_vm_instead_of_host_for_each_provider_and_strategy(self):
         for provider in ('claude','openai'):
@@ -213,7 +223,7 @@ class VMReviewTests(unittest.TestCase):
         from threading import Event
         runner = ClaudeRunner('/fake/claude', env={'ANTHROPIC_API_KEY':'fake-key', 'HTTPS_PROXY':'http://proxy'})
         budget = SimpleNamespace(cancelled=Event())
-        with patch('code_reviewer.flows.agent_personas.runner.subprocess.Popen') as popen,              patch('code_reviewer.flows.agent_personas.runner.os.killpg'):
+        with patch('code_reviewer.shared.claude_cli.subprocess.Popen') as popen,              patch('code_reviewer.shared.claude_cli.os.killpg'):
             proc = popen.return_value
             proc.communicate.return_value=(json.dumps({'type':'result','result':'{"findings":[]}'}),'')
             proc.returncode=0
@@ -284,3 +294,4 @@ class VMReviewTests(unittest.TestCase):
                     self.assertNotIn('CLAUDE_CODE_OAUTH_TOKEN',env)
                     self.assertNotIn('OPENAI_API_KEY',env)
                 self.assertNotIn('fake-selected-key',json.dumps(result))
+                self.assertIn('ephemeral guest files',base64.b64decode(result['files']['report.md']).decode())

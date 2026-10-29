@@ -1,4 +1,4 @@
-"""Production frontdoors must refuse before any target parsing or credential use."""
+"""Invalid setup refuses before target/credential activity; preflight is offline."""
 from __future__ import annotations
 
 import contextlib
@@ -54,7 +54,7 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual(report['request']['passes'], 2)
             self.assertEqual(report['request']['parallel'], 1)
             self.assertIn('vm-configuration', report['blockers'])
-            self.assertFalse(report['qualified'])
+            self.assertFalse(report['runtime_checked'])
             self.assertEqual(cfg.provider, 'claude')
 
     def test_repl_start_and_review_do_not_inspect_local_git(self):
@@ -78,18 +78,20 @@ class BoundaryTests(unittest.TestCase):
                     result = exc.code
             self.assertNotEqual(result, 0)
 
-    def test_qualifying_status_rows_alone_cannot_reactivate_legacy_host_dispatch(self):
-        with patch('code_reviewer.security.require_ready'), patch('subprocess.run', side_effect=AssertionError('no host command')), \
-                patch.object(cli, 'load_config', return_value=Config()), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.main(['review', 'example/project#1']), 1)
-
-    def test_operator_cannot_certify_missing_controls_or_enable_an_unknown_provider(self):
-        with self.assertRaises(ReviewRefused):
-            security.require_ready('openai')
-        with self.assertRaises(ReviewRefused):
-            security.readiness('arbitrary-provider')
+    def test_operator_cannot_enable_an_unknown_provider(self):
         with self.assertRaises(ConfigError):
             Config(provider='arbitrary-provider').validate()
+
+    def test_doctor_and_preflight_share_configuration_status_without_infrastructure_activity(self):
+        values=[]
+        for argv in (['doctor'], ['review','example/project#1','--preflight']):
+            out=io.StringIO()
+            with patch.object(cli,'load_config',return_value=Config()),                  patch('subprocess.run',side_effect=AssertionError('offline')), contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(argv),1)
+            values.append(json.loads(out.getvalue()))
+        for field in ('ready','provider','execution','configuration_errors','blockers','runtime_checked'):
+            self.assertEqual(values[0][field],values[1][field],field)
+        self.assertEqual(values[0]['blockers'],['vm-configuration'])
 
     def test_low_level_connected_entry_cannot_bypass_live_release_gate(self):
         settings = dict(model='synthetic-model', prices=[1, .5, 2], mode='single-agent', passes=1,
@@ -112,6 +114,12 @@ class BoundaryTests(unittest.TestCase):
                 patch('pathlib.Path.read_text', side_effect=AssertionError('no target/saved-run reads')), \
                 contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(replay.main(['/missing/saved-run']), 1)
+
+    def test_invalid_integer_limits_fail_before_review(self):
+        for name in ('call_timeout_s','run_budget_tokens','max_diff_lines','criteria_max_chars','max_consecutive_failures'):
+            for value in (0,-1,True,1.5):
+                with self.subTest(name=name,value=value),self.assertRaises(ConfigError):
+                    Config(**{name:value}).validate()
 
     def test_nonfinite_operator_budgets_are_rejected(self):
         for value in (float('nan'), float('inf'), True, 0, 10 ** 10000):

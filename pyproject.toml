@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "code-reviewer"
 version = "0.1.0"
-description = "Multi-pass pull request review agent built on Claude Code headless mode"
+description = "Multi-pass pull request reviewer with runtime-selected providers and VM or explicit host execution"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

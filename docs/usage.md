@@ -15,7 +15,7 @@ reviewer review OWNER/REPO#123 --preflight
 reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --passes 1 --preflight
 ```
 
-The CLI prints JSON with the provider, effective settings, configuration blockers and qualification evidence. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means configuration is missing/unsupported. `ready: true` means offline settings passed, not that files, worker or authentication have been checked. `qualified: false` records that live VM qualification is outstanding. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
+The CLI prints JSON with the provider, effective settings, configuration errors and execution choice. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means configuration is missing/unsupported. `ready: true` means offline settings passed, not that files, worker or authentication have been checked. `runtime_checked: false` makes clear this is an offline configuration report, not a live check. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
 
 The retained REPL modules are not launched by the CLI. Explicit host review/dry-run is now wired. Default VM dispatch is wired; the deployment still needs trusted worker/artifact settings and the selected runtime credential.
 
@@ -50,7 +50,7 @@ Options override the settings file for that run only. Everything else (budgets, 
 
 ### Posting a comment
 
-`post` (REPL) or `--post` (one-shot) writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting or `post --tiers`), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
+`post` (REPL) or `--post` (one-shot) writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
 
 ## Reading the report
 
@@ -70,11 +70,11 @@ The persona report instead shows each finding's agreement per discovering person
 How to read either report:
 
 - A finding that every pass found has high agreement; repetition alone does not establish correctness. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
-- **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them yourself with `mark`; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. The persona Verifier annotates flagged conflicts without changing confidence (see the roadmap in [docs/proposal.md](proposal.md)).
+- **Mostly Low findings does not mean they are wrong.** In an early run on a small PR, six passes each reported a different, valid issue, so every finding was Low. Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them manually; the appendix shows how many findings each pass raised, and the notes in `pass-NN/findings.json` show what each pass did and did not verify. The persona Verifier annotates flagged conflicts without changing confidence (see the roadmap in [docs/proposal.md](proposal.md)).
 - **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. The separate Verifier in persona mode annotates only flagged conflicts; checking every finding remains later work (see the [persona flow](../README.md#agent-personas)).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: an exact quote that exists in the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
-- Cost figures are Claude Code's estimates and may not match your billing.
+- Cost figures come from native CLI accounting or operator-supplied API token rates and may not match billing.
 
 ## Preparing your project (optional, recommended)
 
@@ -132,7 +132,7 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 | `persona_passes` | `3` | Persona-only scheduled passes per persona. `--passes N` overrides it for one run; 4 × N review slots, with no convergence stopping. One completed pass per persona is unrated |
 | `self_check` | `true` | The Reviewer tries to refute its own findings before answering |
 | `criteria_mode` | `merge` | `merge`, `project_only` or `defaults_only` |
-| `criteria_manifest` | `""` | Path to a JSON file that replaces the criteria resolver's answer (reproducible experiments) |
+| `criteria_manifest` | `""` | Host-only operator JSON file replacing the Resolver answer; VM mode refuses this override |
 | `disabled_default_rules` | `[]` | Default rule IDs to switch off |
 | `min_passes`, `max_passes` | `3`, `6` | Single-agent only: Successful passes required before convergence / maximum scheduled attempts |
 | `quiet_k` | `2` | Single-agent only: Stop after this many consecutive passes with no new finding (after `min_passes`) |
@@ -143,10 +143,10 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 | `extra_exclude_patterns` | none | Added to `exclude_patterns` without replacing it. Use it for planning documents such as PRDs and implementation plans (the author's claims, which may drift from the code): `["docs/prds/", "docs/plans/"]`. They are left out of the prompt but listed by path, the reviewer can still open them in the checkout, and findings located in excluded files are dropped and counted. Keep public-facing documentation (API and event docs) out of this list: it must stay reviewed |
 | `persona_prompt_max_chars` | `500000` | Persona-only limit on complete system + user text per call, including retry feedback. Oversized inputs are reported and never silently truncated |
 | `criteria_max_chars` | `200000` | Cap on project criteria text |
-| `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Spend and time cap for every single Claude call |
+| `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | Estimated spend allowance and timeout for each model call |
 | `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Thresholds for a whole review; new calls stop at the relevant budget check. The token cap counts new input, output and cache-write tokens only. **Cache reads are not counted**: a many-turn review re-reads the same cached context every turn, which adds up to hundreds of thousands of tokens but costs very little. Single-agent checks run thresholds between passes. Persona mode checks before every call/retry and reserves dollars from independent proportional pools (see below), rounded down to cents; reported usage can still overshoot a threshold. Persona call budgets need at least $0.01 |
-| `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Do not remove unless you know why |
-| `claude_bin` | `claude` | Path or name of the Claude Code binary |
+| `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Host-only customization; VM mode uses the fixed default flags |
+| `claude_bin` | `claude` | Host native binary; VM mode uses the digest-pinned `vm_claude_binary` artifact |
 | `post_tiers` | `["High","Medium","Low"]` | Confidence tiers shown in the review summary and included in a posted comment. Single-pass (unrated) findings are always included |
 | `redact_emails` | `true` | Replace email addresses in the PR title, description and commit messages with `[email]` before they are sent to the model. The diff and repository files are not redacted. Set to `false` to send PR text as written |
 | `runs_dir` | `""` | Where runs are stored (default `~/.code-reviewer/runs`) |
@@ -165,13 +165,14 @@ A persona budget/failure limit disables only that persona. Criteria exhaustion f
 ## Where things are stored, and cleaning up
 
 | Path | Contents |
+| `~/.code-reviewer/runs/vm-<random ID>/` | VM run: private report, summary and stats only; guest raw replies/prompts are not retained |
 |---|---|
-| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | One review: summary/report, master, usage, labels and settings; `input/` holds redacted PR metadata, diff and criteria; `pass-NN/` holds raw replies, findings and mappings. Single-agent prompts live under `input/reviewer.*.md`; persona prompts under `input/personas/`, with conditional annotations under `verification/` |
+| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | Host review: summary/report, master, usage, labels and settings; `input/` holds redacted PR metadata, diff and criteria; `pass-NN/` holds raw replies, findings and mappings. Single-agent prompts live under `input/reviewer.*.md`; persona prompts under `input/personas/`, with conditional annotations under `verification/` |
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
-| `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's read-only checkout of the PR, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless `--keep-checkout` |
+| `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's read-only checkout of the PR, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless host-only `--keep-checkout` |
 | `refs/code-reviewer/*` in your local clone | The PR head and base commits fetched for a review. Your branches and working tree are never changed |
 
-The temporary checkout is deleted when the run ends, even if the run fails (keep it with `--keep-checkout`). To clean up, delete run directories you no longer need. To remove the fetched refs from a clone:
+In host mode, the temporary checkout is deleted when the run ends, even if the run fails (keep it with `--keep-checkout`). New host run directories and cache directories are created with mode 0700, independent of umask. This does not change permissions of old saved data. To clean up, delete run directories you no longer need. To remove the fetched refs from a clone:
 
 ```bash
 git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update-ref -d
@@ -188,11 +189,11 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 ## Privacy and safety
 
 - **What reaches the selected provider:** PR text, diff, criteria and repository files read by code-reading model roles. Authentication uses the selected adapter; repository labels do not select a provider. Both dispatch paths are wired; authenticated VM inference remains untested. Saved prompts/reports also contain code and should stay private.
-- **What the Reviewer and persona Verifier can do:** read files in a separate checkout of the PR. They cannot run commands, edit files, use the network or load your local Claude configuration (skills, hooks, MCP servers, `CLAUDE.md`). The checkout lives in its own temporary directory, away from the run's files, so earlier passes' findings are not next to it. The former host-based `doctor --live` implementation has been removed. Runtime containment checks use the [sandbox deployment command](sandbox-check.md); the tool allow-list alone is not an OS boundary.
+- **What the Reviewer and persona Verifier can do:** read files in a separate checkout of the PR. The model tool allow-list provides no command, write or network tools. Native isolation flags are intended to exclude local hooks/skills/MCP/config; actual native behavior still needs live verification. Explicit host mode is not an OS sandbox. The checkout lives in its own temporary directory, away from the run's files, so earlier passes' findings are not next to it. The former host-based `doctor --live` implementation has been removed. Runtime containment checks use the [sandbox deployment command](sandbox-check.md); the tool allow-list alone is not an OS boundary.
 - **What the Reviewer cannot see:** pull request comments, review threads, issue comments, other reviewers' or bots' reviews, and other passes' findings. It is given only the PR title, description and commit messages, the diff, the criteria and the checkout. The tool fetches only an allow-list of PR fields from GitHub for the review (a test fails if comments are ever added to it). Posting a comment separately lists the PR's comments to find the tool's own earlier one; that list is never given to the model. Host `--no-sandbox --dry-run` describes the defaults-only inputs without credentials or model calls, and `input/pr.json` and `input/reviewer.*.md` in a run to see what was sent.
 - **Personal data in PR text:** email addresses in the PR title, description and commit messages are replaced with `[email]` before anything is sent (setting `redact_emails`, on by default; `git@host:` clone addresses and version strings such as `lodash@4.17.21` are left alone). This covers **only** emails in the PR text. Names, chat links (for example Slack URLs) and anything in the diff or repository files are sent as they are. The internal dry-run output shows the text as it would be sent, and `input/pr.json` records what was sent and how many addresses were replaced.
 - **Untrusted PR text:** the PR description and code are treated as data and the model is told never to follow instructions found in them. That reduces the risk of prompt injection but cannot eliminate it. Read findings critically.
-- **Nothing outward-facing happens without you:** the only action on GitHub is `post`, after a preview and your confirmation (or the explicit `--post` flag).
+- **Nothing outward-facing happens without you:** the supported publishing action is the explicit one-shot `--post` flag. Interactive post-preview/confirmation is part of the parked REPL.
 - **Not done in v0:** secret scanning of the diff, and filtering of what the Reviewer may read inside the checkout. See [proposal.md](proposal.md) section 5.
 
 ## Troubleshooting
@@ -202,13 +203,13 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `reviewer: command not found` | The virtual environment is not active: `source .venv/bin/activate` in the code-reviewer directory |
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
 | `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
-| `FileNotFoundError` points to `prompts/resolver.system.md` after updating the reviewer | Exit any already-running `reviewer` REPL and launch it again. An editable install does not reload modules in a running Python process. Current prompts live under `src/code_reviewer/flows/<flow>/prompts/`; do not copy assets back to the old location. If a fresh launch still uses old paths, check which `reviewer` executable/virtual environment is active |
-| `--passes applies to single-agent` after updating | An older REPL is still running: exit and restart it. Current persona mode accepts `--passes N` as passes per persona (default 3), so `--mode agent-personas --passes 1` schedules four total review slots |
+| `FileNotFoundError` points to `prompts/resolver.system.md` after updating the reviewer | Check that the active executable/virtual environment matches this checkout. The REPL is parked. An editable install does not reload modules in a running Python process. Current prompts live under `src/code_reviewer/flows/<flow>/prompts/`; do not copy assets back to the old location. If a fresh launch still uses old paths, check which `reviewer` executable/virtual environment is active |
+| `--passes applies to single-agent` after updating | Check for an outdated installed executable. Current persona mode accepts `--passes N` as passes per persona (default 3), so `--mode agent-personas --passes 1` schedules four total review slots |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
-| `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Restart an old REPL after updating the reviewer. A new review fetches the latest branch tips; commits are pinned only within a run |
+| `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Use a fresh one-shot invocation after updating. A new review fetches the latest branch tips; commits are pinned only within a run |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
 | `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` or `extra_exclude_patterns` |
-| `pass N FAILED: ... timed out` or `not a valid JSON object` | Look at `pass-NN/reviewer.raw.json` in the run directory. Raise `call_timeout_s` or `call_budget_usd`, or try another model |
+| `pass N FAILED: ... timed out` or `not a valid JSON object` | For host runs, inspect `pass-NN/reviewer.raw.json`. VM exports contain only report/summary/stats; use their failure accounting. Raise `call_timeout_s` or `call_budget_usd`, or try another model |
 | `pass N FAILED` mentioning budget | The call hit `call_budget_usd`. Raise it, or review a smaller PR |
 | Many findings counted as ungrounded | See the `reason` of each in `pass-NN/findings.json`. The model may be quoting from memory. Try `--model sonnet` |
 | Warning: criteria resolver failed | Resolver-selected rules may be missing; enabled defaults and automatically included project rules can still apply. Check the criteria index, warnings and `input/resolver.raw.json` |
@@ -216,16 +217,16 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | No findings at all | May be correct. Check `notes` in `pass-NN/findings.json` and compare with the diff. Try `--model sonnet` |
 | `post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |
 
-## Sandbox prototype status
+## VM execution status
 
 Normal VM reviews acquire public GitHub PRs inside the VM, select the configured adapter, privately hand off credentials after boundary checks and return bounded reports after worker shutdown. Explicit host dispatch remains available. Private URL authentication and normal-CLI capsule input remain unsupported; low-level no-key checks retain capsules. See the [execution contract](security-contract.md) and [VM runbook](sandbox-check.md).
 
 ## Host adapter configuration
 
-Host reviews use `--no-sandbox` or trusted `sandbox = false`; preflight does not check/read model credentials. The CLI adapter uses its configured local login/token. The API adapter reads `OPENAI_API_KEY` only when a real host review starts; never put the key in arguments or TOML. Configure `openai_input_price`, `openai_cached_input_price` and `openai_output_price` as positive USD per million tokens. The current API adapter requires one explicit model ID across all `model_*` roles (`--model MODEL_ID` sets all of them). A host dry-run needs a valid model ID, but no key or rates. Missing/invalid configuration refuses before target acquisition. The [example TOML](../review.example.toml) lists the fields.
+Host reviews use `--no-sandbox` or trusted `sandbox = false`; preflight does not check/read model credentials. The native adapter uses its configured local login/token. The API adapter reads `OPENAI_API_KEY` only when a real host review starts; never put the key in arguments or TOML. Configure `openai_input_price`, `openai_cached_input_price` and `openai_output_price` as positive USD per million tokens. The current API adapter requires one explicit model ID across all `model_*` roles (`--model MODEL_ID` sets all of them). A host dry-run needs a valid model ID, but no key or rates. Missing/invalid configuration refuses before target acquisition. The [example TOML](../review.example.toml) lists the fields.
 
 
-### VM review configuration
+## VM review configuration
 
 Store these **outside Git working trees**, in `~/.code-reviewer/review.toml` or an explicit `reviewer --config /absolute/path/review.toml review ...` file:
 

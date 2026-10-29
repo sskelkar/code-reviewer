@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import criteria as criteria_mod
 from . import git_ops
-from ..config import Config
+from ..config import Config, ConfigError
 from .diffview import FileDiff, changed_line_count, mark_exclusions, parse_unified_diff, render_changed_files, render_diff_block, render_excluded, reviewable
 from .llm import ClaudeCaller
 from .models import PRContext, ReviewInput, ReviewRefused
@@ -90,7 +90,15 @@ class InputBuilder:
         agents_text = git_ops.git_show(ctx.git_dir, ctx.base_sha, "AGENTS.md") if "AGENTS.md" in tree else None
         override: Optional[Dict[str, Any]] = None
         if self.cfg.criteria_manifest:
-            override = json.loads(Path(self.cfg.criteria_manifest).expanduser().read_text(encoding="utf-8"))
+            try:
+                override = json.loads(Path(self.cfg.criteria_manifest).expanduser().read_text(encoding="utf-8"))
+                if not isinstance(override, dict):
+                    raise ValueError('manifest must be an object')
+                for field in ('criteria_files', 'inline_sections', 'ignored_references'):
+                    if field in override and not isinstance(override[field], list):
+                        raise ValueError('manifest entries must be lists')
+            except (OSError, ValueError) as exc:
+                raise ConfigError('cannot read valid criteria_manifest JSON object') from exc
         resolver = CriteriaResolver(caller, self.prompts["resolver"], self.cfg, ctx, work_dir, self.emit)
         return criteria_mod.resolve_project(
             agents_text, tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),

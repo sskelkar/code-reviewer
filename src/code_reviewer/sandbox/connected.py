@@ -1,10 +1,8 @@
 """Linux VM supervisor, external network policy and private bootstrap/result transport."""
 from __future__ import annotations
 
-import argparse
 import base64
 import fcntl
-import getpass
 import json
 import os
 import pwd
@@ -158,11 +156,11 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
     from .settings import provider
     selected = provider(settings)
     if sys.platform != 'linux' or os.geteuid() != 0 or not os.access('/dev/kvm', os.R_OK | os.W_OK):
-        raise ValueError('connected pilot requires a dedicated Linux/KVM host and root for scoped network setup')
+        raise ValueError('VM supervisor requires a dedicated Linux/KVM host and root for scoped network setup')
     if Path(output).exists():
         raise ValueError('output directory must be new')
-    if not settings['probe_only'] and key_reader is None and not (sys.stdin.isatty() and sys.stderr.isatty()):
-        raise ValueError('interactive terminal or explicit private key descriptor required')
+    if not settings['probe_only'] and key_reader is None:
+        raise ValueError('explicit private credential reader required')
     if (capsule is None) == (source is None):
         raise ValueError('select exactly one capsule or public PR input')
     if source is not None:
@@ -194,7 +192,7 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
                         with connect_bootstrap(vm.socket, vm.proc) as sock:
                             sock.settimeout(timeout)
                             confinement = vm.confinement()
-                            result = exchange(sock, settings, data, output, key_reader or getpass.getpass,
+                            result = exchange(sock, settings, data, output, key_reader,
                                               network=network, source=source)
                             result['vm_checks'] = confinement
                             assign_output(result, output, owner)
@@ -203,55 +201,3 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
         signal.setitimer(signal.ITIMER_REAL, 0)
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('firecracker', 'jailer', 'kernel', 'initrd'):
-        parser.add_argument('--' + name, type=Path, required=True)
-        parser.add_argument('--' + name + '-sha256', required=True)
-    inputs = parser.add_mutually_exclusive_group(required=True)
-    inputs.add_argument('--input', type=Path)
-    inputs.add_argument('--pr', help='public GitHub PR URL; fetched only inside the review VM')
-    parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--model', required=True)
-    parser.add_argument('--prices', nargs=3, type=float, required=True, metavar=('INPUT', 'CACHED', 'OUTPUT'))
-    parser.add_argument('--mode', choices=('single-agent', 'agent-personas'), default='single-agent')
-    parser.add_argument('--passes', type=int, default=1)
-    parser.add_argument('--parallel', type=int, default=1)
-    parser.add_argument('--budget', type=float, default=3)
-    parser.add_argument('--call-budget', type=float, default=.5)
-    parser.add_argument('--timeout', type=int, default=900)
-    parser.add_argument('--probe-only', action='store_true')
-    parser.add_argument('--key-fd', type=int, help='optional inherited private descriptor; otherwise use hidden prompt')
-    args = parser.parse_args()
-    if not 60 <= args.timeout <= 1800 or (args.probe_only and args.key_fd is not None):
-        parser.error('deadline must be 60..1800; probe-only jobs accept no key')
-    settings = dict(model=args.model, prices=args.prices, mode=args.mode, passes=args.passes,
-                    parallel=args.parallel, budget=args.budget, call_budget=args.call_budget, probe_only=args.probe_only)
-    try:
-        binary = Artifact(args.firecracker, args.firecracker_sha256, MAX_KERNEL_BYTES)
-        jailer = Artifact(args.jailer, args.jailer_sha256, MAX_KERNEL_BYTES)
-        kernel = Artifact(args.kernel, args.kernel_sha256, MAX_KERNEL_BYTES)
-        initrd = Artifact(args.initrd, args.initrd_sha256, MAX_INITRD_BYTES)
-        def read_key(prompt):
-            return os.read(args.key_fd, 4097).decode('ascii').rstrip('\r\n')
-        result = run(binary, kernel, initrd, args.input, args.output, settings, timeout=args.timeout,
-                     key_reader=read_key if args.key_fd is not None else None, jailer=jailer, source=args.pr)
-        print(json.dumps(result))
-        if not args.probe_only:
-            print('Review VM stopped. Revoke the disposable test key after this test.', file=sys.stderr)
-        return 0 if result['stop_reason'] in ('probes_passed', 'completed', 'converged', 'max_passes') else 1
-    except ReviewRefused as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    except (Exception, KeyboardInterrupt):
-        # Infrastructure/provider exceptions must never disclose a key or guest-controlled console bytes.
-        print('sandbox job refused, failed or interrupted; inspect policy/input; no host fallback', file=sys.stderr)
-        if not args.probe_only:
-            print('If a key/request was released, usage may be unknown; revoke the disposable test key.', file=sys.stderr)
-        return 1
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())

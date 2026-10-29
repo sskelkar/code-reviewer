@@ -51,7 +51,7 @@ The supported [sandbox check](sandbox-check.md) builds the offline fixture image
 
 ## VM transport integration
 
-The shared [VM supervisor](sandbox-connected.md) supplies explicit trusted proxy routing and private bounded bootstrap/results. The adapter keeps verified TLS to its fixed API destination and excludes the authorization header from CONNECT requests. Host operation uses the same adapter/core without VM transport. Authenticated VM dispatch is wired; live inference remains untested; no repository category grants another execution path.
+The shared [VM supervisor](sandbox-architecture.md) supplies explicit trusted proxy routing and private bounded bootstrap/results. The adapter keeps verified TLS to its fixed API destination and excludes the authorization header from CONNECT requests. Host operation uses the same adapter/core without VM transport. Authenticated VM dispatch is wired; live inference remains untested; no repository category grants another execution path.
 
 ## Official API references
 

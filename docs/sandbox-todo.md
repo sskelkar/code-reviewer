@@ -20,14 +20,15 @@ Working checklist for the VM execution path. The current product direction also 
 - [x] Fetch and pin a public PR directly inside its review VM, with bounded clean unprivileged Git and source access revoked before inference. Capsule import remains optional. The supported no-key check exercises acquisition; normal-command dispatch now uses the same acquisition.
 - [x] Implement selected-adapter settings, endpoint policies and private runtime credentials behind the shared core. Live authentication/inference/native-tool qualification remains below. Keep credentials private and document guest-compromise exposure; no automatic custom broker.
 - [x] Connect the normal command to the VM-default lifecycle, private result transfer and display; never silently fall back. The explicit direct-host selector/provider factory now use preserved host acquisition and the same core; both dispatch paths are wired.
-- [ ] Run hostile-input/containment and both-flow regressions, then an authorized PR through the supported command.
-- [ ] Consolidate current instructions/runbooks and remove superseded prototype instructions; replace static readiness claims with concrete supported-runtime checks as implementation becomes available.
+- [x] Run offline hostile-input/containment, adapter, flow and command-wiring regressions.
+- [ ] Run an authorized real PR through the normal VM command and verify actual authentication, native tools, reports and cleanup.
+- [x] Consolidate current docs/runbooks, remove duplicate security plans and the unusable alternate CLI, and share honest offline configuration status instead of static certification tables.
 
 ## Scope decisions
 
 Use the existing VM boundary, upstream confinement, non-root execution, read-only code, bounded tools/resources and external networking. A custom guest-wide executable/syscall sandbox is deferred, not silently declared implemented. Read-only model tools do not contain native implementation bugs. Guest self-reported probes are diagnostics, not attestation; host controls enforce isolation.
 
-The current [execution contract](security-contract.md) and [roadmap](security-roadmap.md) define shared behavior and the independent VM/host choice. This checklist records the agreed simplification direction; unfinished qualification must remain visible. VM dispatch now checks concrete configuration and runtime controls; explicit host reviews require operator selection. No test count or status-row change enables live reviews by itself. Record completed work and exact evidence here. A handover document is created only on explicit user request.
+The current [execution contract](security-contract.md) and [roadmap](proposal.md#checklist) define shared behavior and the independent VM/host choice. This checklist records the agreed simplification direction; unfinished qualification must remain visible. VM dispatch now checks concrete configuration and runtime controls; explicit host reviews require operator selection. No test count or status-row change enables live reviews by itself. Record completed work and exact evidence here. A handover document is created only on explicit user request.
 
 ## Evidence: 2026-10-28
 
@@ -39,3 +40,9 @@ Public acquisition also passed the real no-key Mac check on the explicitly selec
 
 
 Normal-command VM dispatch now reuses the worker/image/jailer components. All 370 tests pass on Python 3.9 and 3.13. Regression tests cover private two-way worker framing, delayed selected-credential release, both providers/strategies, complete review-setting transfer, native parallel-process environments, native-image digest invalidation, private report export and refusal when shutdown fails. Configuration readiness is separate from live qualification. A new real no-key deployment check passed both flow simulations, boundary probes, network cleanup and worker shutdown. The initial rerun caught a TLS-probe destination-variable regression, which was fixed and covered for both provider destinations. No credential or inference was used; authenticated verification remains outstanding.
+
+
+A scope/correctness audit additionally fixed a VM deadline mismatch, rejected unsupported VM operator-file manifests before execution, made host run directories private independently of umask and shared native process-group timeout/cancellation handling across both strategies. The REPL and comparator replay are explicitly parked; their testable helpers remain. Runtime containment is still enforced by the actual backend, independent of offline configuration status.
+
+
+The final audit suite has 376 tests, including actual fake-native subprocesses through both one-shot host flows, malformed-manifest/limit errors, permissive-umask storage checks and sequential child-process timeout cleanup. Both Python 3.9 and 3.13 pass. The real no-key VM rerun also passed both simulated flows, connected boundary checks and confirmed worker shutdown. No credential, paid inference or private project material was used. Exported VM reports now explicitly identify internal artifact paths as ephemeral.

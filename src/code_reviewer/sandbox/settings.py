@@ -47,8 +47,8 @@ def errors(cfg):
             result.append('set %s to an absolute operator path' % name)
     if not re.fullmatch(r'[a-z][a-z0-9-]{0,62}', cfg.vm_instance):
         result.append('invalid vm_instance')
-    if type(cfg.vm_timeout_s) is not int or not 60 <= cfg.vm_timeout_s <= 7200:
-        result.append('vm_timeout_s must be 60..7200')
+    if type(cfg.vm_timeout_s) is not int or not 60 <= cfg.vm_timeout_s <= 1800:
+        result.append('vm_timeout_s must be 60..1800')
     if cfg.provider == 'claude':
         if not re.fullmatch('[a-f0-9]{64}', cfg.vm_claude_sha256):
             result.append('set vm_claude_sha256 to the verified Linux ARM64 binary digest')
@@ -65,7 +65,7 @@ def job_settings(cfg):
 def config_from_job(value, root):
     if not isinstance(value, dict) or set(value) != {'config', 'auth', 'probe_only', 'timeout_s'} or value['probe_only'] is not False:
         raise ValueError('invalid review job settings')
-    if type(value['timeout_s']) is not int or not 60 <= value['timeout_s'] <= 7200:
+    if type(value['timeout_s']) is not int or not 60 <= value['timeout_s'] <= 1800:
         raise ValueError('invalid whole-job timeout')
     raw = value['config']
     if not isinstance(raw, dict) or set(raw) != set(CORE) or value['auth'] not in ('api-key', 'oauth'):
@@ -77,10 +77,8 @@ def config_from_job(value, root):
     failures = configuration_errors(cfg)
     if failures:
         raise ConfigError('; '.join(failures))
-    # Absolute paths would refer to guest infrastructure, never a project contract.
-    manifest = Path(cfg.criteria_manifest)
-    if cfg.criteria_manifest and (manifest.is_absolute() or '..' in manifest.parts):
-        raise ValueError('criteria_manifest must be relative to the reviewed project')
+    if cfg.criteria_manifest:
+        raise ValueError('criteria_manifest is host-only; VM reviews discover criteria from the pinned base commit')
     cfg.claude_bin = '/usr/bin/claude'
     cfg.runs_dir = str(Path(root) / 'runs')
     return cfg

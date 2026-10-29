@@ -29,7 +29,7 @@ class ReviewOutcome:
 def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:
     """Select the operator's boundary before Git or credentials; VM requests never fall back."""
     from .security import readiness
-    report = readiness(cfg.provider, sandbox=cfg.sandbox)
+    report = readiness(cfg, ref, options)
     report['request'] = {'repository': ref.slug, 'pr': ref.number, 'host': ref.host,
                          'mode': cfg.review_mode, 'model': cfg.model_reviewer,
                          'passes': cfg.persona_passes if cfg.review_mode == 'agent-personas' else cfg.max_passes,
@@ -37,25 +37,13 @@ def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: P
                          'run_budget_usd': cfg.run_budget_usd, 'call_budget_usd': cfg.call_budget_usd,
                          'models': {role: getattr(cfg, 'model_' + role)
                                     for role in ('reviewer', 'resolver', 'comparator', 'verifier')}}
-    model_errors = factory.configuration_errors(cfg, dry_run=getattr(options, 'dry_run', False))
-    report['configuration_errors'] = list(model_errors)
-    if cfg.sandbox:
-        from .sandbox import review as vm_review
-        report['configuration_errors'] += vm_review.configuration_errors(cfg, ref, options)
-        report['qualified'] = report['ready']
-        report['qualification_blockers'] = report['blockers']
-        report['ready'] = not report['configuration_errors']
-        report['blockers'] = [] if report['ready'] else ['vm-configuration']
-        report['diagnostic'] = 'Offline configuration check only; worker, authentication and containment are checked at runtime.'
-    if model_errors:
-        report['ready'] = False
-        report['blockers'].append('model-configuration')
     if getattr(options, 'preflight', False):
         return ReviewOutcome(preflight=report)
     if cfg.sandbox:
         if report['configuration_errors']:
             raise ReviewRefused('VM review unavailable: ' + '; '.join(report['configuration_errors']) + '; no host fallback')
-        return ReviewOutcome(result=vm_review.run(cfg, ref, options))
+        from .sandbox.review import run
+        return ReviewOutcome(result=run(cfg, ref, options))
     if report['configuration_errors']:
         raise ConfigError('; '.join(report['configuration_errors']))
     dry_run = getattr(options, 'dry_run', False)

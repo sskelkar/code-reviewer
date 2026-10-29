@@ -26,18 +26,21 @@ class RunStore:
         self.input_dir = root / "input"
         self.report_path = root / "report.md"
         self.summary_path = root / "summary.md"
-        self.input_dir.mkdir(parents=True, exist_ok=True)
+        self.input_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._checkout_parent: Optional[Path] = None
 
     @classmethod
     def create(cls, runs_path: Path, ctx: PRContext, label: str = "") -> "RunStore":
-        runs_path.mkdir(parents=True, exist_ok=True)
+        runs_path.mkdir(mode=0o700, parents=True, exist_ok=True)
         name = "%s_%s_%d%s" % (time.strftime("%Y%m%d-%H%M%S"), ctx.repo.replace("/", "-"), ctx.number, "_%s" % label if label else "")
         path, suffix = runs_path / name, 1
-        while path.exists():
-            suffix += 1
-            path = runs_path / ("%s-%d" % (name, suffix))
-        path.mkdir()
+        while True:
+            try:
+                path.mkdir(mode=0o700)
+                break
+            except FileExistsError:
+                suffix += 1
+                path = runs_path / ("%s-%d" % (name, suffix))
         return cls(path)
 
     def prepare_checkout(self) -> Path:
@@ -54,7 +57,7 @@ class RunStore:
 
     def pass_dir(self, pass_no: int) -> Path:
         path = self.root / ("pass-%02d" % pass_no)
-        path.mkdir(exist_ok=True)
+        path.mkdir(mode=0o700, exist_ok=True)
         return path
 
     def dump(self, relative: str, data: Any) -> None:

@@ -490,9 +490,9 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         from code_reviewer import replay
         result = self.run_flow(PersonaRunner())
         error = io.StringIO()
-        with patch.object(replay, 'ClaudeRunner', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):
+        with patch('subprocess.Popen', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):
             self.assertEqual(replay.main([str(result.run_dir)]), 1)
-        self.assertIn('VM review unavailable', error.getvalue())
+        self.assertIn('replay is parked', error.getvalue())
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):
         runner = self.conflict_runner(self.annotation())

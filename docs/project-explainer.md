@@ -66,7 +66,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "doctor":                  # `reviewer doctor`
         from .security import readiness
-        report = readiness(cfg.provider)
+        report = readiness(cfg)
         print(json.dumps(report, indent=2))
         return 0 if report["ready"] and not args.live else 1
     if args.command == "review":                  # `reviewer review <url>`
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 |---|---|---|
 | `reviewer` | `cli.main` | Print help; no configuration, model or interactive session |
 | `reviewer review <url>` | `cli.main` | [`review_flow.run_review`](../src/code_reviewer/review_flow.py): preflight, explicit host acquisition/review, or current VM refusal |
-| `reviewer doctor` | `cli.main` | `security.readiness`: offline release status |
+| `reviewer doctor` | `cli.main` | `security.readiness`: offline configuration status |
 | `reviewer sandbox check` / `recover` | `cli.main` before review configuration | `sandbox.check.cli`: no-key deployment or dedicated-worker recovery |
 
 The one-shot review command goes through `review_flow.run_review`, which returns preflight without I/O, executes explicit host requests through the provider factory/Engine, or dispatches VM requests through the shared worker/lifecycle and private bootstrap. Inside synthetic tests and guest workloads, `Engine` selects the configured flow. **[`SingleAgentFlow.review`](../src/code_reviewer/flows/single_agent/flow.py)** is the default and a good first file to read; `--mode agent-personas` selects [`AgentPersonasFlow.review`](../src/code_reviewer/flows/agent_personas/flow.py) instead.
@@ -714,7 +714,7 @@ This is what a Spring `@Configuration` class would do. It is also why classes ar
 
 ### 10.2 Events and callbacks (observer pattern, without an interface)
 
-`SingleAgentFlow` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. Internal callers can pass a `ProgressPrinter`, which prints a line; explicit host dispatch supplies this progress callback; preflight and current VM refusal do not instantiate the engine. Other frontends (or tests) could pass a different function. The engine never prints. The parked REPL is preserved as another internal caller; it is not an active CLI entry point. See [`events.py`](../src/code_reviewer/shared/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
+`SingleAgentFlow` reports progress by calling `self.emit("pass_finished", pass_no=2, new=1, ...)`, which creates an `Event(type, data)` and hands it to whatever function was supplied as `emit=`. Internal callers can pass a `ProgressPrinter`, which prints a line; explicit host dispatch supplies this progress callback; preflight does not instantiate the engine. VM dispatch starts the engine inside the guest after private bootstrap; its launcher prints lifecycle stages rather than streaming every model event. Other frontends (or tests) could pass a different function. The engine never prints. The parked REPL is preserved as another internal caller; it is not an active CLI entry point. See [`events.py`](../src/code_reviewer/shared/events.py) and [`progress.py`](../src/code_reviewer/progress.py).
 
 ### 10.3 The central design rule
 
@@ -784,7 +784,7 @@ and `criteria.resolve_project` simply accepts "a function that takes (list, str)
 
 ### 11.5 `ClaudeRunner`: talking to an external process
 
-[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` calls `subprocess.run(cmd, input=user_prompt, capture_output=True, text=True, timeout=...)` (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. This adapter implementation runs one-shot processes when called by an internal algorithm; both execution locations use this adapter, with an explicit private credential/proxy environment inside the VM. Persona mode uses `flows/agent_personas/runner.py` to supply stdin through a temporary file, poll cancellation and terminate process groups. The runtime-selectable API adapter uses Python HTTPS; `backends/factory.py` now creates the selected runner after configuration is resolved.
+[`claude_cli.py`](../src/code_reviewer/shared/claude_cli.py): `build_command(...)` assembles the argument list, `ClaudeRunner.run` delegates to `run_cancellable`, which starts `subprocess.Popen` and polls `communicate` with a deadline (like `ProcessBuilder` with stdin/stdout capture and a timeout), and `parse_envelope` decodes the JSON that `claude -p --output-format json` prints into a `ClaudeResult` dataclass. This adapter implementation runs one-shot processes when called by an internal algorithm; both execution locations use this adapter, with an explicit private credential/proxy environment inside the VM. Both strategies use the shared native adapter to supply stdin through a private temporary file and terminate the owned process group on success, timeout or cancellation. `flows/agent_personas/runner.py` only forwards the run cancellation signal to the selected adapter. The runtime-selectable API adapter uses Python HTTPS; `backends/factory.py` now creates the selected runner after configuration is resolved.
 
 ### 11.6 Reading a regex
 
@@ -842,7 +842,7 @@ Reading the tests is the fastest way to learn what each module is supposed to do
 
 ## 14. Suggested reading order
 
-1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and command routing (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds the preflight/refusal boundary both review frontends share).
+1. [`cli.py`](../src/code_reviewer/cli.py): the entry point and command routing (the review branch is short because [`review_flow.py`](../src/code_reviewer/review_flow.py) holds shared configuration checks and VM/host dispatch for the supported CLI and retained REPL code).
 2. [`flows/single_agent/flow.py`](../src/code_reviewer/flows/single_agent/flow.py): `SingleAgentFlow.review` and `_run_passes`; then [`review_inputs.py`](../src/code_reviewer/shared/review_inputs.py), which builds what the Reviewer is given.
 3. [`models.py`](../src/code_reviewer/models.py) and [`config.py`](../src/code_reviewer/config.py): dataclasses, your gentlest introduction to Python classes.
 4. [`stop_policy.py`](../src/code_reviewer/flows/single_agent/stop_policy.py) with its test: a plain class and its rules.
@@ -937,7 +937,7 @@ Runtime preparation now happens before job execution. `sandbox/prepare.py` build
 
 There is now a supported deployment command: `reviewer sandbox check`. `cli.py` dispatches it to `sandbox/check.py` before review configuration loading. That Python module validates and owns the dedicated Lima lifecycle, builds the current trusted source, exercises both flows with simulated model replies, runs no-key connected probes, removes temporary state and saves a private JSON result after shutdown. The second VM is a sequential test workload, not another layer or per-persona VM. See [how to run it](sandbox-check.md) and [alternative designs](sandbox-alternatives.md). It does not yet review a real PR.
 
-The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. The one-shot CLI can run explicit host reviews; default VM requests use `sandbox/review.py` and the shared lifecycle. The separate [connected Linux entry point](sandbox-connected.md) selects the configured provider runner inside the same `Engine` and existing flows; it does not duplicate the review algorithm.
+The [sandbox architecture](sandbox-architecture.md) wraps the whole review job in one disposable Firecracker VM. The one-shot CLI can run explicit host reviews; default VM requests use `sandbox/review.py` and the shared lifecycle. The separate [connected Linux entry point](sandbox-architecture.md) selects the configured provider runner inside the same `Engine` and existing flows; it does not duplicate the review algorithm.
 
 Follow the boundary by module:
 
@@ -947,7 +947,7 @@ Follow the boundary by module:
 4. In normal review dispatch, `guest.py` constructs `Config` from the allowlisted operator settings, selects the configured provider runner, then calls `Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)`. In Java terms, the runner is an injected implementation behind the existing duck-typed interface. No target `review.toml` is loaded. Each call starts a fresh context. The API adapter implements bounded tools in `backends/read_tools.py`; the native adapter receives the same explicit tools restriction through its command builder. Both use the mandatory external proxy with the selected provider policy.
 5. The existing flow writes reports in private guest scratch. The guest returns only fixed bounded report artifacts; the host validates and writes private files. Raw prompts stay in the disposable VM. Success, failure, cancellation and deadlines trigger process/network/scratch cleanup; stale policy after a hard crash blocks a new job.
 
-The current connected engineering command uses one pass/worker by default, separately from normal algorithm defaults. Provider is a runtime adapter choice; VM-default and explicit host execution use the same review core. Repository labels do not create another workflow. Explicit host dispatch and the `--no-sandbox` flag are implemented; VM dispatch is wired; real authentication/inference remains untested. Existing host acquisition is retained for the direct option. A credential available in a compromised guest can be copied, and local accounting cannot enforce provider spending.
+There is one normal review command; the unusable alternate connected CLI has been removed. The no-key deployment check remains a separate test command. Provider is a runtime adapter choice; VM-default and explicit host execution use the same review core. Repository labels do not create another workflow. Explicit host dispatch and the `--no-sandbox` flag are implemented; VM dispatch is wired; real authentication/inference remains untested. Existing host acquisition is retained for the direct option. A credential available in a compromised guest can be copied, and local accounting cannot enforce provider spending.
 
 ### The launcher is separate from the reviewer
 

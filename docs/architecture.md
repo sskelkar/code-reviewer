@@ -67,9 +67,9 @@ Image preparation is now a separate `sandbox/prepare.py` operation reused by the
 
 ## Remaining end-to-end wiring
 
-The normal VM/host dispatcher, trusted settings, provider-scoped endpoint policy, private credential handoff and local report presentation are implemented. Offline tests cover both providers/strategies and refusal/cleanup paths. Preflight distinguishes configuration readiness from live qualification; it opens no artifacts and reads no credentials.
+The normal VM/host dispatcher, trusted settings, provider-scoped endpoint policy, private credential handoff and local report presentation are implemented. Offline tests cover both providers/strategies and refusal/cleanup paths. Doctor and preflight share offline configuration status (`runtime_checked: false`); it opens no artifacts and reads no credentials.
 
-Remaining: verify authenticated inference and native tools under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input and VM dry-run remain unsupported. Host API calls currently require one explicit model for all roles and operator token rates. Keep real credentials out of tests; no successful live VM inference has been recorded.
+Remaining: verify authenticated inference and native tools under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input, operator-file criteria manifests and VM dry-run remain unsupported. Host API calls currently require one explicit model for all roles and operator token rates. Keep real credentials out of tests; no successful live VM inference has been recorded.
 
 ## Code map
 
@@ -77,7 +77,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 
 | Location | Responsibility |
 |---|---|
-| `security.py`, `review_flow.py` | Shared no-target-IO readiness/refusal boundary; no caller-supplied readiness flag |
+| `security.py`, `review_flow.py` | Shared offline configuration report and explicit execution dispatch; real backends enforce their boundary |
 | `engine.py`, `flows/__init__.py` | Stable API and one-time mode selection |
 | `flows/single_agent/flow.py` | Complete current review sequence and pass loop |
 | `flows/single_agent/passes.py`, `stop_policy.py` | One pass and convergence/failure/budget rules |
@@ -92,7 +92,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
 | `cli.py`, `review_flow.py`, `presentation.py`, `review_options.py` | Active command entry point, execution boundary, output, options and help |
 | `repl.py`, `repl_help.py` | Parked interactive frontend; code and tests retained, no CLI launch route |
-| `progress.py`, `post.py`, `replay.py` | Progress, confirmed posting and Comparator replay; offline release status is handled by `cli.py`/`security.py` |
+| `progress.py`, `post.py`, `replay.py` | Progress, explicit posting and parked comparator helpers; doctor/preflight share `security.readiness` |
 | `backends/factory.py`, `openai.py`, `read_tools.py` | Runtime runner selection, credential/config checks, stdlib API adapter and bounded read tools |
 | `sandbox/review.py`, `review_worker.py`, `settings.py`, `channel.py` | Normal VM dispatch, allowlisted settings, private SSH pipe protocol and local exported result |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
@@ -107,14 +107,14 @@ Shared code imports no workflow. Flow-owned result types stay inside the flow; `
 
 ## Single-agent implementation
 
-The flow below explains the implemented internal algorithm and legacy preparation helpers. It is exercised programmatically by synthetic tests/guest workloads; the public frontend above does not currently execute it.
+The flow below is the implemented single-agent algorithm called by the normal CLI in either execution location. Host mode prepares context through Git/GitHub CLI; the guest receives already admitted context and a sealed snapshot. Offline tests exercise the same algorithm with synthetic inputs.
 
 ```mermaid
 flowchart TD
     U["Host or guest caller / synthetic workload"] --> SELECT["<b>Engine</b><br/>select single-agent"]
     SELECT --> INPUT{"Already admitted PRContext?"}
     INPUT -->|yes, guest or internal caller| RED
-    INPUT -->|no, retained host preparation| PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
+    INPUT -->|no, host preparation| PREP["<b>SingleAgentFlow.prepare</b> (pr_source, git_ops)<br/>gh + git: fetch PR head and base,<br/>pin exact commit SHAs"]
     PREP --> RED["<b>InputBuilder.redact</b><br/>replace email addresses in PR text"]
     RED --> DIFF["<b>InputBuilder.load_diff</b> (diffview)<br/>merge-base diff, drop lockfiles and generated files,<br/>refuse empty or oversized PRs"]
     DIFF --> CO["<b>Prepared checkout or RunStore + export_tree</b><br/>Reuse sealed VM snapshot, or export separate head copy<br/>Read-only model tools in either case"]
@@ -206,4 +206,4 @@ After the round barrier, usable batches are consolidated serially in fixed perso
 
 After reviewing, one fresh Verifier session per distinct flagged group examines code and accepted criteria while budget/run status permit. Validated annotations may explain support/refutation, conditions or tradeoffs and correct categories. They never rewrite/suppress findings or change severity/votes. No flags means no Verifier calls; failed or skipped verification stays unresolved/pending. Reviewers never receive findings or annotations from earlier calls.
 
-The persona-only `budget.py` owns atomic pool reservations, reconciliation and cancellation; `runner.py` runs cancellable subprocess groups, supplying complete UTF-8 prompts through anonymous temporary stdin files so timeout polling cannot strand partially written pipe input. Each persona has its own Caller/request-log state. Workers append call accounting, and presentation/merging reads it only after the round barrier or worker shutdown; budget decisions use the locked ledger. No worker mutates the master. `--parallel 1` serializes reviewers but retains the round barrier. The Verifier runs serially after review rounds. See [pool behavior](usage.md#persona-budget-pools).
+The persona-only `budget.py` owns atomic pool reservations, reconciliation and cancellation; `runner.py` only forwards the cancellation signal to adapters. Shared `ClaudeRunner.run_cancellable` owns native process groups, complete UTF-8 stdin files, timeout polling and cleanup for both strategies. Each persona has its own Caller/request-log state. Workers append call accounting, and presentation/merging reads it only after the round barrier or worker shutdown; budget decisions use the locked ledger. No worker mutates the master. `--parallel 1` serializes reviewers but retains the round barrier. The Verifier runs serially after review rounds. See [pool behavior](usage.md#persona-budget-pools).

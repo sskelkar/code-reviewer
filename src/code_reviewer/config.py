@@ -126,6 +126,11 @@ class Config:
     vm_claude_auth: str = "api-key"
 
     def validate(self) -> None:
+        for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',
+                     'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars'):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ConfigError('%s must be a positive integer' % name)
         if type(self.sandbox) is not bool:
             raise ConfigError('sandbox must be true or false')
         for name in ('openai_input_price', 'openai_cached_input_price', 'openai_output_price'):

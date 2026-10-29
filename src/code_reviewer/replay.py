@@ -1,24 +1,14 @@
-"""Developer tool: re-run the comparator on the findings saved from a real review and show how the grouping changes.
-
-    python -m code_reviewer.replay ~/.code-reviewer/runs/<run directory> [--model haiku] [--repeat 2]
-
-The comparator decides which findings of different passes are the same issue, which drives every "found in 3 of 6 passes"
-count. After editing `flows/single_agent/prompts/comparator.*.md`, replay a few real runs and check that duplicates merge and different
-issues do not. This makes real (cheap) model calls for the comparator only; the Reviewer is not run again.
-"""
+"""Parked comparator replay helpers, retained for offline regressions and future work."""
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 import tempfile
-from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from .shared.claude_cli import ClaudeRunner
-from .config import Config, ConfigError, load_config
+from .config import Config
 from .shared.llm import ClaudeCaller
 from .flows.single_agent.master import MasterList
 from .flows.single_agent.roles import Comparator
@@ -69,16 +59,17 @@ def replay_grouping(passes: PassFindings, cfg: Config, runner: Any, stats: Optio
     """Group findings by asking the current comparator prompt, one pass at a time, exactly as a real run would.
 
     Pass a `Stats` to collect the cost of the comparator calls."""
-    scratch = Path(tempfile.mkdtemp(prefix="comparator-replay-"))
-    comparator = Comparator(ClaudeCaller(runner, cfg, stats or Stats()), load_prompt("comparator"), cfg, scratch)
+    with tempfile.TemporaryDirectory(prefix="comparator-replay-") as name:
+        scratch = Path(name)
+        comparator = Comparator(ClaudeCaller(runner, cfg, stats or Stats()), load_prompt("comparator"), cfg, scratch)
 
-    def decide(master: MasterList, pass_no: int, findings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        candidates = master.candidates(findings, cfg.candidate_window, cfg.candidate_all_threshold, cfg.candidate_max)
-        if comparator.is_trivial(findings, candidates):
-            return comparator.all_new(findings)
-        return comparator.compare(pass_no, findings, candidates, scratch / ("pass-%02d.raw.json" % pass_no))
+        def decide(master: MasterList, pass_no: int, findings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+            candidates = master.candidates(findings, cfg.candidate_window, cfg.candidate_all_threshold, cfg.candidate_max)
+            if comparator.is_trivial(findings, candidates):
+                return comparator.all_new(findings)
+            return comparator.compare(pass_no, findings, candidates, scratch / ("pass-%02d.raw.json" % pass_no))
 
-    return _group(passes, decide)
+        return _group(passes, decide)
 
 
 def _same_group_pairs(groups: Groups) -> Set[Tuple[str, str]]:
@@ -111,53 +102,8 @@ def describe_changes(before: Groups, after: Groups, titles: Dict[str, str]) -> s
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m code_reviewer.replay", description=__doc__.split("\n\n")[0])
-    parser.add_argument("run_dir", help="a review run directory under ~/.code-reviewer/runs")
-    parser.add_argument("--model", help="model for the comparator (default: model_comparator from review.toml)")
-    parser.add_argument("--repeat", type=int, default=1, help="how many times to replay (the model is not deterministic)")
-    parser.add_argument("--config", help="path to a review.toml")
-    args = parser.parse_args(argv)
-    from .security import require_ready
-    from .shared.models import ReviewRefused
-    try:
-        require_ready('claude')
-    except ReviewRefused as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    run_dir = Path(args.run_dir).expanduser()
-    saved_config = run_dir / 'config.json'
-    if saved_config.is_file():
-        try:
-            metadata = json.loads(saved_config.read_text(encoding='utf-8'))
-            saved_mode = metadata.get('config', {}).get('review_mode', 'single-agent')
-        except (OSError, ValueError, AttributeError):
-            print('cannot read saved run configuration', file=sys.stderr)
-            return 1
-        if saved_mode != 'single-agent':
-            print('replay supports single-agent runs only; persona contracts require a separate replay implementation', file=sys.stderr)
-            return 1
-    try:
-        cfg = load_config(args.config)
-    except ConfigError as exc:
-        print("config error: %s" % exc, file=sys.stderr)
-        return 2
-    if args.model:
-        cfg = replace(cfg, model_comparator=args.model)
-    passes = load_pass_findings(run_dir)
-    if not passes:
-        print("no pass-*/findings.json under %s" % run_dir, file=sys.stderr)
-        return 1
-    runner = ClaudeRunner(cfg.claude_bin, cfg.isolation_flags)
-
-    before, titles = recorded_grouping(run_dir, passes)
-    print(describe("RECORDED (the comparator used when the review ran)", before, titles))
-    for attempt in range(1, args.repeat + 1):
-        stats = Stats()
-        after, _ = replay_grouping(passes, cfg, runner, stats)
-        print("\n" + describe("REPLAY %d (current comparator prompt, model %s)" % (attempt, cfg.model_comparator), after, titles))
-        print("  comparator cost of this replay: $%.4f over %d calls" % (stats.total_cost(), len(stats.calls)))
-        print(describe_changes(before, after, titles))
-    return 0
+    print('Comparator replay is parked; its offline helpers/tests are retained. Use the one-shot review CLI.', file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":  # pragma: no cover

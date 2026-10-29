@@ -126,7 +126,7 @@ def gh_pr_view(ref: PRRef) -> Dict[str, object]:
 
 def ensure_cache_clone(ref: PRRef, cache_dir: Optional[Path] = None) -> Path:
     cache = (cache_dir or DATA_DIR / "cache")
-    cache.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = cache / ("%s__%s__%s.git" % (ref.host, ref.owner, ref.repo))
     if not path.exists():
         _run(["gh", "repo", "clone", ref.gh_repo, str(path), "--", "--bare", "--quiet"], timeout=1800)

@@ -19,9 +19,9 @@ MAIN_EPILOG = """\
 examples:
   reviewer                                show help (the interactive prompt is parked)
   reviewer review <PR URL> --passes 1     one cheap pass over a pull request
-  reviewer review <PR URL> --dry-run      show what the reviewer would be given, without calling the model
+  reviewer review <PR URL> --no-sandbox --dry-run      show what the reviewer would be given, without calling the model
   reviewer review <PR URL>                a full review (several passes)
-  reviewer review <PR URL> --preflight    list production release blockers; no network or model calls
+  reviewer review <PR URL> --preflight    check configuration; no network or model calls
 
 Each subcommand has its own options, for example: reviewer review --help
 """
@@ -55,10 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--post", action="store_true",
                         help="post the summary comment to the pull request after the review (explicit opt-in; nothing is posted without it)")
     review.add_argument("--local-path", metavar="DIR",
-                        help="local clone to use as the git object store (default: the current directory, if it is a clone of the same repository)")
+                        help="host-only clone to use as the git object store (default: current directory when it matches)")
 
     doctor = sub.add_parser("doctor", help="show offline execution status without commands or credentials")
-    doctor.add_argument("--live", action="store_true", help="legacy live check; blocked until the production backend is qualified")
+    doctor.add_argument("--live", action="store_true", help="unsupported legacy option; use sandbox check for no-key deployment checks")
     sandbox = sub.add_parser('sandbox', help='run the supported sandbox deployment checks')
     checks = sandbox.add_subparsers(dest='sandbox_command', required=True)
     check = checks.add_parser('check', help='build and check Firecracker in a dedicated Lima worker; no key or inference')
@@ -94,20 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     if args.command == "doctor":
         from .security import readiness
-        report = readiness(cfg.provider, sandbox=cfg.sandbox)
-        from .backends.factory import configuration_errors
-        report['configuration_errors'] = configuration_errors(cfg)
-        if cfg.sandbox:
-            from .sandbox.review import configuration_errors as vm_errors
-            report['configuration_errors'] += vm_errors(cfg)
-            report['qualified'] = report['ready']
-            report['qualification_blockers'] = report['blockers']
-            report['ready'] = not report['configuration_errors']
-            report['blockers'] = [] if report['ready'] else ['vm-configuration']
-        if report['configuration_errors']:
-            report['ready'] = False
-            report['blockers'].append('model-configuration')
-        report['diagnostic'] = 'offline release status; no external executable or model was started'
+        report = readiness(cfg)
         if args.live:
             report['diagnostic'] = 'live sandbox diagnostic is not integrated; no host fallback'
         print(json.dumps(report, indent=2))
