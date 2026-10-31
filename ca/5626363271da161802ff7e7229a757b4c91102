@@ -1,0 +1,28 @@
+deploy/langfuse/setup.py
+  s_68cd0db0a8fc3a::t_3c6b404f0eb487 21
+deploy/langfuse/compose.yaml
+  s_68cd0db0a8fc3a::t_3c6b404f0eb487 56
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_3c6b404f0eb487 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ca5626363271da161802ff7e7229a757b4c91102",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
