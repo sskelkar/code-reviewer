@@ -19,8 +19,6 @@ CREDENTIALS = {('claude', 'api-key'): 'ANTHROPIC_API_KEY',
 
 def configuration_errors(cfg, *, dry_run=False):
     errors = []
-    if (cfg.provider, cfg.auth_mode) not in CREDENTIALS:
-        errors.append('ChatGPT subscription login/streaming is not implemented; OpenAI currently supports auth_mode = "api-key" only; no billing fallback')
     if cfg.provider != 'openai':
         return errors
     models = [getattr(cfg, 'model_' + role) for role in ('reviewer', 'resolver', 'comparator', 'verifier')]
@@ -47,21 +45,32 @@ def credential_name(provider, auth='api-key'):
         raise ConfigError('unsupported provider/authentication combination; no fallback') from None
 
 
-def credential(provider, auth='api-key'):
+def credential(provider, auth='api-key', *, cfg=None, min_ttl=60):
+    if (provider, auth) == ('openai', 'subscription'):
+        if cfg is None:
+            raise ConfigError('ChatGPT runtime configuration required; no credential fallback')
+        from .chatgpt.store import Store, runtime_key
+        return Store().access(runtime_key(cfg), cfg.chatgpt_account, min_ttl)
     name = credential_name(provider, auth)
     return validate_credential(os.environ.get(name, ''), name)
 
 
-def validate_credential(value, name):
-    if not isinstance(value, str) or not value or len(value) > 4096 or any(ord(c) < 33 or ord(c) > 126 for c in value):
+def validate_credential(value, name, limit=4096):
+    if not isinstance(value, str) or not value or len(value) > limit or any(ord(c) < 33 or ord(c) > 126 for c in value):
         raise ConfigError('set a valid %s in the review process environment' % name)
     return value
 
 
-def create_runner(cfg, *, selected_credential=None, env=None, transport=None) -> Runner:
+def create_runner(cfg, *, selected_credential=None, env=None, transport=None, proxy=None) -> Runner:
     failures = configuration_errors(cfg)
     if failures:
         raise ConfigError('; '.join(failures))
+    subscription = cfg.provider == 'openai' and cfg.auth_mode == 'subscription'
+    if subscription:
+        token_source = (lambda: credential('openai', 'subscription', cfg=cfg, min_ttl=cfg.call_timeout_s + 120)) if selected_credential is None else None
+        secret = token_source() if token_source else validate_credential(selected_credential, 'ChatGPT access token', 16384)
+        return OpenAIRunner(secret, model=cfg.model_reviewer, transport=transport, proxy=proxy,
+                            billing_mode='subscription', token_source=token_source, token_limit=cfg.call_budget_tokens)
     name = credential_name(cfg.provider, cfg.auth_mode)
     secret = credential(cfg.provider, cfg.auth_mode) if selected_credential is None else validate_credential(selected_credential, name)
     if cfg.provider == 'claude':
@@ -71,7 +80,7 @@ def create_runner(cfg, *, selected_credential=None, env=None, transport=None) ->
         native_env = {key: source[key] for key in ENVIRONMENT if key in source}
         native_env[name] = secret
         return ClaudeRunner(cfg.claude_bin, cfg.isolation_flags, env=native_env, billing_mode=cfg.auth_mode)
-    return OpenAIRunner(secret, model=cfg.model_reviewer, prices=prices(cfg), transport=transport)
+    return OpenAIRunner(secret, model=cfg.model_reviewer, prices=prices(cfg), transport=transport, proxy=proxy)
 
 
 def preview_command(cfg, tools):
@@ -79,7 +88,7 @@ def preview_command(cfg, tools):
     if cfg.provider == 'openai':
         return ['POST', 'https://api.openai.com/v1/responses', 'model=' + cfg.model_reviewer]
     command = build_command(cfg.claude_bin, system_prompt='', schema={}, model=cfg.model_reviewer,
-                            tools=tools, budget_usd=cfg.call_budget_usd, isolation_flags=cfg.isolation_flags)
+                            tools=tools, budget_usd=None if cfg.auth_mode == 'subscription' else cfg.call_budget_usd, isolation_flags=cfg.isolation_flags)
     placeholders = {'--append-system-prompt': '<system prompt: input/reviewer.system.md>',
                     '--json-schema': '<JSON schema of the findings>'}
     return [placeholders.get(command[i-1], arg) if i else arg for i,arg in enumerate(command)]

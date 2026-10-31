@@ -1,6 +1,6 @@
 # Default criteria for the four review personas
 
-**Initial assets, 2026-10-20.** Thirteen generic criteria are defined under [the persona flow](../src/code_reviewer/flows/agent_personas/README.md). They retain the ten existing concerns and add entry-point/artifact wiring, test discovery/failure propagation and query/index compatibility. The persona workflow now loads these assets; it is tested offline but has no live quality result. The single-agent `GEN-*` defaults, prompt contents and schemas are unchanged.
+Thirteen generic criteria are defined under [the persona flow](../src/code_reviewer/flows/agent_personas/README.md). They retain the ten existing concerns and add entry-point/artifact wiring, test discovery/failure propagation and query/index compatibility. The persona flow loads these assets. Offline tests check wiring; model quality needs manual evaluation.
 
 The canonical wording lives in the linked files below. This guide is an index, so future edits do not leave competing copies of the rules. Every rule specifies **Inspect**, **Report** and **Do not report**. These rules define inspection subjects; the persona Reviewer contract still owns evidence, self-checks, scope and JSON output.
 
@@ -34,6 +34,6 @@ No universal deployment model, database guarantee, external policy or documentat
 
 ## Next step
 
-Loading, project-rule distribution, frozen prompts, the configured round-robin scheduler, Comparator/conflict records, advisory verification and reports are implemented as specified in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps). Review the implementation and use authorized manual comparisons before drawing quality conclusions. Offline tests check plumbing, not semantic routing or review accuracy. Review quality is judged manually; the unused eval framework has been removed.
+Loading, project-rule distribution, frozen prompts, the configured round-robin scheduler, Comparator/conflict records, advisory verification and reports are implemented as specified in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps). Review the implementation and use authorized manual comparisons before drawing quality conclusions. Offline tests check plumbing, not semantic routing or review accuracy. Review quality is judged manually.
 
 In persona mode, `disabled_default_rules` accepts canonical persona IDs and the ten legacy `GEN-*` aliases mapped in proposal §12; unknown IDs fail clearly. Disabling a shared rule removes it from every persona. Single-agent IDs and behavior remain unchanged.

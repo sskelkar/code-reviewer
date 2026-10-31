@@ -1,6 +1,6 @@
 # Alternatives to Lima plus Firecracker
 
-Decision recorded 2026-10-26: continue with the existing Lima plus Firecracker implementation. This document records alternatives we could have chosen; none is another backend implemented by this project.
+The supported backend uses Lima plus Firecracker. This comparison explains its tradeoffs; alternative backends are outside the implementation scope.
 
 ## Why the current design has two VMs
 
@@ -13,9 +13,9 @@ Mac
         └── Repository preparation, Python reviewer, model/tool loop
 ```
 
-Firecracker deliberately exposes a small device model, applies VMM syscall filters and provides a Linux jailer for process confinement. Network filtering is explicitly the operator's responsibility. These mechanisms depend on correct host integration; choosing Firecracker alone does not establish production security. Our shared jailed lifecycle now passes no-key deployment checks; normal-command dispatch is wired; authenticated inference remains untested. See the [upstream design](https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md), [jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md) and our [security roadmap](proposal.md#checklist).
+Firecracker deliberately exposes a small device model, applies VMM syscall filters and provides a Linux jailer for process confinement. Network filtering is explicitly the operator's responsibility. These mechanisms depend on correct host integration; choosing Firecracker alone does not establish production security. The shared jailed lifecycle supports normal review dispatch and no-key deployment checks; native Claude inference still requires qualification. See the [upstream design](https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md), [jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md) and our [security roadmap](proposal.md#checklist).
 
-## Alternatives we could have built
+## Alternative boundaries
 
 | Option | Arrangement | What it retains | What changes |
 |---|---|---|---|

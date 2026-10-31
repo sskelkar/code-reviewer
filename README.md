@@ -2,7 +2,7 @@
 
 A one-shot Python CLI for independent, repeated pull-request reviews. Python validates evidence and model replies, merges duplicate findings and produces private reports. Claude and OpenAI adapters use the same review algorithms.
 
-**Status:** both strategies, host/VM dispatch and a provider-neutral LLM interface are implemented. Claude API-key/subscription access and OpenAI API-key access are wired and tested with simulated providers. Successful live VM inference remains unverified. ChatGPT subscription login is the next implementation milestone; it is not a working flag today.
+**Status:** both review strategies, host/VM dispatch, Claude API-key/subscription access, OpenAI API-key access and reviewer-owned ChatGPT sign-in/streaming are implemented and tested with simulated providers. ChatGPT-backed VM review is user-confirmed. Native Claude behavior, live persona coverage and long-running token refresh still need qualification.
 
 ## Quick start
 
@@ -18,7 +18,7 @@ pip install -e .
 reviewer --help
 ```
 
-Keep the checkout: prompts and criteria load from it. Runtime dependencies are the standard library and `tomli` below Python 3.11.
+Keep the checkout: prompts and criteria load from it. Runtime dependencies are the standard library and `tomli` below Python 3.11. ChatGPT sign-in also requires `/usr/bin/openssl` for identity-signature verification.
 
 Provider, authentication, strategy and execution location are independent:
 
@@ -29,7 +29,17 @@ reviewer review OWNER/REPO#123 --provider claude --auth subscription --mode agen
 reviewer review OWNER/REPO#123 --provider openai --auth api-key --model MODEL_ID --passes 1
 ```
 
-Configure [credentials and adapter support](docs/llm.md) and the [persistent VM installation](docs/sandbox-check.md#persistent-first-time-setup) first. API keys use separate API billing; a ChatGPT subscription does not fund an API key. Claude subscription access uses a dedicated `CLAUDE_CODE_OAUTH_TOKEN` created through the supported enterprise/native flow. Tokens belong in the invoking environment, never TOML, arguments or Git.
+Configure [credentials and adapter support](docs/llm.md) and the [persistent VM installation](docs/sandbox-check.md#persistent-first-time-setup) first. API keys use separate API billing; a ChatGPT subscription does not fund an API key. Claude subscription access uses a dedicated `CLAUDE_CODE_OAUTH_TOKEN` created through the supported enterprise/native flow. API/native tokens belong in the invoking environment, never TOML, arguments or Git. ChatGPT sign-in uses the reviewer's private credential store.
+
+To use an eligible ChatGPT subscription, sign in for the chosen execution location and select a model from its catalog:
+
+```bash
+reviewer auth login
+reviewer auth models
+reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
+```
+
+Append `--no-sandbox` to both authentication and review commands for direct-host execution. Host and VM identities have separate registrations. See [ChatGPT sign-in](docs/llm.md#chatgpt-sign-in).
 
 **VM is the default.** One jailed Firecracker VM fetches a public github.com PR, pins commits, runs the selected strategy and returns bounded reports after cleanup. A mountless Lima worker supplies Linux/KVM on compatible Apple Silicon Macs. Private in-VM source authentication is unsupported. Failures never fall back to the host.
 
@@ -82,7 +92,7 @@ flowchart TD
 
 Default: three passes per persona; `--passes N` sets rounds, without quiet-pass stopping. `--parallel N` limits concurrent Reviewers to 1–4. Exhaustion of one persona's budget does not stop the others. The Comparator merges duplicates, categorizes and flags conflicts. Verification does not suppress findings or change severity/votes.
 
-Allocation pools scale with the total cap: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder equally among personas; no borrowing. Dollar values are estimated allowances, not hard provider caps or subscription balances. Token/pass/time/concurrency limits remain relevant with subscription access.
+Allocation pools scale with the total cap: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder equally among personas; no borrowing. API pools allocate estimated dollars; subscription pools allocate tokens using the same proportions. Limits are harness stop conditions, not hard provider caps.
 
 ## Results and configuration
 
@@ -101,20 +111,20 @@ PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 
 Tests use synthetic Git repositories, fake executables and simulated providers; no real credentials, networking or VM boots. Check actual deployment separately with `reviewer sandbox check`; it performs no inference. Run the oldest and newest available supported Python before finishing changes.
 
-Next: implement reviewer-owned ChatGPT consent/streaming, then qualify subscription-backed inference through the VM and compare review quality manually. REPL/replay remain in `parked/`, disconnected from the CLI. No eval framework, distributed scheduler or per-persona VMs are maintained.
+Next: qualify real sign-in and subscription-backed inference through the VM, then compare review quality manually. REPL/replay remain in `parked/`, disconnected from the CLI. No eval framework, distributed scheduler or per-persona VMs are maintained.
 
 ## Documentation
 
 | Guide | Purpose |
 |---|---|
 | [Usage](docs/usage.md) | Commands, settings, reports, limits and troubleshooting |
-| [LLM interface](docs/llm.md) | Contract, adapter/authentication matrix, credentials and remaining subscription work |
+| [LLM interface](docs/llm.md) | Contract, adapter/authentication matrix, credentials and qualification |
 | [Architecture](docs/architecture.md) | Ownership and review-flow diagrams |
 | [VM architecture](docs/sandbox-architecture.md) | Launcher, worker, guest, networking and cleanup |
 | [VM deployment](docs/sandbox-check.md) | Persistent setup, no-key checks and recovery |
 | [Execution contract](docs/security-contract.md) | Scope and actual guarantees |
-| [Plan](docs/proposal.md) | Checklist, decisions, evidence and optional later work |
-| [VM checklist](docs/sandbox-todo.md) | Deployment evidence and unverified live behavior |
+| [Plan](docs/proposal.md) | Checklist and optional later work |
+| [VM checklist](docs/sandbox-todo.md) | Controls and outstanding qualification |
 | [Development](docs/development.md) | Tests and debugging |
 | [Python walkthrough](docs/project-explainer.md) | Reading this code as a Java developer |
 | [Prompt contracts](prompts/README.md) | Canonical assets and harness validation |

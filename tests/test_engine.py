@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import unittest
 from pathlib import Path
@@ -218,6 +220,15 @@ def git_ctx(ctx, head):
 
 
 class GitOpsTests(TempDirTestMixin, unittest.TestCase):
+    def test_unrelated_histories_refuse_instead_of_substituting_base_tip(self):
+        from .helpers import git
+        ctx = make_repo(self.make_tmp())
+        git(ctx.git_dir, 'checkout', '--orphan', 'unrelated')
+        git(ctx.git_dir, 'commit', '--allow-empty', '-qm', 'independent root')
+        other = git(ctx.git_dir, 'rev-parse', 'HEAD')
+        with self.assertRaisesRegex(git_ops.GitError, 'merge base'):
+            git_ops.merge_base(ctx.git_dir,ctx.base_sha,other)
+
     def test_review_fetch_refreshes_private_refs_without_touching_tracking_refs_or_tags(self):
         from .helpers import git
 

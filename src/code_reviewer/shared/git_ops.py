@@ -152,7 +152,9 @@ def fetch_pr_refs(git_dir: Path, number: int, base_ref: str) -> Tuple[str, str]:
 
 def merge_base(git_dir: Path, base_sha: str, head_sha: str) -> str:
     proc = _run(["git", "-C", str(git_dir), "merge-base", base_sha, head_sha], check=False)
-    return proc.stdout.strip() if proc.returncode == 0 and proc.stdout.strip() else base_sha
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise GitError('cannot determine a merge base for the pinned commits; refusing to change diff scope')
+    return proc.stdout.strip()
 
 
 def git_diff(git_dir: Path, from_sha: str, to_sha: str) -> str:

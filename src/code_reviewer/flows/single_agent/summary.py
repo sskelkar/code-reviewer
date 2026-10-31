@@ -117,4 +117,4 @@ def run_line(result: RunResult) -> str:
     stats = result.stats
     return "Run: %d pass%s, %s · est. cost %s · %.0fs of model time" % (
         result.passes_completed, "" if result.passes_completed == 1 else "es",
-        _STOP_SHORT.get(result.stop_reason, result.stop_reason), money(stats.total_cost(), stats.cost_known()), stats.duration_s())
+        _STOP_SHORT.get(result.stop_reason, result.stop_reason), ('subscription (no API charge)' if result.cfg.auth_mode == 'subscription' else money(stats.total_cost(), stats.cost_known())), stats.duration_s())

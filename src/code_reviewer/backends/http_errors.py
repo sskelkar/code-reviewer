@@ -11,8 +11,14 @@ MAX_ERROR_BYTES = 8192
 CODES = frozenset(('rate_limit_exceeded', 'slow_down', 'insufficient_quota',
                   'credit_balance_exhausted', 'organization_spend_limit_exceeded',
                   'project_spend_limit_exceeded', 'organization_usage_limit_exceeded',
-                  'server_is_overloaded', 'invalid_api_key'))
-QUOTA_CODES = CODES - {'rate_limit_exceeded', 'slow_down', 'server_is_overloaded', 'invalid_api_key'}
+                  'server_is_overloaded', 'invalid_api_key',
+                  'subscription_sharing_usage_limit_exceeded', 'subscription_sharing_usage_unavailable',
+                  'subscription_sharing_unsupported_capability', 'subscription_sharing_route_not_supported',
+                  'subscription_sharing_invalid_user', 'chatpass_v2_scope_not_authorized',
+                  'chatpass_v2_invalid_authorization_context', 'subscription_sharing_user_unavailable'))
+QUOTA_CODES = frozenset(('insufficient_quota', 'credit_balance_exhausted',
+                         'organization_spend_limit_exceeded', 'project_spend_limit_exceeded',
+                         'organization_usage_limit_exceeded', 'subscription_sharing_usage_limit_exceeded'))
 TYPES = frozenset(('rate_limit_error', 'insufficient_quota', 'service_unavailable_error',
                   'invalid_request_error', 'authentication_error'))
 HEADERS = ('x-ratelimit-limit-requests', 'x-ratelimit-limit-tokens',
@@ -79,7 +85,9 @@ def error_message(details):
         message += ' (' + details['code'] + ')'
     elif details['type']:
         message += ' (' + details['type'] + ')'
-    if details['code'] in QUOTA_CODES or details['type'] == 'insufficient_quota':
+    if details['code'] == 'subscription_sharing_usage_limit_exceeded':
+        message += '; check ChatGPT Settings / Usage and app-sharing limits; no API-key fallback'
+    elif details['code'] in QUOTA_CODES or details['type'] == 'insufficient_quota':
         message += '; check API credits and organization/project limits; retrying will not restore access'
     elif details['status'] == 429 and not details['code'] and not details['type']:
         message += '; rate limit or quota could not be distinguished'

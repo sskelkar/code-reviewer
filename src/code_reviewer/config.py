@@ -124,13 +124,20 @@ class Config:
     vm_claude_binary: str = ""
     vm_claude_sha256: str = ""
     auth_mode: str = "api-key"
+    chatgpt_account: str = "default"
+    call_budget_tokens: int = 200000
 
     def validate(self) -> None:
         for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',
-                     'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars'):
+                     'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars', 'call_budget_tokens'):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
                 raise ConfigError('%s must be a positive integer' % name)
+        import re
+        if not isinstance(self.chatgpt_account, str) or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}', self.chatgpt_account):
+            raise ConfigError('chatgpt_account must be a local label of 1..64 letters, digits, underscores or hyphens')
+        if self.provider == 'openai' and self.auth_mode == 'subscription' and self.call_timeout_s >= 3380:
+            raise ConfigError('ChatGPT call_timeout_s must be below 3380 seconds')
         if type(self.sandbox) is not bool:
             raise ConfigError('sandbox must be true or false')
         for name in ('openai_input_price', 'openai_cached_input_price', 'openai_output_price'):
@@ -157,7 +164,7 @@ class Config:
             raise ConfigError("persona_parallel must be an integer from 1 to 4")
         if isinstance(self.persona_passes, bool) or not isinstance(self.persona_passes, int) or self.persona_passes < 1:
             raise ConfigError('persona_passes must be a positive integer')
-        if self.review_mode == 'agent-personas' and self.call_budget_usd < 0.01:
+        if self.auth_mode != 'subscription' and self.review_mode == 'agent-personas' and self.call_budget_usd < 0.01:
             raise ConfigError('agent-personas needs call_budget_usd >= 0.01 (Claude CLI dollar limits use cents)')
         if self.persona_prompt_max_chars < 1:
             raise ConfigError("persona_prompt_max_chars must be positive")

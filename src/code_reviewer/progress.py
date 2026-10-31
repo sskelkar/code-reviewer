@@ -48,7 +48,7 @@ class ProgressPrinter:
         elif kind == 'classification_started':
             self._say('distributing %d project rules among four personas ...' % d['rules'])
         elif kind == 'budget_allocated':
-            self._say('budget allocation: ' + ', '.join('%s $%.2f' % (p, v['allocated_usd']) for p, v in d['pools'].items()))
+            self._say('budget allocation: ' + ', '.join(('%s %d tokens' % (p, v['allocated_tokens'])) if 'allocated_tokens' in v else ('%s $%.2f' % (p, v['allocated_usd'])) for p, v in d['pools'].items()))
         elif kind == "warning":
             self._say("warning: %s" % d["message"])
         elif kind == "persona_pass_started":

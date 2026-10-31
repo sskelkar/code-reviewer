@@ -23,7 +23,7 @@ flowchart TD
     ADAPTER --> VALIDATE["Shared validators, accounting and private reports"]
 ```
 
-Host/guest dispatch use the same adapter factory and common result/error contract. Successful live VM inference remains unverified; ChatGPT subscription consent/streaming is not implemented. Current routing is below.
+Host/guest dispatch use the same adapter factory and common result/error contract. ChatGPT uses reviewer-owned consent, private refresh storage, streaming and token-only budgets. Current routing is below.
 
 ## Public entry-point boundary
 
@@ -49,27 +49,27 @@ flowchart TD
     CORE --> OUT["Private report + CLI summary; post only if requested"]
 ```
 
-`doctor` reports offline execution/configuration status. The old `doctor --live` option is removed; paid replay and legacy incomplete-settings connected jobs remain blocked. Normal VM reviews use the complete operator job protocol. The parked REPL remains covered by internal tests, with no CLI launch route.
+`doctor` reports offline execution/configuration status. There is no supported live-doctor or paid-replay command. Incomplete job settings are refused. Normal VM reviews use the complete operator job protocol. The parked REPL remains covered by internal tests, with no CLI launch route.
 
 ## Sandbox deployment
 
-The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal dispatch is wired, with live authentication/inference qualification outstanding.
+The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal dispatch is wired, with ChatGPT VM execution user-confirmed and native Claude/mode/refresh qualification still open.
 
 The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. `sandbox/review.py` first checks installed artifact files and the worker definition, then stages trusted source/artifacts and reuses `check.prepare_worker` for the dedicated Linux worker. `review_worker.py` owns private framed SSH stdio; `connected.py` installs external network policy and launches the shared jailed VM. `guest.py` acquires/pins the public PR, seals input read-only, checks native/file/network restrictions and runs the configured provider/strategy. The credential is read on the workstation only after admission/probes, then transferred over private pipes/vsock. No key/token is stored in argv, TOML, cache images or console logs. `settings.py` transports the complete allowlisted review configuration while excluding host paths/infrastructure settings.
 
 The VM returns three bounded files: report, summary and stats. After VM/network cleanup, remote job deletion and confirmed outer-worker shutdown, the host validates and saves them privately. `ExportedReview` supplies the already filtered summary to CLI/posting; Python objects are never unpickled. Internal prompt/raw-call files remain ephemeral. Native runtime bytes are digest-pinned and part of connected-image cache identity. The native adapter receives an explicit fresh environment, including the selected credential and proxy, in sequential and parallel subprocess paths. The API adapter uses its explicit proxy transport.
 
-Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The raw standalone launcher was extracted outside this project. The supported Mac check now uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition now runs unprivileged inside the guest with source access revoked externally before readiness. Successful live inference remains unverified; recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
+Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The supported Mac check uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition runs unprivileged inside the guest with source access revoked externally before readiness. Recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
 
-The public `reviewer sandbox check` command in `sandbox/check.py` now owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates a harmless fixture or passes an explicit public PR URL into the review VM, and verifies host network cleanup; it accepts no key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
+The public `reviewer sandbox check` command in `sandbox/check.py` owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates a harmless fixture or passes an explicit public PR URL into the review VM, and verifies host network cleanup; it accepts no key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
 
-Image preparation is now a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. The normal command now reuses image preparation, worker lifecycle and connected supervision.
+Image preparation is a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. The normal command reuses image preparation, worker lifecycle and connected supervision.
 
-## Remaining end-to-end wiring
+## End-to-end qualification
 
 The normal VM/host dispatcher, trusted settings, provider-scoped endpoint policy, private credential handoff and local report presentation are implemented. Offline tests cover both providers/strategies and refusal/cleanup paths. Doctor and preflight share offline configuration status (`runtime_checked: false`); it opens no artifacts and reads no credentials.
 
-Remaining: verify authenticated inference and native tools under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input, operator-file criteria manifests and VM dry-run remain unsupported. Host API calls currently require one explicit model for all roles and operator token rates. Keep real credentials out of tests; no successful live VM inference has been recorded.
+Remaining: qualify native Claude tools, live persona coverage and long-running token refresh under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input, operator-file criteria manifests and VM dry-run remain unsupported. OpenAI requires one explicit model for all roles; API-key access also requires operator token rates. Keep real credentials out of tests. See [support and qualification](llm.md#support-and-qualification).
 
 ## Code map
 
@@ -93,7 +93,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `cli.py`, `review_flow.py`, `presentation.py`, `review_options.py` | Active command entry point, execution boundary, output, options and help |
 | `parked/repl.py`, `parked/repl_help.py` | Parked interactive frontend; code and tests retained, no CLI launch route |
 | `progress.py`, `post.py`, `parked/replay.py` | Progress, explicit posting and parked comparator helpers; doctor/preflight share `security.readiness` |
-| `backends/factory.py`, `openai.py`, `read_tools.py` | Runtime runner selection, credential/config checks, stdlib API adapter and bounded read tools |
+| `backends/factory.py`, `openai.py`, `openai_stream.py`, `chatgpt/`, `read_tools.py` | Runtime adapter selection, protected OAuth consent/refresh, bounded streaming/API transport and read tools |
 | `sandbox/review.py`, `review_worker.py`, `settings.py`, `channel.py` | Normal VM dispatch, allowlisted settings, private SSH pipe protocol and local exported result |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |
 | `sandbox/check.py`, `check_worker.py` | Supported no-key Mac deployment command and connected Linux fixture/cleanup check |
@@ -103,7 +103,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `sandbox/artifacts.py`, `bundle.py`, `image.py`, `runtime.py`, `*_smoke.py`, `runtime_probe.py` | Trusted image inputs/build stages and separate offline deployment checks |
 | `backends/contract.py`, `factory.py` | Shared runner/result/error contract; common provider/auth selection for host and guest |
 
-Shared code imports no workflow. Flow-owned result types stay inside the flow; package-root compatibility exports were removed. Review code imports the neutral LLM contract, not native provider types.
+Shared code imports no workflow. Flow-owned result types stay inside the flow; implementations live in their owning modules. Review code imports the neutral LLM contract, not native provider types.
 
 ## Single-agent implementation
 
@@ -209,3 +209,7 @@ After reviewing, one fresh Verifier session per distinct flagged group examines 
 The persona-only `budget.py` owns atomic pool reservations, reconciliation and cancellation; `runner.py` only forwards the cancellation signal to adapters. `backends/claude.py:ClaudeRunner.run_cancellable` owns native process groups, complete UTF-8 stdin files, timeout polling and cleanup for both strategies. Each persona has its own Caller/request-log state. Workers append call accounting, and presentation/merging reads it only after the round barrier or worker shutdown; budget decisions use the locked ledger. No worker mutates the master. `--parallel 1` serializes reviewers but retains the round barrier. The Verifier runs serially after review rounds. See [pool behavior](usage.md#persona-budget-pools).
 
 API transient HTTP retries live in the provider adapter and repeat the current request within the existing call deadline/allowance. Shared `ModelCaller` still owns model-output validation retries, but respects a terminal HTTP result so the retry layers do not multiply. Safe HTTP diagnostic metadata follows the common result into stats and the VM's existing bounded exports. See [retry policy](usage.md#api-errors-and-retries).
+
+## Subscription authentication
+
+ChatGPT consent runs through `reviewer auth login`, outside PR acquisition. A private host store binds verified accounts to stable host/VM identities. Direct calls refresh locally; VM dispatch releases only an access token covering its bounded deadline after admission, source revocation and boundary checks. Refresh/identity tokens stay on the host, so guest egress policy needs no auth endpoint. Subscription responses stream through `response.completed`; partial output cannot execute tools or count as success. Token pools replace dollar pools for subscription calls. See [LLM access](llm.md#chatgpt-sign-in) and the [method-level call chain](project-explainer.md#complete-review-call-chain).

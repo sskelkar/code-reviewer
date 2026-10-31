@@ -77,14 +77,12 @@ class LLMInterfaceTests(unittest.TestCase):
         self.assertNotIn('ANTHROPIC_API_KEY',runner.env)
         self.assertEqual(runner.env['HTTPS_PROXY'],'http://192.0.2.1:3128')
 
-    def test_chatgpt_subscription_refuses_before_credentials_and_preflight_stays_offline(self):
-        cfg=replace(self.api_config(),auth_mode='subscription',sandbox=False)
+    def test_chatgpt_subscription_preflight_stays_offline_without_requiring_api_prices(self):
+        cfg=replace(self.api_config(),auth_mode='subscription',sandbox=False,
+                    openai_input_price=0,openai_cached_input_price=0,openai_output_price=0)
         with patch.object(factory,'credential',side_effect=AssertionError('no credentials')):
             report=readiness(cfg)
-            self.assertFalse(report['ready'])
-            self.assertIn('not implemented',' '.join(report['configuration_errors']))
-            with self.assertRaisesRegex(ConfigError,'not implemented'):
-                factory.create_runner(cfg)
+            self.assertTrue(report['ready'])
         self.assertFalse(report['runtime_checked'])
         self.assertEqual(report['auth_mode'],'subscription')
 

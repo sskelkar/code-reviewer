@@ -27,9 +27,10 @@ class BudgetRunner:
         dump_json(self.path, self.requests)
         if len(kwargs['system_prompt']) + len(kwargs['user_prompt']) > self.cfg.persona_prompt_max_chars:
             raise PassFailed('retry prompt exceeds persona_prompt_max_chars; not sent or truncated')
-        allowance = self.budget.reserve(self.pool, kwargs['budget_usd'])
-        kwargs['budget_usd'] = allowance
-        self.requests[-1]['budget_usd'] = allowance
+        limit_key = 'token_limit' if self.budget.subscription else 'budget_usd'
+        allowance = self.budget.reserve(self.pool, kwargs[limit_key])
+        kwargs[limit_key] = allowance
+        self.requests[-1][limit_key] = allowance
         self.requests[-1]['invoked'] = True
         dump_json(self.path, self.requests)
         result = None

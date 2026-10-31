@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--config", help="path to a review.toml (default: ~/.code-reviewer/review.toml; must be outside Git working trees)")
-    sub = parser.add_subparsers(dest="command", metavar="{review,doctor,sandbox}")
+    sub = parser.add_subparsers(dest="command", metavar="{review,auth,doctor,sandbox}")
 
     review = sub.add_parser(
         "review", help="review a pull request with the one-shot CLI",
@@ -57,6 +57,17 @@ def build_parser() -> argparse.ArgumentParser:
                         help="post the summary comment to the pull request after the review (explicit opt-in; nothing is posted without it)")
     review.add_argument("--local-path", metavar="DIR",
                         help="host-only clone to use as the git object store (default: current directory when it matches)")
+
+    review.add_argument('--account', help='local ChatGPT account label for subscription mode')
+    auth = sub.add_parser('auth', help='manage reviewer-owned ChatGPT sign-in; never reads Codex/browser credentials')
+    actions = auth.add_subparsers(dest='auth_command', required=True)
+    for action in ('login', 'status', 'logout', 'models'):
+        command = actions.add_parser(action, help={'login': 'Continue with ChatGPT', 'status': 'show offline account status',
+                                                 'logout': 'revoke and clear selected tokens', 'models': 'list account-supported models'}[action])
+        command.add_argument('--account', help='local account label (default: configured chatgpt_account)')
+        command.add_argument('--no-sandbox', action='store_true', help='select host identity instead of the VM identity')
+        if action == 'login':
+            command.add_argument('--no-browser', action='store_true', help='print the sign-in URL instead of opening a browser')
 
     doctor = sub.add_parser("doctor", help="show offline execution status without commands or credentials")
     sandbox = sub.add_parser('sandbox', help='run the supported sandbox deployment checks')
@@ -92,6 +103,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ConfigError as exc:
         print("config error: %s" % exc, file=sys.stderr)
         return 2
+    if args.command == 'auth':
+        from .backends.chatgpt.login import cli as auth_cli
+        try:
+            return auth_cli(args, cfg)
+        except ConfigError as exc:
+            print('error: %s' % exc, file=sys.stderr)
+            return 1
+        except OSError:
+            print('error: ChatGPT authentication failed; check private storage permissions and connectivity.', file=sys.stderr)
+            return 1
     if args.command == "doctor":
         from .security import readiness
         report = readiness(cfg)
@@ -102,6 +123,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             ref = git_ops.parse_pr_ref(args.pr)
             cfg = apply_run_options(cfg, args)
+            if args.account is not None:
+                cfg.chatgpt_account = args.account
+                cfg.validate()
             if sys.stdout.isatty() and not args.preflight:  # readiness output stays JSON even in a terminal
                 print(review_banner(str(ref), cfg))
             local = Path(args.local_path) if args.local_path else Path.cwd()

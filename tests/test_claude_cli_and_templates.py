@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import unittest
 
@@ -55,6 +57,18 @@ class EnvelopeTests(unittest.TestCase):
         data = json.loads(self.envelope())
         del data["total_cost_usd"]
         self.assertIsNone(claude_cli.parse_envelope(json.dumps(data)).cost_usd)
+
+    def test_malformed_usage_and_cost_metadata_stay_unknown_without_crashing(self):
+        for cost in (True, -1, float('nan'), float('inf'), 10**400):
+            result = claude_cli.parse_envelope(self.envelope(total_cost_usd=cost))
+            self.assertTrue(result.ok)
+            self.assertIsNone(result.cost_usd)
+        for usage in ([], 'invalid', {'input_tokens': -1, 'output_tokens': 2},
+                      {'input_tokens': 1, 'output_tokens': float('inf')}):
+            result = claude_cli.parse_envelope(self.envelope(usage=usage))
+            self.assertTrue(result.ok)
+            self.assertFalse(result.usage_known)
+            self.assertTrue(all(value >= 0 for value in result.tokens.values()))
 
     def test_build_command(self):
         cmd = claude_cli.build_command(

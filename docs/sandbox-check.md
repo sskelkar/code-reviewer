@@ -11,7 +11,7 @@ The worker needs Python 3.12, Git, static BusyBox, GNU cpio/coreutils, systemd 2
 Supply an operator-controlled artifact directory containing:
 
 - `firecracker.tgz`: the upstream ARM64 v1.17.0 release archive, SHA-256 `e351ebe4f7a16b5873bbd51005d2e6767103cff4d5ebc829df2d3f95a93e2256` from the recorded upstream release metadata. The command checks the compressed archive before parsing, extracts only the exact bounded Firecracker and matching jailer members. The jailer SHA-256 is `4d8d2dd4dfc1d47932b2bd261479181dd0c54f0a2f32714421a7e7f9f07ddec8`; the Firecracker executable SHA-256 is `fe726e0b43c04363ac07e358be4dee982c3947c65ed3ae10c770fef5e1cd756c`.
-- `vmlinux-6.1.188`: the previously tested ARM64 kernel, SHA-256 `52748cec9d75865246d95906021fea6754bc0abc2cba0cfc792dac5ec7f46f83`.
+- `vmlinux-6.1.188`: the pinned ARM64 kernel, SHA-256 `52748cec9d75865246d95906021fea6754bc0abc2cba0cfc792dac5ec7f46f83`.
 
 It deliberately does not download arbitrary URLs or calculate trust from whatever file it finds. Changing these pinned versions requires updating deployment evidence. The current runtime derives from the worker's installed Ubuntu libraries; it is not a reproducible, production-qualified image.
 
@@ -51,7 +51,7 @@ env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 \
 
 Do not overwrite another instance or use an unrelated Lima/Colima installation. The template's image URL is digest-pinned; if the upstream image changes, deliberately verify/update that digest instead of removing pinning. Existing workers retain their own disk; normal reviews do not reprovision them.
 
-Set `vm_instance = "reviewer-sandbox"` and the two persistent **absolute** paths in your local config, then run the no-key command below with those same paths. TOML paths do not expand shell `$HOME` variables. Only per-run staging, guest scratch and result temporaries belong under system temp. A missing input now produces a specific setup error before any credential access; later errors name the failed phase without echoing raw provider/guest messages. Public-source metadata failures carry only a validated HTTP status across the private channel; server bodies, target text and credentials are excluded. Other acquisition failures use closed reason codes; oversized-file diagnostics include only escaped bounded filename/size metadata. The binary omission policy preserves text/count/object limits; see [binary omissions](usage.md#binary-omissions).
+Set `vm_instance = "reviewer-sandbox"` and the two persistent **absolute** paths in your local config, then run the no-key command below with those same paths. TOML paths do not expand shell `$HOME` variables. Only per-run staging, guest scratch and result temporaries belong under system temp. A missing input produces a specific setup error before any credential access; later errors name the failed phase without echoing raw provider/guest messages. Public-source metadata failures carry only a validated HTTP status across the private channel; server bodies, target text and credentials are excluded. Other acquisition failures use closed reason codes; oversized-file diagnostics include only escaped bounded filename/size metadata. The binary omission policy preserves text/count/object limits; see [binary omissions](usage.md#binary-omissions).
 
 ## Command
 
@@ -93,7 +93,7 @@ The metadata endpoint and shallow-fetch behavior follow [GitHub's pull-request A
 
 `sandbox/prepare.py` owns preparation separately from job execution. Its cache lives only inside the dedicated Linux worker at `/var/lib/code-reviewer/images`. It stores trusted reviewer/runtime files, never repository inputs, API keys or saved findings. Cache identity covers the source-bundle hash, builder hash, workload, and the bytes/permissions/link targets of the installed OS files copied by the builder. The runtime fingerprint is checked before and after a build. Every reuse checks the recorded identity and image digest; the VM launcher independently hashes the bytes it stages.
 
-Preparation is serialized and publication is atomic. Failed builds or changing OS inputs do not publish partial images. The result records `image_preparation.images.*.reused` and the selected hashes. A cache mismatch refuses execution rather than silently trusting/rebuilding a damaged entry; inspect/remove the affected clean cache entry on the worker before retrying. Older clean cache entries are retained within the worker's bounded disk and can be removed when not needed. These are locally prepared images, not signed/reproducible production attestations.
+Preparation is serialized and publication is atomic. Failed builds or changing OS inputs do not publish partial images. The result records `image_preparation.images.*.reused` and the selected hashes. A cache mismatch refuses execution rather than silently trusting/rebuilding a damaged entry; inspect/remove the affected clean cache entry on the worker before retrying. Preparation retains only the offline/connected identities needed for the selected source, OS and native runtime. Under its exclusive lock and idle-worker check, it removes recognized obsolete root-owned image entries before building replacements. Unknown entries and current corrupt images are never silently deleted; unsafe/invalid obsolete entries refuse preparation. This bounds cache growth across source changes without touching review inputs or reports. These are locally prepared images, not signed/reproducible production attestations.
 
 ## Recover an abandoned worker
 
@@ -113,4 +113,4 @@ If a shutdown/cleanup operation itself fails, the command fails; do not assume s
 
 Normal VM review/report dispatch is implemented. This no-key command checks deployment without provider credentials; an authorized real PR run must still verify authentication, native tools and actual model/report behavior. See the [security roadmap](proposal.md#checklist), [architecture](sandbox-architecture.md) and [alternative designs](sandbox-alternatives.md).
 
-Checks remain credential-free after LLM separation. Normal host/guest jobs now share the neutral adapter factory and explicit `auth_mode`; unsupported ChatGPT subscription access is not enabled by a passing deployment check. See [LLM access](llm.md).
+Checks are credential-free. Host/guest jobs share the adapter factory and explicit `auth_mode`; a deployment check does not establish real authentication/inference. See [LLM access](llm.md).

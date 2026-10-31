@@ -2,7 +2,7 @@
 
 Use [`reviewer sandbox check`](../docs/sandbox-check.md) for the supported Mac/Lima/Firecracker check. It owns artifact validation, clean image preparation/reuse, both offline review algorithms, no-key connected probes, private results and dedicated-worker shutdown. Add `--pr` for in-VM public acquisition and source-access revocation, or `--lifecycle` for cancellation/supervisor-loss checks. It never requests a model key or performs inference.
 
-The standalone raw-Firecracker launcher was extracted into an independent external playground at the operator's request. It is no longer packaged or maintained as part of this project. This repository retains the shared jailed VM lifecycle and the helpers it needs in `sandbox/runtime.py`.
+The VM implementation uses the shared jailed lifecycle and bounded helpers in `sandbox/runtime.py`.
 
 ## Build inputs
 
@@ -25,4 +25,4 @@ python -m code_reviewer.sandbox.openai_smoke
 
 These simulate models and need no key/network/VM boot. Both algorithms exercise real validation, grounding, consolidation, tool dispatch and reports. The separate native CLI startup probe records argument/authentication compatibility without inference. The whole suite must pass on Python 3.9 and the newest available Python.
 
-Actual no-key deployment evidence belongs in the [VM checklist](../docs/sandbox-todo.md#evidence-2026-10-28). Normal VM and explicit host dispatch are wired; successful live VM inference/native-tool behavior still needs an authorized check; the neutral adapter contract and explicit access-mode selection are described in [the LLM guide](../docs/llm.md). Configure [normal VM dispatch](../docs/usage.md#vm-review-configuration) rather than assembling a manual launcher. The [execution contract](../docs/security-contract.md) defines VM-default and explicit direct-host operation with either provider. The [VM architecture](../docs/sandbox-architecture.md) explains the isolated path; [alternatives](../docs/sandbox-alternatives.md) records other designs considered.
+Actual no-key deployment evidence belongs in the [VM checklist](../docs/sandbox-todo.md#qualification-status). Normal VM and explicit host dispatch are wired; successful live VM inference/native-tool behavior still needs an authorized check; the neutral adapter contract and explicit access-mode selection are described in [the LLM guide](../docs/llm.md). Configure [normal VM dispatch](../docs/usage.md#vm-review-configuration) rather than assembling a manual launcher. The [execution contract](../docs/security-contract.md) defines VM-default and explicit direct-host operation with either provider. The [VM architecture](../docs/sandbox-architecture.md) explains the isolated path; [alternatives](../docs/sandbox-alternatives.md) records other designs considered.

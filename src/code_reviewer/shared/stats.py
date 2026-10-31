@@ -22,6 +22,8 @@ class Stats:
             "model": result.model or model,
             "cost_usd": result.cost_usd,
             "tokens": dict(result.tokens),
+            **({"usage_known": False} if not result.usage_known else {}),
+            **({"budget_tokens_used": result.budget_tokens_used} if result.budget_tokens_used is not None else {}),
             "duration_ms": result.duration_ms,
             "num_turns": result.num_turns,
             **({"billing_mode": result.billing_mode} if result.billing_mode != "unknown" else {}),
@@ -39,12 +41,8 @@ class Stats:
         return sum(sum(c["tokens"].values()) for c in self.calls)
 
     def budget_tokens(self) -> int:
-        """Tokens counted against the run's token budget: new input, output and cache writes.
-
-        Cache reads are excluded. A model that takes many turns re-reads the same cached context every turn, which
-        inflates the raw total (hundreds of thousands of tokens) while costing a small fraction of normal input.
-        """
-        return sum(c["tokens"].get("input", 0) + c["tokens"].get("output", 0) + c["tokens"].get("cache_creation", 0)
+        """API: fresh input/output/cache writes; subscription: all tokens or reserved unknown usage."""
+        return sum(c.get("budget_tokens_used", c["tokens"].get("input", 0) + c["tokens"].get("output", 0) + c["tokens"].get("cache_creation", 0))
                    for c in self.calls)
 
     def token_totals(self) -> Dict[str, int]:
@@ -78,14 +76,18 @@ class Stats:
         }
 
     def to_dict(self) -> Dict[str, Any]:
+        roles = self.by_role()
+        subscription = bool(self.calls) and all(c.get('billing_mode') == 'subscription' for c in self.calls)
+        if subscription:
+            roles = {role: {**value, 'cost_usd': None} for role, value in roles.items()}
         return {
-            "total_cost_usd_estimated": self.total_cost(),
+            "total_cost_usd_estimated": None if self.calls and all(c.get("billing_mode") == "subscription" for c in self.calls) else self.total_cost(),
             "cost_known_for_all_calls": self.cost_known(),
             "total_tokens": self.total_tokens(),
             "budget_tokens": self.budget_tokens(),
             "token_totals": self.token_totals(),
             "duration_s": self.duration_s(),
             **self.retries_and_failures(),
-            "by_role": self.by_role(),
+            "by_role": roles,
             "calls": self.calls,
         }

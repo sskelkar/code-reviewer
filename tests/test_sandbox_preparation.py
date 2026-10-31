@@ -66,6 +66,44 @@ class PreparationTests(unittest.TestCase):
             self.run_prepare()
             self.assertEqual(len(self.calls), 8)
 
+    def test_obsolete_clean_images_are_pruned_and_current_images_reuse(self):
+        with self.context():
+            first = self.run_prepare()
+            self.assertEqual(first['obsolete_images_removed'], 0)
+            keep = self.cache/'operator-notes'
+            keep.mkdir()
+            (keep/'canary').write_text('preserve')
+            self.source.write_bytes(b'changed source')
+            second = self.run_prepare()
+            self.assertEqual(second['obsolete_images_removed'], 2)
+            self.assertTrue(all(not Path(row['path']).exists() for row in first['images'].values()))
+            self.assertTrue(all(Path(row['path']).exists() for row in second['images'].values()))
+            self.assertEqual((keep/'canary').read_text(), 'preserve')
+            third = self.run_prepare()
+            self.assertEqual(third['obsolete_images_removed'], 0)
+            self.assertTrue(all(row['reused'] for row in third['images'].values()))
+            self.assertEqual(len(self.calls), 4)
+
+    def test_cache_pruning_refuses_links_and_invalid_metadata_without_deleting_candidates(self):
+        with self.context():
+            images = self.run_prepare()['images']
+            outside = self.root/'outside'
+            outside.mkdir()
+            (outside/'canary').write_text('preserve')
+            link = self.cache/('f'*64)
+            link.symlink_to(outside, target_is_directory=True)
+            self.source.write_bytes(b'changed source')
+            with self.assertRaisesRegex(ValueError, 'unsafe obsolete'):
+                self.run_prepare()
+            self.assertTrue(all(Path(row['path']).exists() for row in images.values()))
+            self.assertEqual((outside/'canary').read_text(), 'preserve')
+            link.unlink()
+            metadata = Path(images['offline']['path'])/'image.json'
+            metadata.write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'unrecognized obsolete'):
+                self.run_prepare()
+            self.assertTrue(all(Path(row['path']).exists() for row in images.values()))
+
     def test_native_runtime_digest_invalidates_connected_image_and_is_checked_before_build(self):
         binary=self.root/'claude'
         binary.write_bytes(b'synthetic native binary')

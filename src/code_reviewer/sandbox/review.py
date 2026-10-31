@@ -70,7 +70,7 @@ def converse(channel, cfg, source, key_reader):
     if value != {'kind': 'credential', 'provider': cfg.provider, 'auth': settings.job_settings(cfg)['auth']}:
         raise ValueError('worker did not complete admission and boundary checks; no credential released')
     key = key_reader(cfg.provider, settings.job_settings(cfg)['auth'])
-    send(channel, key.encode('ascii'), 4096)
+    send(channel, key.encode('ascii'), 16384)
     value = receive_json(channel, RESULT_LIMIT)
     if not isinstance(value, dict) or set(value) != {'kind', 'result', 'files', 'cleanup'} or value['kind'] != 'finished' or value['cleanup'] is not True:
         raise ValueError('VM review or cleanup failed')
@@ -133,11 +133,14 @@ def runtime_inputs(cfg):
                               'in a persistent directory (see docs/sandbox-check.md)' % (label, setting))
 
 
-def run(cfg, ref, options, *, key_reader=settings.credential):
+def run(cfg, ref, options, *, key_reader=None):
     failures = configuration_errors(cfg, ref, options)
     if failures:
         raise ReviewRefused('VM review unavailable: ' + '; '.join(failures) + '; no host fallback')
     runtime_inputs(cfg)
+    if key_reader is None:
+        def key_reader(provider, auth):
+            return settings.credential(provider, auth, cfg=cfg, min_ttl=cfg.vm_timeout_s + 120)
     worker = Worker(cfg.vm_lima_home, cfg.vm_instance)
     job = '/tmp/reviewer-check-' + uuid.uuid4().hex
     source = source_url(ref)

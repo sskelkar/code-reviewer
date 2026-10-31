@@ -30,6 +30,8 @@ class LLMResult:
     retryable: bool = True
     http_errors: List[Dict[str, Any]] = field(default_factory=list)
     billing_mode: str = 'unknown'
+    usage_known: bool = True
+    budget_tokens_used: Optional[int] = None
 
     @property
     def total_tokens(self) -> int:
@@ -44,7 +46,7 @@ class Runner(Protocol):
     """
     def run(self, *, system_prompt: str, user_prompt: str, schema: Dict[str, Any], model: str,
             tools: str, cwd: Path, budget_usd: float, timeout_s: float,
-            add_dirs: Sequence[Path] = ()) -> LLMResult:
+            add_dirs: Sequence[Path] = (), token_limit: Optional[int] = None) -> LLMResult:
         ...
 
     def run_cancellable(self, cancelled: Optional[Event], **kwargs: Any) -> LLMResult:

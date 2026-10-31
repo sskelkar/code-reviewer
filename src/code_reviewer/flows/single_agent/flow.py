@@ -180,4 +180,4 @@ class SingleAgentFlow:
         return passes, policy.completed, stop_reason
 
     def _over_budget(self, stats: Stats) -> bool:
-        return stats.total_cost() >= self.cfg.run_budget_usd or stats.budget_tokens() >= self.cfg.run_budget_tokens
+        return (self.cfg.auth_mode != 'subscription' and stats.total_cost() >= self.cfg.run_budget_usd) or stats.budget_tokens() >= self.cfg.run_budget_tokens

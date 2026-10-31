@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import os
@@ -27,7 +28,7 @@ def extract_json(text: str) -> Optional[Dict[str, Any]]:
             continue
         try:
             value = json.loads(attempt)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             continue
         if isinstance(value, dict):
             return value
@@ -36,8 +37,8 @@ def extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 def _as_int(value: Any) -> int:
     try:
-        return int(value or 0)
-    except (TypeError, ValueError):
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -48,7 +49,7 @@ def _decode_envelope(stdout: str) -> Tuple[Optional[Dict[str, Any]], Optional[LL
         return None, LLMResult(ok=False, error="empty output from claude")
     try:
         envelope = json.loads(stdout)
-    except ValueError:
+    except (ValueError, RecursionError):
         return None, LLMResult(ok=False, error="claude output is not JSON: %s" % stdout[:200], text=stdout)
     if isinstance(envelope, list):  # some modes print every message; the last "result" message is the answer
         results = [item for item in envelope if isinstance(item, dict) and item.get("type") == "result"]
@@ -61,7 +62,8 @@ def _decode_envelope(stdout: str) -> Tuple[Optional[Dict[str, Any]], Optional[LL
 
 
 def _token_counts(envelope: Dict[str, Any]) -> Dict[str, int]:
-    usage = envelope.get("usage") or {}
+    usage = envelope.get("usage")
+    usage = usage if isinstance(usage, dict) else {}
     return {
         "input": _as_int(usage.get("input_tokens")),
         "output": _as_int(usage.get("output_tokens")),
@@ -77,6 +79,17 @@ def parse_envelope(stdout: str) -> LLMResult:
         return failure  # type: ignore[return-value]
 
     cost = envelope.get("total_cost_usd", envelope.get("cost_usd"))
+    try:
+        cost = float(cost) if not isinstance(cost, bool) and isinstance(cost, (int, float)) else None
+    except (ValueError, OverflowError):
+        cost = None
+    if cost is not None and (not math.isfinite(cost) or cost < 0):
+        cost = None
+    usage = envelope.get('usage')
+    usage_known = isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0
+                  for key in ('input_tokens', 'output_tokens')) and all(
+                  type(usage.get(key, 0)) is int and usage.get(key, 0) >= 0
+                  for key in ('cache_creation_input_tokens', 'cache_read_input_tokens'))
     model_usage = envelope.get("modelUsage")
     text = envelope.get("result") if isinstance(envelope.get("result"), str) else ""
     subtype = str(envelope.get("subtype") or "")
@@ -85,7 +98,8 @@ def parse_envelope(stdout: str) -> LLMResult:
     result = LLMResult(
         ok=False,
         text=text,
-        cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
+        cost_usd=cost,
+        usage_known=usage_known,
         tokens=_token_counts(envelope),
         duration_ms=_as_int(envelope.get("duration_ms")) or None,
         num_turns=_as_int(envelope.get("num_turns")) or None,
@@ -114,7 +128,7 @@ def build_command(
     schema: Dict[str, Any],
     model: str,
     tools: str,
-    budget_usd: float,
+    budget_usd: Optional[float],
     isolation_flags: Sequence[str],
     add_dirs: Sequence[str] = (),
 ) -> List[str]:
@@ -130,9 +144,10 @@ def build_command(
         "--no-session-persistence",
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
-        "--max-budget-usd", "%.2f" % budget_usd,
         "--append-system-prompt", system_prompt,
     ]
+    if budget_usd is not None:
+        cmd += ["--max-budget-usd", "%.2f" % budget_usd]
     for directory in add_dirs:
         cmd += ["--add-dir", str(directory)]
     return cmd
@@ -159,9 +174,9 @@ class ClaudeRunner:
 
     def run_cancellable(self, cancelled, *, system_prompt: str, user_prompt: str, schema: Dict[str, Any],
                         model: str, tools: str, cwd: Optional[Path], budget_usd: float, timeout_s: int,
-                        add_dirs: Sequence[str] = ()) -> LLMResult:
+                        add_dirs: Sequence[str] = (), token_limit: Optional[int] = None) -> LLMResult:
         cmd = build_command(self.claude_bin, system_prompt=system_prompt, schema=schema, model=model, tools=tools,
-                            budget_usd=budget_usd, isolation_flags=self.isolation_flags, add_dirs=add_dirs)
+                            budget_usd=None if self.billing_mode == 'subscription' else budget_usd, isolation_flags=self.isolation_flags, add_dirs=add_dirs)
         # A temporary stdin file avoids partial-pipe writes across communicate polls.
         with tempfile.TemporaryFile(mode='w+b') as prompt:
             prompt.write(user_prompt.encode('utf-8'))
@@ -178,7 +193,7 @@ class ClaudeRunner:
                     if cancelled is not None and cancelled.is_set():
                         raise KeyboardInterrupt
                     if time.monotonic() - started >= timeout_s:
-                        return LLMResult(ok=False, error='timed out after %ss' % timeout_s, timed_out=True, billing_mode=self.billing_mode)
+                        return LLMResult(ok=False, error='timed out after %ss' % timeout_s, timed_out=True, billing_mode=self.billing_mode, usage_known=False)
                     try:
                         out, err = proc.communicate(timeout=.1)
                         break
@@ -186,6 +201,11 @@ class ClaudeRunner:
                         pass
                 result = parse_envelope(out)
                 result.billing_mode = self.billing_mode
+                if self.billing_mode == 'subscription':
+                    result.cost_usd = None
+                    if token_limit is not None and result.total_tokens > token_limit:
+                        result.ok, result.budget_exceeded, result.retryable = False, True, False
+                        result.error = 'subscription token allowance exceeded'
                 if proc.returncode and result.ok:
                     result.ok, result.error = False, 'claude exited with status %d: %s' % (proc.returncode, err[-300:])
                 elif result.raw is None and not result.ok and err:

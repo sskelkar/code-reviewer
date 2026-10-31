@@ -2,7 +2,7 @@
 
 Working checklist for the VM execution path. The current product direction also retains explicit direct-host execution; repository labels never choose behavior. Keep one disposable Firecracker VM for the whole review; Lima only supplies Linux/KVM on macOS. Keep the existing review loops unchanged. No per-persona VMs, distributed scheduler, enterprise audit service or new VM backend.
 
-## Already implemented
+## Implemented controls
 
 - [x] Trusted operator settings and pinned artifact staging; no target-selected security settings or executables.
 - [x] Bounded Read/Grep/Glob and input/result frames; no model command-execution tool.
@@ -10,53 +10,31 @@ Working checklist for the VM execution path. The current product direction also 
 - [x] Non-root connected reviewer, bounded scratch and initial resource/deadline controls.
 - [x] A repository-owned Mac deployment check with private results and handled-failure worker shutdown.
 
-## Finish next
+## Verification checklist
 
 - [x] Start Firecracker through the matching pinned upstream jailer; verify reduced privileges, process/filesystem confinement and resource limits in a real VM check.
 - [x] Make admitted code read-only to the reviewer independently of its file tools; keep runtime root-owned and prevent privilege escalation. Test write/chmod attempts using native processes.
-- [x] Share VM start/supervision/stop code between the supported checks and connected job supervisor instead of maintaining separate lifecycle implementations. The normal review command now reuses that lifecycle.
+- [x] Share VM start/supervision/stop code between the supported checks and connected job supervisor instead of maintaining separate lifecycle implementations. The normal review command uses that lifecycle.
 - [x] Make abrupt supervisor loss bounded and stale-job recovery explicit; exercise cancellation/deadline/crash cleanup. A separate no-key lifecycle test kills the supervisor and observes the VM deadline; explicit recovery restarts only the selected dedicated worker under its launcher lock. Host failure still interrupts the job; automatic resume is not promised.
 - [x] Separate reusable image preparation from job execution; avoid rebuilding unchanged images without weakening source/artifact pinning. Clean root-owned images are keyed by source, builder, copied OS bytes/permissions/links and workload; image hashes are checked again on reuse and staging.
-- [x] Fetch and pin a public PR directly inside its review VM, with bounded clean unprivileged Git and source access revoked before inference. Capsule import remains optional. The supported no-key check exercises acquisition; normal-command dispatch now uses the same acquisition.
+- [x] Fetch and pin a public PR directly inside its review VM, with bounded clean unprivileged Git and source access revoked before inference. Capsule import remains optional. The supported no-key check exercises acquisition; normal-command dispatch uses the same acquisition.
 - [x] Implement selected-adapter settings, endpoint policies and private runtime credentials behind the shared core. Live authentication/inference/native-tool qualification remains below. Keep credentials private and document guest-compromise exposure; no automatic custom broker.
-- [x] Connect the normal command to the VM-default lifecycle, private result transfer and display; never silently fall back. The explicit direct-host selector/provider factory now use preserved host acquisition and the same core; both dispatch paths are wired.
+- [x] Connect the normal command to the VM-default lifecycle, private result transfer and display; never silently fall back. The explicit direct-host selector/provider factory use host acquisition and the same core; both dispatch paths are wired.
 - [x] Run offline hostile-input/containment, adapter, flow and command-wiring regressions.
-- [ ] Run an authorized real PR through the normal VM command and verify actual authentication, native tools, reports and cleanup.
+- [x] Complete a real ChatGPT-backed review through the normal VM command (user-confirmed).
+- [ ] Qualify native Claude authentication/read tools, live persona coverage and long-running subscription refresh through the VM.
 - [x] Consolidate current docs/runbooks, remove duplicate security plans and the unusable alternate CLI, and share honest offline configuration status instead of static certification tables.
 
 ## Scope decisions
 
 Use the existing VM boundary, upstream confinement, non-root execution, read-only code, bounded tools/resources and external networking. A custom guest-wide executable/syscall sandbox is deferred, not silently declared implemented. Read-only model tools do not contain native implementation bugs. Guest self-reported probes are diagnostics, not attestation; host controls enforce isolation.
 
-The current [execution contract](security-contract.md) and [roadmap](proposal.md#checklist) define shared behavior and the independent VM/host choice. This checklist records the agreed simplification direction; unfinished qualification must remain visible. VM dispatch now checks concrete configuration and runtime controls; explicit host reviews require operator selection. No test count or status-row change enables live reviews by itself. Record completed work and exact evidence here. A handover document is created only on explicit user request.
+The current [execution contract](security-contract.md) and [roadmap](proposal.md#checklist) define shared behavior and the independent VM/host choice. VM dispatch checks concrete configuration and runtime controls; explicit host reviews require operator selection. Record qualification results against the named controls. Create a handover only when explicitly requested.
 
-## Evidence: 2026-10-28
+## Qualification status
 
-The actual Mac command passed with both workloads using the shared jailed `VirtualMachine`. Host observations confirmed non-root UID, no capabilities, no-new-privileges, default seccomp, separate PID/mount namespaces, chroot and cgroup limits. The connected guest confirmed a read-only input mount and failed native write/chmod/runtime-write attempts. Both flow algorithms completed with simulated OpenAI replies; no authentication or paid inference was performed. Host network cleanup and outer-worker shutdown passed. Remaining rows are not implied by these checks.
+No-key deployment checks cover both simulated review flows, public source acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. These checks establish the named infrastructure behavior only.
 
-The opt-in `--lifecycle` check also passed actual cancellation and supervisor SIGKILL. After SIGKILL the VM remained under its independent systemd deadline, then stopped without Python cleanup running; the test reaped remaining state and removed the runtime bind mount. This exposed and fixed graceful-stop delays and unreliable bind-mount detection. `sandbox recover` passed its fresh-worker/idle-state check and shutdown. Image preparation/reuse is covered by invalidation, corrupt-cache and partial-build regressions; no target data or credentials are cached.
+Subscription protocol tests cover browser callback state/PKCE, signed identities, protected account storage, rotating refresh credentials, streaming completion, bounded read-tool continuations, token accounting and private access-token handoff. They use simulated endpoints and synthetic credentials.
 
-Public acquisition also passed the real no-key Mac check on the explicitly selected public PR. API and Git parsing/fetching occurred inside the jailed review VM, pins were returned privately, existing source tunnels closed on the external phase switch, fresh GitHub tunnels were denied, and file/native/network probes plus host network cleanup and worker shutdown passed. No key, inference or production material was used. The earlier cleanup passed its regression suites on Python 3.9 and 3.13; finding quality has not been evaluated by this check.
-
-
-Normal-command VM dispatch now reuses the worker/image/jailer components. All 370 tests pass on Python 3.9 and 3.13. Regression tests cover private two-way worker framing, delayed selected-credential release, both providers/strategies, complete review-setting transfer, native parallel-process environments, native-image digest invalidation, private report export and refusal when shutdown fails. Configuration readiness is separate from live qualification. A new real no-key deployment check passed both flow simulations, boundary probes, network cleanup and worker shutdown. The initial rerun caught a TLS-probe destination-variable regression, which was fixed and covered for both provider destinations. No credential or inference was used; authenticated verification remains outstanding.
-
-
-A scope/correctness audit additionally fixed a VM deadline mismatch, rejected unsupported VM operator-file manifests before execution, made host run directories private independently of umask and shared native process-group timeout/cancellation handling across both strategies. The REPL and comparator replay are explicitly parked; their testable helpers remain. Runtime containment is still enforced by the actual backend, independent of offline configuration status.
-
-
-The final audit suite has 376 tests, including actual fake-native subprocesses through both one-shot host flows, malformed-manifest/limit errors, permissive-umask storage checks and sequential child-process timeout cleanup. Both Python 3.9 and 3.13 pass. The real no-key VM rerun also passed both simulated flows, connected boundary checks and confirmed worker shutdown. No credential, paid inference or private project material was used. Exported VM reports now explicitly identify internal artifact paths as ephemeral.
-
-## Evidence: 2026-10-30
-
-Persistent pinned artifacts and a checked-in mountless worker profile replace missing temporary deployment inputs. Runtime failures now identify the phase and allowlisted public-acquisition failure reason without forwarding arbitrary exception/server bodies. Oversized text failures include bounded escaped path/size metadata.
-
-All detected binary contents are now omitted from review snapshots and diff hunks, with path/change/size metadata in reports/stats and summary warnings. Text-size, all-entry, retained-object and resource limits remain enforced. Synthetic tests cover both flows/exports, small/large binaries, public acquisition, capsule reconstruction, unchanged/deleted binaries, forced-text attributes, escaped/capped report details and sampler timeout cleanup. All 388 tests pass on Python 3.9 and 3.13; canonical prompts and criteria are unchanged.
-
-The normal VM path also passed real public-PR acquisition/admission and boundary probes with binary omission, reached its delayed credential callback, then deliberately returned no credential. The dedicated worker shut down. This is no-key admission evidence only: no credential was read/transferred and no inference was performed. Actual authenticated inference and report export remain to be qualified.
-
-## LLM separation and cleanup: 2026-10-31
-
-Removed 21 obsolete forwarding modules and the unusable `doctor --live` option. Retained inactive REPL/replay code now lives under `parked/`; ordinary execution imports none of it. Consolidated provider runbooks into `llm.md` and replaced the stale Python walkthrough. VM lifecycle/containment/recovery and all existing boundary checks remain active.
-
-Review flows now use a neutral Runner/LLMResult/RunnerError contract and ModelCaller. Host and guest share one adapter factory; trusted `auth_mode` is carried/checked through the VM protocol. Claude subscription mode requires its explicitly selected token and does not inherit API credentials. The existing API HTTP diagnostics/retries remain. ChatGPT subscription consent/streaming is an unfinished milestone and fails offline readiness, not a silently substituted API-key run. No successful live inference or new deployment qualification is claimed by this refactor.
+ChatGPT-backed VM review is user-confirmed. This is execution evidence, not a quality assessment or independent audit of every boundary. Outstanding: native Claude authentication/tools, live persona coverage, long-running refresh and broader failure-path qualification. Account entitlement, model quality and hard provider billing caps are not established by unit tests.

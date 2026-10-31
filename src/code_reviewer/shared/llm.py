@@ -57,10 +57,13 @@ class ModelCaller:
         feedback = ""
         problems: List[str] = ["unknown error"]
         for attempt in (1, 2):
+            limits = {'token_limit': self.cfg.call_budget_tokens} if self.cfg.auth_mode == 'subscription' else {}
             result = self.runner.run(
                 system_prompt=spec.system, user_prompt=spec.user + feedback, schema=spec.schema, model=spec.model,
-                tools=spec.tools, cwd=spec.cwd, budget_usd=self.cfg.call_budget_usd, timeout_s=self.cfg.call_timeout_s,
+                tools=spec.tools, cwd=spec.cwd, budget_usd=self.cfg.call_budget_usd, timeout_s=self.cfg.call_timeout_s, **limits,
             )
+            if self.cfg.auth_mode == 'subscription' and result.budget_tokens_used is None:
+                result.budget_tokens_used = result.total_tokens if result.usage_known else max(result.total_tokens, self.cfg.call_budget_tokens)
             self.stats.record(spec.role, spec.pass_no, result, attempt, spec.model)
             raw_log.append({"attempt": attempt, "ok": result.ok, "error": result.error, "envelope": result.raw})
 

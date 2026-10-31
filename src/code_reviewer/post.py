@@ -1,4 +1,4 @@
-"""Format the PR summary comment and post it through the gh CLI (only ever after human confirmation)."""
+"""Format the PR summary comment and post it through the gh CLI (only with explicit operator opt-in)."""
 from __future__ import annotations
 
 import os

@@ -34,6 +34,11 @@ class HTTPErrorTests(unittest.TestCase):
         return openai.OpenAIRunner('synthetic-private-key',model='synthetic-model',
                                   prices=openai.TokenPrices(1,.5,2),transport=transport)
 
+    def test_subscription_usage_limit_points_to_chatgpt_not_api_credits(self):
+        message = openai.error_message(details(code='subscription_sharing_usage_limit_exceeded'))
+        self.assertIn('ChatGPT',message)
+        self.assertNotIn('API credits',message)
+
     def test_transport_exports_only_closed_codes_and_validated_headers(self):
         reply=Mock(status=429)
         reply.read.return_value=json.dumps({'error':{'code':'insufficient_quota','type':'insufficient_quota',

@@ -1,12 +1,12 @@
 # Copy outside Git working trees to ~/.code-reviewer/review.toml (chmod 600).
-# Project-directory review.toml is not loaded. VM-default and explicit host reviews are wired; live VM inference remains untested.
+# Project-directory review.toml is not loaded. VM-default and explicit host reviews are wired; ChatGPT-backed VM review is user-confirmed; broader provider/mode qualification remains open.
 # Every key is optional; the values below are the defaults.
 provider = "claude"  # runtime adapter: claude or openai
-auth_mode = "api-key" # subscription selects CLAUDE_CODE_OAUTH_TOKEN for Claude; ChatGPT login is not implemented
+auth_mode = "api-key" # subscription selects CLAUDE_CODE_OAUTH_TOKEN for Claude; OpenAI subscription uses reviewer auth login
 sandbox = true       # default VM request; false or --no-sandbox explicitly selects the host
 
-# OpenAI: set one explicit model ID for all model_* roles, supply current positive USD/million token rates,
-# and set OPENAI_API_KEY in the process environment. Zero defaults mean rates are not configured.
+# OpenAI: set one explicit model ID for all model_* roles. API-key mode requires positive USD/million token rates
+# and OPENAI_API_KEY in the process environment. Subscription mode uses auth login and token allowances.
 # No key belongs in this TOML file or on the command line.
 openai_input_price = 0.0
 openai_cached_input_price = 0.0
@@ -22,7 +22,7 @@ persona_parallel = 4
 
 # Models: any alias or full name accepted by `claude --model`.
 model_reviewer = "haiku"
-model_comparator = "haiku"   # "sonnet" merges duplicate findings more consistently but costs ~15x more for this step
+model_comparator = "haiku"
 model_resolver = "haiku"   # also used for project-rule classification in persona mode
 model_verifier = "haiku"   # persona conflict annotations only
 
@@ -95,3 +95,7 @@ runs_dir = ""
 # vm_claude_sha256 = "verified-lowercase-sha256"
 
 # Credentials come from the selected process environment; NEVER put key/token values here.
+
+# ChatGPT subscription access (reviewer auth login; no key in this file).
+chatgpt_account = "default"
+call_budget_tokens = 200000

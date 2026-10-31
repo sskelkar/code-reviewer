@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from code_reviewer import cli
+from code_reviewer.backends.factory import credential_name
 from code_reviewer.flows.agent_personas.runner import ParallelRunner
 from code_reviewer.config import Config
 from code_reviewer.sandbox import review, settings, guest, connected, wire, network
@@ -107,8 +108,10 @@ class VMReviewTests(unittest.TestCase):
                 self.assertIn('VM review:',out.getvalue())
 
     def test_private_channel_releases_only_selected_credential_after_exact_request(self):
-        for provider in ('claude','openai'):
+        for provider, auth in (('claude','api-key'), ('openai','api-key'), ('openai','subscription')):
             cfg = self.cfg(provider)
+            cfg.auth_mode = auth
+            secret = 'x'*8000 if auth == 'subscription' else 'fake-selected-key'
             a,b = socket.socketpair()
             errors = []
             observed = []
@@ -116,8 +119,8 @@ class VMReviewTests(unittest.TestCase):
                 try:
                     request = wire.receive_json(b)
                     observed.append(request)
-                    wire.send_json(b,{'kind':'credential','provider':provider,'auth':'api-key'})
-                    observed.append(wire.receive(b,4096))
+                    wire.send_json(b,{'kind':'credential','provider':provider,'auth':auth})
+                    observed.append(wire.receive(b,16384))
                     wire.send_json(b,self.envelope(),wire.RESULT_LIMIT)
                 except BaseException as exc:
                     errors.append(exc)
@@ -127,13 +130,13 @@ class VMReviewTests(unittest.TestCase):
             thread.start()
             try:
                 value,key = review.converse(Channel(a.fileno(),a.fileno(),5),cfg,review.source_url(self.ref),
-                                            lambda p,auth:'fake-selected-key')
+                                            lambda p,auth:secret)
             finally:
                 a.close()
                 thread.join(5)
             self.assertFalse(thread.is_alive())
             self.assertFalse(errors,errors)
-            self.assertEqual(observed[1],b'fake-selected-key')
+            self.assertEqual(observed[1],secret.encode())
             self.assertNotIn('fake-selected-key',str(observed[0]))
             self.assertEqual(value['stop_reason'],'completed')
 
@@ -297,7 +300,7 @@ class VMReviewTests(unittest.TestCase):
             value = {'criteria_files':[], 'inline_sections':[]} if 'criteria_files' in properties else {'findings':[]}
             return {'status':'completed','usage':{'input_tokens':10,'output_tokens':2},
                     'output':[{'type':'message','content':[{'type':'output_text','text':json.dumps(value)}]}]}
-        for provider,auth in (('claude','api-key'),('claude','subscription'),('openai','api-key')):
+        for provider,auth in (('claude','api-key'),('claude','subscription'),('openai','api-key'),('openai','subscription')):
             for mode in ('single-agent','agent-personas'):
                 cfg = self.cfg(provider,mode)
                 cfg.auth_mode=auth
@@ -306,7 +309,7 @@ class VMReviewTests(unittest.TestCase):
                 root.mkdir()
                 with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
                      patch.object(guest,'receive',side_effect=[target.read_bytes(),b'fake-selected-key']), \
-                     patch.object(guest,'send_json'),patch.object(guest,'request_response',api), \
+                     patch.object(guest,'send_json'),patch('code_reviewer.backends.openai.request_response',api), \
                      patch('code_reviewer.backends.factory.ClaudeRunner') as native:
                     native.return_value=FakeRunner([{'findings':[]}] * 8)
                     result=guest.run_job(None,root,probe_network=lambda:self.checks()['network'])
@@ -316,7 +319,7 @@ class VMReviewTests(unittest.TestCase):
                 self.assertEqual(metadata['criteria_mode'],'defaults_only')
                 if provider=='claude':
                     env=native.call_args.kwargs['env']
-                    selected_name=settings.credential_name(provider,auth)
+                    selected_name=credential_name(provider,auth)
                     self.assertEqual(env[selected_name],'fake-selected-key')
                     self.assertNotIn('ANTHROPIC_API_KEY' if auth=='subscription' else 'CLAUDE_CODE_OAUTH_TOKEN',env)
                     self.assertNotIn('OPENAI_API_KEY',env)

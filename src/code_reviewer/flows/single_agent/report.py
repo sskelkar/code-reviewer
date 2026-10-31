@@ -123,7 +123,7 @@ def _header(result: RunResult) -> List[str]:
         "| Passes completed | %d of %d max (%d failed) |" % (result.passes_completed, cfg.max_passes, failed),
         "| Stop reason | %s |" % stop_text(result),
         "| Diff | %(files)d files, %(changed_lines)d changed lines, %(excluded)d excluded |" % result.diff_summary,
-        "| Estimated cost | %s, %s tokens |" % (money(stats.total_cost(), stats.cost_known()), count(stats.total_tokens())),
+        "| Estimated cost | %s, %s tokens |" % (('N/A (subscription)' if cfg.auth_mode == 'subscription' else money(stats.total_cost(), stats.cost_known())), count(stats.total_tokens())),
         "",
     ]
 
@@ -203,11 +203,11 @@ def _pass_table(result: RunResult) -> List[str]:
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for p in result.passes:
         if not p.ok:
-            out.append("| %d | failed: %s | | | | | | | | | |" % (p.pass_no, p.error.replace("|", "/")[:80]))
+            out.append("| %d | failed: %s | | | | | | | | | |" % (p.pass_no, " ".join(p.error.replace("|", "/").splitlines())))
             continue
         out.append("| %d | ok | %d | %d | %d | %d | %d | %d | %s | %s | %s |" % (
             p.pass_no, p.new_scored, p.matched, p.usable, p.rejected_by_self_check, p.ungrounded, p.rule_unknown,
-            money(p.reviewer_cost_usd), money(p.comparator_cost_usd), count(p.reviewer_tokens + p.comparator_tokens)))
+            ('N/A' if result.cfg.auth_mode == 'subscription' else money(p.reviewer_cost_usd)), ('N/A' if result.cfg.auth_mode == 'subscription' else money(p.comparator_cost_usd)), count(p.reviewer_tokens + p.comparator_tokens)))
     return out + [""]
 
 
@@ -222,6 +222,12 @@ def _overlap_section(result: RunResult) -> List[str]:
 
 def _usage_section(result: RunResult) -> List[str]:
     cfg, stats = result.cfg, result.stats
+    if cfg.auth_mode == 'subscription':
+        return ['### Subscription usage', '',
+                '- API cost: N/A; this run uses the selected subscription.',
+                '- Reported tokens: %s; counted allowance: %s / %s (includes cache reads; incomplete usage charged conservatively).' %
+                (count(stats.total_tokens()), count(stats.budget_tokens()), count(cfg.run_budget_tokens)),
+                '- Per-call token allowance: %s. Limits are harness stop conditions, not a hard provider cap.' % count(cfg.call_budget_tokens), '']
     known = stats.cost_known()
     totals, counts = stats.token_totals(), stats.retries_and_failures()
     out = ["### Usage and cost (estimated)", "", "| Role | Calls | Tokens | Cost |", "|---|---|---|---|"]

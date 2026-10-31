@@ -138,10 +138,10 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
     print('sandbox: input and boundary probes passed', file=sys.stderr)
     command(['nft', 'list', 'table', 'inet', 'cr_reviewer'])
     key = '' if settings['probe_only'] else key_reader('Selected provider credential: ')
-    if not settings['probe_only'] and (not isinstance(key, str) or not key or len(key) > 4096
+    if not settings['probe_only'] and (not isinstance(key, str) or not key or len(key) > 16384
                                        or any(ord(c) < 33 or ord(c) > 126 for c in key)):
         raise ValueError('invalid runtime key')
-    send(sock, key.encode(), 4096)
+    send(sock, key.encode(), 16384)
     value = receive_json(sock, RESULT_LIMIT)
     if acquired and (not isinstance(value.get('checks'), dict) or value['checks'].get('source_access_revoked') is not True):
         raise ValueError('result does not confirm source revocation')

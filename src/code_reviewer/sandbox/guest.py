@@ -9,7 +9,7 @@ import resource
 import socket
 from pathlib import Path
 
-from ..backends.openai import TokenPrices, request_response
+from ..backends.openai import TokenPrices
 from ..backends.factory import create_runner
 from ..config import Config
 from ..engine import Engine
@@ -103,7 +103,7 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
         from .snapshot import probes
         checks['isolation'] = probes(snapshot)
     send_json(sock, {'kind': 'ready', 'checks': checks})
-    secret = receive(sock, 4096).decode('ascii')
+    secret = receive(sock, 16384).decode('ascii')
     if settings['probe_only']:
         if secret:
             raise ValueError('probe-only job must not receive credentials')
@@ -126,8 +126,7 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
     env.update({'HTTPS_PROXY': 'http://%s:%d' % PROXY,
                 'CLAUDE_CONFIG_DIR': str(root / 'home' / '.claude'),
                 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'})
-    runner = create_runner(cfg, selected_credential=key, env=env,
-                           transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
+    runner = create_runner(cfg, selected_credential=key, env=env, proxy=PROXY)
     if snapshot is not None:
         result = Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)
     else:

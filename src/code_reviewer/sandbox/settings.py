@@ -6,11 +6,11 @@ import sys
 from pathlib import Path
 
 from ..config import Config, ConfigError, _coerce
-from ..backends.factory import configuration_errors, credential, credential_name
+from ..backends.factory import configuration_errors, credential
 
 # All algorithm options travel together. Infrastructure and host executable paths
 # are deliberately absent, even when new Config fields are added later.
-CORE = ('provider', 'auth_mode', 'review_mode', 'model_reviewer', 'model_comparator', 'model_resolver', 'model_verifier',
+CORE = ('provider', 'auth_mode', 'chatgpt_account', 'call_budget_tokens', 'review_mode', 'model_reviewer', 'model_comparator', 'model_resolver', 'model_verifier',
         'self_check', 'criteria_mode', 'criteria_manifest', 'disabled_default_rules', 'min_passes', 'max_passes',
         'quiet_k', 'max_consecutive_failures', 'tier_high', 'tier_medium', 'candidate_window',
         'candidate_all_threshold', 'candidate_max', 'max_diff_lines', 'criteria_max_chars', 'exclude_patterns',

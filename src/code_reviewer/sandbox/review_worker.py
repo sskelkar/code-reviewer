@@ -25,7 +25,7 @@ def dispatch(channel, root, image, image_sha, timeout):
     cfg = config_from_job(settings, Path('/work'))
     def read_key(prompt):
         send_json(channel, {'kind': 'credential', 'provider': cfg.provider, 'auth': settings['auth']})
-        return receive(channel, 4096).decode('ascii')
+        return receive(channel, 16384).decode('ascii')
     output = root / 'result'
     result = run(Artifact(root/'firecracker', FIRECRACKER_SHA, MAX_KERNEL_BYTES),
                  Artifact(root/'kernel', KERNEL_SHA, MAX_KERNEL_BYTES),

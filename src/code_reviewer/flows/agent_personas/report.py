@@ -40,8 +40,9 @@ def render_finding(result: Any, item: Any) -> str:
 
 
 def run_line(result: Any) -> str:
-    return 'agent-personas: %d/%d completed · %s · $%.4f estimated' % (
-        result.passes_completed, len(result.passes), result.stop_reason, result.stats.total_cost())
+    return 'agent-personas: %d/%d completed · %s · %s' % (
+        result.passes_completed, len(result.passes), result.stop_reason,
+        'subscription (no API charge)' if result.cfg.auth_mode == 'subscription' else '$%.4f estimated' % result.stats.total_cost())
 
 
 def conflict_text(group: Any, visible: Any) -> str:
@@ -110,7 +111,7 @@ def render_dry_run(dry: Any) -> str:
     return '\n'.join(['Dry run: agent-personas. No model calls, posting or checkout creation.',
         '%d passes per persona (%d scheduled). Defaults only: project discovery and classification are omitted.' % (
             dry.passes_per_persona, len(dry.assignments) * dry.passes_per_persona),
-        'Concurrent calls: %d; budget allocation: %s' % (dry.parallel, ', '.join('%s $%.2f' % (p, v['allocated_usd']) for p, v in dry.budget_pools.items())),
+        'Concurrent calls: %d; budget allocation: %s' % (dry.parallel, ', '.join(('%s %d tokens' % (p, v['allocated_tokens'])) if 'allocated_tokens' in v else ('%s $%.2f' % (p, v['allocated_usd'])) for p, v in dry.budget_pools.items())),
         'Model: %s; tools: Read,Grep,Glob in the temporary head checkout.' % dry.model,
         'Diff: %s' % dry.diff_summary] + ['%s: %d default rules; prompts saved under input/personas/%s/' % (p, len(r), p)
         for p, r in dry.assignments.items()] + ['Saved in %s' % dry.run_dir])

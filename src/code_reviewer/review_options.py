@@ -96,6 +96,7 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # The options of `reviewer review`, one line each, for the banner it prints in a terminal. A test checks that every option
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
+    ("--account LABEL", "saved ChatGPT account label for subscription access"),
     ("--auth NAME", "api-key or subscription; no automatic billing fallback"),
     ("--preflight", "check configuration; no fetch, model call or credential access"),
     ("--provider NAME", "runtime adapter: claude or openai, independent of execution location"),

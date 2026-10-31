@@ -178,7 +178,7 @@ class ConnectedTests(unittest.TestCase):
             settings = dict(self.settings, mode=mode, probe_only=False)
             with patch.object(guest, 'receive_json', return_value=settings), \
                     patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
-                    patch.object(guest, 'send_json') as ready_message, patch.object(guest, 'request_response', provider):
+                    patch.object(guest, 'send_json') as ready_message, patch('code_reviewer.backends.openai.request_response', provider):
                 value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
             metadata = next((root / 'runs').glob('*/config.json'))
             self.assertEqual(json.loads(metadata.read_text())['config']['provider'], 'openai')
@@ -199,7 +199,7 @@ class ConnectedTests(unittest.TestCase):
             with patch.object(guest, 'receive_json', return_value=settings), \
                     patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
                     patch.object(guest, 'send_json'), \
-                    patch.object(guest, 'request_response', return_value={
+                    patch('code_reviewer.backends.openai.request_response', return_value={
                         'status': 'completed', 'usage': {'input_tokens': 10, 'output_tokens': 5},
                         'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]}):
                 value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])

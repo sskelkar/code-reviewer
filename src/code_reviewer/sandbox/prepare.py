@@ -6,6 +6,8 @@ import fcntl
 import hashlib
 import json
 import os
+import re
+import shutil
 import stat
 import tempfile
 from pathlib import Path
@@ -58,6 +60,39 @@ def private_cache(path):
         raise ValueError('image cache must be a private root-owned directory')
 
 
+def prune_images(cache, keep):
+    """Under the preparation lock, remove only recognized obsolete clean images."""
+    if not shutil.rmtree.avoids_symlink_attacks:
+        raise ValueError('descriptor-safe cache removal is required')
+    obsolete = []
+    entries = list(cache.iterdir())
+    if len(entries) > 256:
+        raise ValueError('image cache inventory exceeds its limit; inspect manually')
+    for entry in entries:
+        if entry.name in keep or not re.fullmatch('[a-f0-9]{64}', entry.name):
+            continue
+        if entry.is_symlink() or not entry.is_dir():
+            raise ValueError('unsafe obsolete cache entry; inspect manually')
+        private_cache(entry)
+        metadata = json.loads(regular(entry/'image.json', 65536))
+        fields = {'format', 'source_sha256', 'builder_sha256', 'runtime_sha256', 'workload'}
+        if isinstance(metadata, dict) and 'claude_sha256' in metadata:
+            fields.add('claude_sha256')
+        if (not isinstance(metadata, dict) or set(metadata) != fields | {'initrd_sha256'}
+                or metadata.get('format') != 1 or metadata.get('workload') not in WORKLOADS.values()
+                or any(not isinstance(metadata.get(k), str) or not re.fullmatch('[a-f0-9]{64}', metadata[k])
+                       for k in fields - {'format', 'workload'} | {'initrd_sha256'})):
+            raise ValueError('unrecognized obsolete cache metadata; inspect manually')
+        identity = {key: metadata[key] for key in fields}
+        if hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest() != entry.name:
+            raise ValueError('obsolete cache identity mismatch; inspect manually')
+        obsolete.append(entry)
+    # Validate every candidate before deleting any; rmtree never follows symlinks.
+    for entry in obsolete:
+        shutil.rmtree(entry)
+    return len(obsolete)
+
+
 def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE, claude=None, claude_sha=None):
     if os.geteuid() != 0:
         raise ValueError('image preparation requires root in the dedicated Linux worker')
@@ -76,11 +111,18 @@ def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE, cla
             Artifact(Path(builder), builder_sha, 65536).stage(inputs/'build.sh')
             if claude is not None:
                 Artifact(Path(claude), claude_sha, 300000000).stage(inputs/'claude')
+            identities = {}
             for label, workload in WORKLOADS.items():
                 identity = dict(format=1, source_sha256=source_sha, builder_sha256=builder_sha,
                                 runtime_sha256=runtime_sha, workload=workload)
                 if claude is not None and label == 'connected':
                     identity['claude_sha256'] = claude_sha
+                identities[label] = identity
+            keep = {hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+                    for identity in identities.values()}
+            removed = prune_images(cache, keep)
+            for label, identity in identities.items():
+                workload = identity['workload']
                 key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
                 entry = cache/key
                 reused = entry.exists()
@@ -104,7 +146,8 @@ def prepare_images(source, source_sha, builder, builder_sha, *, cache=CACHE, cla
                 if actual != metadata.get('initrd_sha256'):
                     raise ValueError('cached image digest mismatch; rebuild explicitly')
                 images[label] = dict(path=str(entry), sha256=actual, reused=reused)
-        return dict(source_sha256=source_sha, builder_sha256=builder_sha, runtime_sha256=runtime_sha, images=images)
+        return dict(source_sha256=source_sha, builder_sha256=builder_sha, runtime_sha256=runtime_sha,
+                    obsolete_images_removed=removed, images=images)
 
 
 def main():
