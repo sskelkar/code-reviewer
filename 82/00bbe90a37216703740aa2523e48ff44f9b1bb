@@ -1,0 +1,66 @@
+tests/test_llm_interface.py
+  s_68cd0db0a8fc3a::t_d587a0ca8168a7 110,113-118
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 40,44
+AGENTS.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 30,32
+  s_68cd0db0a8fc3a::t_23c029afa983b0 3,9,15,17,19,21,23,25
+README.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 7,12,15,105,108,127
+src/code_reviewer/backends/claude.py
+  s_68cd0db0a8fc3a::t_ccd397ce0c1697 15
+src/code_reviewer/flows/single_agent/roles.py
+  s_68cd0db0a8fc3a::t_ccd397ce0c1697 6
+tests/test_connected_sandbox.py
+  s_68cd0db0a8fc3a::t_d587a0ca8168a7 1,17-18,185-189,209-213
+  s_68cd0db0a8fc3a::t_584bf99cf16a57 144-148
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 79,199
+docs/development.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 7,15,19,107
+docs/history.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 1,3,5-11
+src/code_reviewer/flows/agent_personas/README.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 1,3,5-6,8-11,13
+  s_68cd0db0a8fc3a::t_e4de832e527532 7
+src/code_reviewer/sandbox/guest.py
+  s_68cd0db0a8fc3a::t_d587a0ca8168a7 15,53-54,138-139
+docs/sandbox-architecture.md
+  s_68cd0db0a8fc3a::t_36692c28fff43b 118
+docs/llm.md
+  s_68cd0db0a8fc3a::t_36692c28fff43b 7-14
+docs/persona-criteria.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 3,26-28,30-32,43
+  s_68cd0db0a8fc3a::t_23c029afa983b0 33-41
+docs/prompts.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 15,85,87
+sandbox/README.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 1,3,5,7,13,15
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 19,39-40,88,96,113
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 1,3,7-11,13,15,17,21,23,29
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_d223341a11903a 278,280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8200bbe90a37216703740aa2523e48ff44f9b1bb",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
