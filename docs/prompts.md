@@ -12,7 +12,7 @@ Each LLM call has a **system** prompt, a **user** prompt containing the request 
 
 ## Persona prompts
 
-The optional mode is documented in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps) and the [README flow](../README.md#agent-personas). Its own templates and schemas live in `flows/agent_personas/prompts/`, loaded by its `prompt_contract.py`. Selecting `--mode agent-personas` uses these contracts; single-agent templates/defaults remain unchanged.
+The optional mode is documented in [architecture](architecture.md#persona-implementation) and the [README flow](../README.md#agent-personas). Its own templates and schemas live in `flows/agent_personas/prompts/`, loaded by its `prompt_contract.py`. Selecting `--mode agent-personas` uses these contracts; single-agent templates/defaults remain unchanged.
 
 | Role | Input and output | Model / tools |
 |---|---|---|
@@ -82,12 +82,6 @@ The system prompt continues to define change scope, concrete consequences, evide
 
 Persona pool ratios and exhaustion/accounting behavior are specified in the [usage reference](usage.md#persona-budget-pools). A persona can exhaust its pool without stopping the others. Criteria fallback, comparator exhaustion and verifier exhaustion have distinct handling; none creates votes from unconsolidated output. Cancellation waits for active subprocess groups before checkout cleanup. Model-facing templates are unchanged by parallel scheduling.
 
-## Runtime and execution boundaries
+## Runtime boundaries
 
-VM and explicit host execution use the same canonical prompts, schemas, validators and selected flow. The common `ModelCaller`/`LLMResult` contract carries invocation, validation, usage and safe errors. Provider authentication is trusted operator configuration; repository content cannot choose it. See [LLM access](llm.md).
-
-OpenAI translates schemas into its closed/required-field format without mutating these assets. Its bounded Python Read/Grep/Glob implementation supplies file tools. Subscription requests use a namespaced tool group and streaming completion checks. Claude invokes the native CLI with explicit tool/isolation flags. Protocol fixtures establish plumbing, not live schema acceptance or review quality.
-
-The guest calls `Engine.review(..., prepared_checkout=...)` with sealed admitted input. The flow leaves that externally managed snapshot intact. Public acquisition pins commits and revokes source networking before credential release. Runtime images contain trusted source/prompts, never target inputs, credentials or prior findings. Normal VM results export only bounded report/summary/stats; internal artifact paths refer to ephemeral files.
-
-`reviewer review --preflight` is credential/target-free. `reviewer sandbox check` exercises no-key deployment and both simulated flows; it does not prove real account access or native tool behavior. ChatGPT-backed VM review is user-confirmed; native Claude tools and broader mode/refresh qualification remain open. Infrastructure and adapter changes do not authorize paid prompt comparisons. Canonical asset hashes guard the checked-in bytes; prompt changes require authorized before/after evidence in [proposal section 9](proposal.md#9-review-quality-experiments).
+Adapters transport these contracts; they do not select criteria, strategy or infrastructure. See [the LLM contract](llm.md), [execution contract](security-contract.md) and [VM architecture](sandbox-architecture.md). Canonical asset changes require authorized comparison evidence under [proposal section 9](proposal.md#9-review-quality-experiments).

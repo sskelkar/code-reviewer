@@ -2,19 +2,17 @@
 
 A one-shot Python CLI for independent, repeated pull-request reviews. Python validates evidence and model replies, merges duplicate findings and produces private reports. Claude and OpenAI adapters use the same review algorithms.
 
-**Status:** both review strategies, host/VM dispatch, Claude API-key/subscription access, OpenAI API-key access and reviewer-owned ChatGPT sign-in/streaming are implemented and tested with simulated providers. ChatGPT-backed VM review is user-confirmed. Native Claude behavior, live persona coverage and long-running token refresh still need qualification.
-
 ## Quick start
 
-Python 3.9+, Git/GitHub CLI for host acquisition, and an editable installation:
+Use Python 3.11+ for Langfuse export (3.13 shown), Git/GitHub CLI for host acquisition, and an editable installation:
 
 ```bash
 git clone https://github.com/sskelkar/code-reviewer.git
 cd code-reviewer
-python3 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e .
+pip install -e '.[tracing]'
 reviewer --help
 ```
 
@@ -104,10 +102,10 @@ The VM enforces read-only admitted code, non-root/no-new-privileges, jailer/syst
 
 ## View review traces
 
-Local Langfuse tracing is **enabled by default**. Complete the [first-time setup](docs/tracing.md), including the Python 3.11+ tracing environment. From the project directory, in each terminal session:
+Local Langfuse tracing is **enabled by default**. Complete the [first-time setup](docs/tracing.md), including the local services and exported project keys. From the project directory, in each terminal session:
 
 ```bash
-source .venv-tracing/bin/activate
+source .venv/bin/activate
 . "$HOME/.code-reviewer/langfuse/local.env"
 export LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY
 reviewer review OWNER/REPO#123 --passes 1
@@ -126,7 +124,7 @@ PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 
 Tests use synthetic Git repositories, fake executables and simulated providers; no real credentials, networking or VM boots. Check actual deployment separately with `reviewer sandbox check`; it performs no inference. Run the oldest and newest available supported Python before finishing changes.
 
-Next: qualify VM tracing, native Claude tools, live persona coverage and long-running refresh, then compare review quality manually. REPL/replay remain in `parked/`, disconnected from the CLI. No eval framework, distributed scheduler or per-persona VMs are maintained.
+Outstanding qualification and optional extensions are tracked in [the roadmap](docs/proposal.md#checklist).
 
 ## Documentation
 
@@ -140,7 +138,6 @@ Next: qualify VM tracing, native Claude tools, live persona coverage and long-ru
 | [VM deployment](docs/sandbox-check.md) | Persistent setup, no-key checks and recovery |
 | [Execution contract](docs/security-contract.md) | Scope and actual guarantees |
 | [Plan](docs/proposal.md) | Checklist and optional later work |
-| [VM checklist](docs/sandbox-todo.md) | Controls and outstanding qualification |
 | [Development](docs/development.md) | Tests and debugging |
 | [Python walkthrough](docs/project-explainer.md) | Reading this code as a Java developer |
 | [Prompt contracts](docs/prompts.md) | Canonical assets and harness validation |

@@ -4,14 +4,7 @@ Read [AGENTS.md](../AGENTS.md) for repository rules and [architecture.md](archit
 
 ## Development setup
 
-```bash
-git clone https://github.com/sskelkar/code-reviewer.git
-cd code-reviewer
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e .
-python3 -m unittest discover -s tests -t .
-```
+Use the [README setup](../README.md#quick-start), then run `python -m unittest discover -s tests -t .`.
 
 Core runtime dependencies are limited to `tomli` on Python below 3.11. Optional host tracing uses `langfuse==5.1.0` on Python 3.11+ (`pip install -e '.[tracing]'`); there are no required test dependencies; the tests use the standard `unittest` module. The tests need no network, no model and no GitHub.
 
@@ -19,11 +12,11 @@ Supported Python is 3.9 and up. Before sending a change, run the tests on the ol
 
 ## Configuration and execution checks
 
-`reviewer review example/project#1 --provider claude --preflight` reports configuration errors without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; `runtime_checked: false` states that the backend has not run. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline configuration status; use `sandbox check` for no-key deployment checks. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
+`reviewer review example/project#1 --provider claude --preflight` reports configuration errors without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; `runtime_checked: false` states that the backend has not run. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline configuration status; use `sandbox check` for no-key deployment checks. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`.
 
 The REPL/replay are parked under `src/code_reviewer/parked/`: their modules and regression tests remain, but bare `reviewer` only prints help and does not start a session. New end-to-end work targets the one-shot CLI.
 
-`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the implemented explicit-host and default-VM execution paths.
+`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the implemented explicit-host and default-VM execution paths.
 
 Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.toml`, recommend 0600). The loader no longer considers cwd and rejects linked/non-regular/oversized/foreign-writable files. Canonical prompt prose is unchanged by this milestone, so no paid prompt replay is warranted.
 
@@ -111,7 +104,7 @@ The offline tests cannot prove how Claude Code behaves. Use the implemented norm
 
 The [sandbox runbook](../sandbox/README.md) separates ordinary offline unit tests from explicit Linux/KVM deployment checks. No VM boots, infrastructure changes or paid calls are part of `unittest discover`. The [architecture](sandbox-architecture.md) records the agreed one-VM-per-review boundaries and remaining security gates.
 
-The [VM architecture](sandbox-architecture.md) separates actual reviews from synthetic automated tests/canaries. Actual review input needs no authored sample project. Keep target code, identifiers, keys and findings out of fixtures. Routine documentation checks do not boot a VM or authorize a live call; deployment evidence is recorded in the [VM checklist](sandbox-todo.md#qualification-status).
+The [VM architecture](sandbox-architecture.md) separates actual reviews from synthetic automated tests/canaries. Actual review input needs no authored sample project. Keep target code, identifiers, keys and findings out of fixtures. Routine documentation checks do not boot a VM or authorize a live call; deployment evidence is recorded in the [VM checklist](proposal.md#qualification-evidence).
 
 The [connected runbook](sandbox-architecture.md) separates root Linux infrastructure checks from the standard test suite. Tests never install tools, alter host networking, boot a VM, read a real key or call a model. Deployment checks have exercised actual proxy/firewall/VM startup, no-key denial probes, cancellation before key release and short-deadline cleanup.
 

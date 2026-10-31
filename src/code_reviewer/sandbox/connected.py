@@ -14,11 +14,9 @@ import tempfile
 import time
 from pathlib import Path
 
-from ..shared.models import ReviewRefused
 from .artifacts import Artifact
 from .capsule import MAX_CAPSULE, regular
 from .guest import ARTIFACTS, MAX_ARTIFACT, MAX_EXPORT, validate_settings
-from .runtime import MAX_INITRD_BYTES, MAX_KERNEL_BYTES
 from .network import Network, command
 from .vm import VirtualMachine
 from .wire import BOOT_PORT, RESULT_LIMIT, receive_json, send, send_json
@@ -154,8 +152,6 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
 
 def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None, jailer=None, source=None):
     validate_settings(settings)
-    if not settings['probe_only'] and 'config' not in settings:
-        raise ReviewRefused('VM review unavailable: complete operator job settings required; no legacy key path')
     from .settings import provider
     selected = provider(settings)
     if sys.platform != 'linux' or os.geteuid() != 0 or not os.access('/dev/kvm', os.R_OK | os.W_OK):

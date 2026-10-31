@@ -1,6 +1,6 @@
 # Default criteria for the four review personas
 
-Thirteen generic criteria are defined under [the persona flow](../src/code_reviewer/flows/agent_personas/README.md). They retain the ten existing concerns and add entry-point/artifact wiring, test discovery/failure propagation and query/index compatibility. The persona flow loads these assets. Offline tests check wiring; model quality needs manual evaluation.
+Thirteen generic criteria are defined under [the persona flow](../src/code_reviewer/flows/agent_personas/README.md). The persona flow loads these assets. Offline tests check wiring; model quality needs manual evaluation.
 
 The canonical wording lives in the linked files below. This guide is an index, so future edits do not leave competing copies of the rules. Every rule specifies **Inspect**, **Report** and **Do not report**. These rules define inspection subjects; the persona Reviewer contract still owns evidence, self-checks, scope and JSON output.
 
@@ -15,15 +15,6 @@ The canonical wording lives in the linked files below. This guide is an index, s
 
 [personas.json](../src/code_reviewer/flows/agent_personas/personas.json) records the exact focus instructions and static assignments. Each logical rule has one canonical ID and text. `COR-002` is defined once in correctness and referenced by safety; there are thirteen unique rules and fourteen assignments. Counts are not quotas, and no persona has greater authority than another. Applicable project rules are distributed at runtime, retaining text/source and precedence over defaults.
 
-## What the three additions address
-
-- **`COR-003`: integration wiring.** A locally correct function can still be unreachable because its command, route, export or registration is missing, or an installed artifact can omit a required module/resource. This criterion requires a concrete repository-defined launch/build/install path, accounts for visible generation steps and does not infer failures from the review machine's installed dependencies.
-- **`TEST-003`: false green test execution.** Good assertions provide no protection when discovery/registration silently omits the tests or a script ignores the runner's failure. This criterion traces the repository-defined selection and exit-status path. It does not demand CI or replace the assertion/coverage rule.
-
-- **`SAFE-005`: query/index compatibility.** Production safety compares changed queries with repository-defined schemas, migrations and indexes, including applicable implicit, composite, expression and partial indexes. Findings require a supported mismatch or indexing requirement and a concrete consequence. It cannot confirm actual planner choices, deployed indexes or runtime slowness from schema code alone; a missing index is not automatically a defect.
-
-The existing criteria also make inspection concrete: missing versus explicit false values and boundary cases, hidden process-state dependencies, successful and failed test outcomes, validation before affected work/allocation, and database transactions where related writes must succeed or fail together. The rules still require a supported trigger and consequence; they do not mandate patterns, numerical test ratios, speculative performance targets or undocumented external guarantees.
-
 ## Common standard and boundaries
 
 [review-standard.md](../src/code_reviewer/flows/agent_personas/review-standard.md) supplies the common review instructions: report introduced/worsened issues with repository evidence, respect project precedence, read relevant context beyond the focus, report a root cause once, and keep unverified assumptions in notes. A persona may report an evidenced correctness/safety defect it notices outside its focus. It cannot run tests or infer correctness from their mere existence.
@@ -32,8 +23,21 @@ Contract changes must be reflected in the appropriate repository-visible API, ev
 
 No universal deployment model, database guarantee, external policy or documentation location is assumed. Seeing a query and an index definition alone does not establish a runtime query plan. Unknown external requirements and unverified assumptions do not become findings by assertion.
 
-## Next step
+## Disabled defaults
 
-Loading, project-rule distribution, frozen prompts, the configured round-robin scheduler, Comparator/conflict records, advisory verification and reports are implemented as specified in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps). Review the implementation and use authorized manual comparisons before drawing quality conclusions. Offline tests check plumbing, not semantic routing or review accuracy. Review quality is judged manually.
+`disabled_default_rules` accepts canonical persona IDs and these single-agent aliases. Disabling a shared rule removes it from every persona; unknown IDs fail configuration validation.
 
-In persona mode, `disabled_default_rules` accepts canonical persona IDs and the ten legacy `GEN-*` aliases mapped in proposal §12; unknown IDs fail clearly. Disabling a shared rule removes it from every persona. Single-agent IDs and behavior remain unchanged.
+| Single-agent alias | Persona criterion |
+|---|---|
+| `GEN-001` | `COR-001` |
+| `GEN-002` | `CQ-001` |
+| `GEN-003` | `CQ-002` |
+| `GEN-004` | `SAFE-001` |
+| `GEN-005` | `SAFE-002` |
+| `GEN-006` | `SAFE-003` |
+| `GEN-007` | `SAFE-004` |
+| `GEN-008` | `COR-002` |
+| `GEN-009` | `TEST-001` |
+| `GEN-010` | `TEST-002` |
+
+Scheduling and consolidation are documented in [architecture](architecture.md#persona-implementation); model contracts are in [prompts](prompts.md#persona-prompts).

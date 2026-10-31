@@ -1,4 +1,4 @@
-"""No-root/no-network regressions for pilot admission, credentials, policy and artifacts."""
+"""No-root/no-network regressions for VM admission, credentials, policy and artifacts."""
 from __future__ import annotations
 
 import base64
@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from code_reviewer.config import Config
+from code_reviewer.sandbox.settings import job_settings
 from code_reviewer.backends.read_tools import ReadOnlyTools
 from code_reviewer.backends.openai import request_response
 from code_reviewer.sandbox import capsule, connected, guest, network, wire
@@ -139,6 +141,11 @@ class ConnectedTests(unittest.TestCase):
                 connected.run(self.root/'vmm',self.root/'kernel',self.root/'initrd',self.root/'input',self.root/'out',
                               dict(self.settings,probe_only=False))
 
+        with patch.object(guest, 'receive_json', return_value=dict(self.settings, probe_only=False)), \
+                patch.object(guest, 'receive', side_effect=AssertionError('no input or credential read')):
+            with self.assertRaisesRegex(ValueError, 'complete operator job settings required'):
+                guest.run_job(None, self.root)
+
     def test_key_reader_is_not_called_if_probes_or_host_policy_fail(self):
         reader = lambda prompt: self.fail('key must not be read')
         with patch.object(connected, 'send_json'), patch.object(connected, 'send'), \
@@ -175,7 +182,11 @@ class ConnectedTests(unittest.TestCase):
         for mode in ('single-agent', 'agent-personas'):
             root = self.root / mode
             root.mkdir()
-            settings = dict(self.settings, mode=mode, probe_only=False)
+            settings = job_settings(Config(provider='openai', review_mode=mode,
+                model_reviewer='synthetic-model', model_comparator='synthetic-model',
+                model_resolver='synthetic-model', model_verifier='synthetic-model',
+                openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
+                min_passes=1, max_passes=1, persona_passes=1, persona_parallel=1, tracing=False))
             with patch.object(guest, 'receive_json', return_value=settings), \
                     patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
                     patch.object(guest, 'send_json') as ready_message, patch('code_reviewer.backends.openai.request_response', provider):
@@ -195,7 +206,11 @@ class ConnectedTests(unittest.TestCase):
         for mode in ('single-agent', 'agent-personas'):
             root = self.root / mode
             root.mkdir()
-            settings = dict(self.settings, mode=mode, probe_only=False)
+            settings = job_settings(Config(provider='openai', review_mode=mode,
+                model_reviewer='synthetic-model', model_comparator='synthetic-model',
+                model_resolver='synthetic-model', model_verifier='synthetic-model',
+                openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
+                min_passes=1, max_passes=1, persona_passes=1, persona_parallel=1, tracing=False))
             with patch.object(guest, 'receive_json', return_value=settings), \
                     patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
                     patch.object(guest, 'send_json'), \

@@ -113,11 +113,9 @@ The optional capsule path transfers bounded file-only Git objects from a chosen 
 7. Stop/join the VM and proxy, remove network/scratch state and confirm worker shutdown. Failures do not select host execution automatically.
 8. Save the private local files and print the summary. GitHub posting requires explicit `--post`.
 
-Normal CLI dispatch, selected-adapter private credentials and report transfer are wired. Real OpenAI requests have reached the endpoint and returned account/authentication errors; ChatGPT-backed VM review is user-confirmed. Explicit direct-host execution is implemented with the provider factory and same Engine. No-key checks exercise infrastructure; they do not establish review quality.
-
 ## Development and current work
 
-Use [the supported deployment command](sandbox-check.md), [VM checklist](sandbox-todo.md) and [development guide](development.md). Checks run an offline simulated-provider workload and a sequential connected probe workload; these are tests, not additional VM layers or per-persona isolation.
+Use [the supported deployment command](sandbox-check.md), [qualification evidence](proposal.md#qualification-evidence) and [development guide](development.md). Checks run an offline simulated-provider workload and a sequential connected probe workload; these are tests, not additional VM layers or per-persona isolation.
 
 `sandbox/runtime.py` contains bounded subprocess, boot configuration and result-validation utilities for the shared jailed lifecycle. See [the code map](architecture.md#code-map).
 

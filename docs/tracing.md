@@ -16,7 +16,7 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
 
 Use `docker compose` instead of `docker-compose` if Compose is installed as a Docker plugin. Initial migrations can take a few minutes. Open **http://localhost:4000**. The local account is `reviewer@localhost.invalid`; its generated password is the `LANGFUSE_USER_PASSWORD` entry in `~/.code-reviewer/langfuse/local.env`. Setup creates the `reviewer` project and its keys automatically. The setup script preserves an existing file rather than rotating credentials underneath stored data.
 
-Only `127.0.0.1:4000` is published; host port 3000 and supporting database/storage ports are untouched. Web/worker server version is 4.72.0. All six images are digest-pinned in [compose.yaml](../deploy/langfuse/compose.yaml), including the current upstream Chainguard MinIO distribution. Its static MinIO/client binaries handle startup and bucket creation without invoking the incompatible `mkdir` utility observed in that image on this Docker VM. Deployment telemetry is disabled. No Langfuse Cloud account is involved.
+Only `127.0.0.1:4000` is published; host port 3000 and supporting database/storage ports are untouched. Web/worker server version is 4.72.0. All six images are digest-pinned in [compose.yaml](../deploy/langfuse/compose.yaml), including the MinIO storage/client images. Deployment telemetry is disabled. No Langfuse Cloud account is involved.
 
 The private environment file contains deployment passwords and local project keys; keep it outside Git. Persistent named Docker volumes contain Langfuse's data. Container logs rotate at 10 MiB × 3 files per service. This does not cap database/object-storage growth: inspect `docker system df` and `docker stats`, delete unwanted traces in Langfuse, and choose an explicit retention/backup policy before accumulating long-lived data. This integration does not promise automatic age-based retention or backups.
 
@@ -36,8 +36,8 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
 The core reviewer and VM recorder support Python 3.9+. **Host Langfuse export requires Python 3.11+** and the optional dependency:
 
 ```bash
-python3.13 -m venv .venv-tracing
-source .venv-tracing/bin/activate
+python3.13 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e '.[tracing]'
 . "$HOME/.code-reviewer/langfuse/local.env"
 export LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY
@@ -85,7 +85,7 @@ One review is one trace. Stable typed observations show review preparation, crit
 - **Claude:** one aggregate generation per native CLI invocation, with reported total usage/turns. Internal native tool events are not captured by the current adapter; no synthetic tool history is invented.
 - **VM:** host execution and guest acquisition/admission/review observations share an opaque identity. The guest returns trace records in `stats.json` through the existing private SSH/vsock path. The host validates one connected guest subtree, rejects collisions with host span IDs and exports after confirmed cleanup. See [the transport and firewall diagrams](sandbox-architecture.md#private-control-and-result-channel).
 
-The first implementation times host preparation, VM image preparation and connected VM execution as stages; it does not separately trace every image-build/worker-start subprocess. Guest traces are returned after completion, not streamed live. If a VM dies before returning records, only the host-observed timeline survives. Host/guest wall-clock skew can affect placement; recorded durations are not upload durations.
+The recorder times host preparation, VM image preparation and connected VM execution as stages; it does not separately trace every image-build/worker-start subprocess. Guest traces are returned after completion, not streamed live. If a VM dies before returning records, only the host-observed timeline survives. Host/guest wall-clock skew can affect placement; recorded durations are not upload durations.
 
 Metadata contains role/persona/pass/model, fingerprints, counts, timings and closed error codes. It excludes prompts, diffs, source, findings text, raw model replies, PR/repository identifiers, paths, search arguments, exception messages and authentication material. Trace input/output consists of safe root summaries. This helps diagnose execution and compare usage, but cannot reconstruct complete model context or establish finding correctness.
 
@@ -93,7 +93,7 @@ Metadata contains role/persona/pass/model, fingerprints, counts, timings and clo
 
 Generation usage uses provider-reported fresh input, output, cache-read and cache-creation categories where available. Flags distinguish missing cache fields from reported zero. OpenAI cache-write counts, when present, are additional metadata because the existing billing adapter has no separate write-price configuration; they are not added again to input totals. Claude uses its aggregate reported categories. Parent agents may carry usage summaries as metadata, but only generations contribute usage to Langfuse totals.
 
-Compare cache-read tokens/share across roles and passes with observed latency. OpenAI API calls show the existing operator-rate cost estimate. `cache_savings_usd` is calculated only when writes are explicitly reported as zero, avoiding an unsupported net-savings claim when write charges are unknown. Claude's reported aggregate cost is retained without inventing an uncached comparison price. This milestone measures caching; it does not enable a cache policy or change prompts.
+Compare cache-read tokens/share across roles and passes with observed latency. OpenAI API calls show the existing operator-rate cost estimate. `cache_savings_usd` is calculated only when writes are explicitly reported as zero, avoiding an unsupported net-savings claim when write charges are unknown. Claude's reported aggregate cost is retained without inventing an uncached comparison price. Tracing measures caching; it does not enable a cache policy or change prompts.
 
 Subscription traces show usage; review reports retain cost N/A. Langfuse receives a zero cost override for subscriptions and unknown costs to suppress its automatic API-price inference. That UI zero is **not** a subscription invoice or evidence of quota savings. Unknown/incomplete usage is marked; no token counts are inferred from source text.
 
@@ -110,4 +110,4 @@ Unit tests use synthetic repositories, fake providers and exporters. With the op
 | [sandbox/settings.py](../src/code_reviewer/sandbox/settings.py), [guest.py](../src/code_reviewer/sandbox/guest.py) | Trusted enable/context handoff and bounded stats export |
 | [test_tracing.py](../tests/test_tracing.py) | Privacy, failures, bounds, threading, both flows, guest transfer and optional SDK checks |
 
-Local server 4.72.0 ingestion is verified with synthetic reviews in both flows and adapter paths. Stored observations preserve one logical root, parent links, original timing, usage and metadata-only capture. Actual VM tracing and authenticated provider usage remain separate qualification; the [implementation checklist](langfuse-plan.md) tracks them. Tracing does not move prompts into Langfuse, add evaluations, expand guest networking or introduce another review flow.
+Local server 4.72.0 ingestion is verified with synthetic reviews in both flows and adapter paths. Stored observations preserve one logical root, parent links, original timing, usage and metadata-only capture. Remaining provider usage and adapter qualification is tracked in [the roadmap](proposal.md#checklist). Tracing does not move prompts into Langfuse, add evaluations, expand guest networking or introduce another review flow.

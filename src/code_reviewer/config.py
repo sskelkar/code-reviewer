@@ -295,10 +295,6 @@ def load_config(explicit: Optional[str] = None) -> Config:
             if isinstance(exc, ConfigError):
                 raise
             raise ConfigError("cannot read valid trusted operator configuration") from exc
-        if 'vm_claude_auth' in data:
-            if 'auth_mode' in data or data['vm_claude_auth'] not in ('api-key', 'oauth'):
-                raise ConfigError('replace vm_claude_auth with one explicit auth_mode = "api-key" or "subscription"')
-            data['auth_mode'] = 'subscription' if data.pop('vm_claude_auth') == 'oauth' else 'api-key'
         known = {f.name: f for f in fields(Config)}
         for key, value in data.items():
             if key not in known:

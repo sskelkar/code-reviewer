@@ -76,23 +76,7 @@ flowchart TD
 
 ## Sandbox deployment
 
-The [execution contract](security-contract.md) defines shared review behavior and independent execution/provider choices. The following components implement the VM boundary; normal dispatch is wired, with ChatGPT VM execution user-confirmed and native Claude/mode/refresh qualification still open.
-
-The [sandbox architecture](sandbox-architecture.md) wraps the whole job in one disposable Firecracker VM. `sandbox/review.py` first checks installed artifact files and the worker definition, then stages trusted source/artifacts and reuses `check.prepare_worker` for the dedicated Linux worker. `review_worker.py` owns private framed SSH stdio; `connected.py` installs external network policy and launches the shared jailed VM. `guest.py` acquires/pins the public PR, seals input read-only, checks native/file/network restrictions and runs the configured provider/strategy. The credential is read on the workstation only after admission/probes, then transferred over private pipes/vsock. No key/token is stored in argv, TOML, cache images or console logs. `settings.py` transports the complete allowlisted review configuration while excluding host paths/infrastructure settings.
-
-The VM returns three bounded files: report, summary and stats. After VM/network cleanup, remote job deletion and confirmed outer-worker shutdown, the host validates and saves them privately. `ExportedReview` supplies the already filtered summary to CLI/posting; Python objects are never unpickled. Internal prompt/raw-call files remain ephemeral. Native runtime bytes are digest-pinned and part of connected-image cache identity. The native adapter receives an explicit fresh environment, including the selected credential and proxy, in sequential and parallel subprocess paths. The API adapter uses its explicit proxy transport.
-
-Offline fixtures exercise fake subprocesses, simulated API replies and native CLI startup/auth refusal. The supported Mac check uses `sandbox/vm.py:VirtualMachine` for both its offline and connected workloads: matching upstream jailer, private PID/mount namespaces, chroot, no-new-privileges, default seccomp and a bounded transient systemd service. The connected guest seals its Git input and head snapshot read-only before dropping privileges; `Engine.review(prepared_checkout=...)` reuses that snapshot in either flow. Public acquisition runs unprivileged inside the guest with source access revoked externally before readiness. Recovery resets abandoned worker state without resuming reviews. See the [current VM checklist](sandbox-todo.md).
-
-The public `reviewer sandbox check` command in `sandbox/check.py` owns a complete Mac deployment check: validate/lock/start the dedicated Lima worker, build current trusted source, run both flows with simulated replies in an offline VM, run a second sequential no-key connected probe VM, remove job state, stop the worker and save bounded private results. `sandbox/check_worker.py` generates a harmless fixture or passes an explicit public PR URL into the review VM, and verifies host network cleanup; it accepts no key. This check bypasses target configuration loading, not live-review security controls. See [the command](sandbox-check.md) and [alternative VM designs](sandbox-alternatives.md).
-
-Image preparation is a separate `sandbox/prepare.py` operation reused by the check: it fingerprints source/builder/copied OS inputs, atomically publishes clean root-owned images and validates every cache hit. It runs before any job VM starts. `sandbox recover` uses the same dedicated-worker lock/profile, restarts the selected worker to discard abandoned kernel state, verifies idle state and removes only recognized owned scratch directories. `--lifecycle` exercises actual supervisor SIGKILL and independent VM termination. The stop policy kills the complete VM cgroup immediately rather than relying on graceful termination. The normal command reuses image preparation, worker lifecycle and connected supervision.
-
-## End-to-end qualification
-
-The normal VM/host dispatcher, trusted settings, provider-scoped endpoint policy, private credential handoff and local report presentation are implemented. Offline tests cover both providers/strategies and refusal/cleanup paths. Doctor and preflight share offline configuration status (`runtime_checked: false`); it opens no artifacts and reads no credentials.
-
-Remaining: qualify native Claude tools, live persona coverage and long-running token refresh under the actual endpoint policy using an explicitly supplied credential. Private in-VM URL acquisition, ordinary CLI capsule input, operator-file criteria manifests and VM dry-run remain unsupported. OpenAI requires one explicit model for all roles; API-key access also requires operator token rates. Keep real credentials out of tests. See [support and qualification](llm.md#support-and-qualification).
+The [VM architecture](sandbox-architecture.md) owns placement, acquisition, admission, transport, networking and cleanup diagrams. The [deployment runbook](sandbox-check.md) owns setup, checks, image reuse and recovery. Qualification evidence and remaining work are tracked in [the roadmap](proposal.md#qualification-evidence).
 
 ## Code map
 
@@ -210,19 +194,9 @@ What is checked, and by whom, today:
 | Confidence, severity ordering, what is posted | Harness arithmetic | `master.rate`, `summary.py` |
 | A separate **Verifier** that investigates flagged conflicts and annotates them | Available in agent-personas only; single-agent has no separate Verifier | `flows/agent_personas/roles.py` |
 
-Numbered steps, with the module that does each:
-
-1. Receive an admitted `PRContext` from the execution backend, or use retained host `pr_source` preparation to fetch/pin commits. VM acquisition does not call the host preparation path.
-2. `InputBuilder.redact` replaces email addresses in the PR text; `InputBuilder.load_diff` parses the merge-base diff, removes detected binary hunks, records omission metadata, drops excluded files and refuses empty or oversized PRs.
-3. Reuse the execution backend's admitted `prepared_checkout`, or export the head into a separate flow-owned temporary directory (symlinks and binary contents skipped). VM setup seals its mounts read-only; the generic exporter alone does not provide that OS control.
-4. `InputBuilder.resolve_criteria` loads default rules, then resolves project criteria from the **base** commit: the harness extracts candidate paths from `AGENTS.md`, the `CriteriaResolver` picks files, the harness validates (in-repo regular files only), adds the nested `AGENTS.md` and `.claude/rules` files that cover the changed paths (`criteria.scoped_files`, no model call), and rule IDs are assigned.
-5. `SingleAgentFlow._run_passes` loops. Each pass is `PassRunner.run`: `Reviewer` → `FindingsPreparer` (validate and ground) → `Comparator` → `MasterList.apply`. The Comparator is skipped when there is nothing to compare (for example a single finding in the first pass).
-6. `StopPolicy` decides after every pass whether to stop.
-7. `report.render_report` renders Markdown; the flow and `RunStore` write the report/artifacts. Criteria appear in the report by name and source, never by their internal IDs.
-
 ## Persona implementation
 
-Start at [agent_personas/flow.py](../src/code_reviewer/flows/agent_personas/flow.py). The [flow guide](../src/code_reviewer/flows/agent_personas/README.md) maps its modules and assets; [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps) records the complete agreed contract.
+Start at [agent_personas/flow.py](../src/code_reviewer/flows/agent_personas/flow.py). The [flow guide](../src/code_reviewer/flows/agent_personas/README.md) maps its modules and assets.
 
 Project discovery reuses the base-commit Resolver. A persona-only Classifier distributes all accepted project rules, with deterministic coverage checks and visible fallback. Defaults already have static assignments. The flow freezes four Reviewer prompts, then schedules N rounds, running correctness, code quality, test quality and production safety concurrently within each round (`persona_passes`, default 3; overridden by `--passes N`). There is no quiet-pass stop; incomplete slots remain visible.
 

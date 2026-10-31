@@ -275,28 +275,6 @@ Dependency injection keeps tests offline: a fixture can supply scripted provider
 
 Persona mode uses a `ThreadPoolExecutor`: each round dispatches at most `persona_parallel` calls. Each active reviewer has separate caller/log state and an independent budget pool. Shared accounting/reservations are protected by locks. The harness waits for the round, merges in fixed order and only then starts another round. Cancellation reaches native process groups or API retry waits; join work before removing its checkout.
 
-## Input and criteria
+## Further reference
 
-Each run pins exact base/head/merge-base commits. Criteria come from the base tip so a PR cannot edit its own rules. The merge-base-to-head diff defines changed scope. Lockfiles/generated/configured exclusions are named but not scored. Binary detection uses an 8000-byte NUL/invalid-UTF-8 prefix heuristic; omitted contents are not certified safe. Reports/stats include omission metadata.
-
-The VM fetches and parses public input unprivileged, applies text/count/object limits, exports text blobs, revokes source networking and seals code read-only before model work. Host acquisition reuses Git/GitHub access and exports a separate checkout. No target build/test/install command is run by either review flow.
-
-## One model call and one pass
-
-`ModelCaller` supplies a role's `CallSpec` to the selected `Runner`, records attempts and validates the result. An invalid structured answer can receive one feedback retry. OpenAI temporary HTTP retries repeat the same request with a deadline and server/backoff delay; they do not restart the whole tool conversation or multiply through the output retry. Safe codes/headers survive; raw error bodies do not.
-
-The Reviewer proposes findings. `FindingsPreparer` validates shape/rule references and grounds quotes/anchors in admitted code/diff. A Comparator proposes duplicate mappings; deterministic code updates the master. Single-agent stopping uses successful completions and new findings. Persona stopping uses configured rounds and independent pools; flagged conflicts may receive advisory verification. Agreement measures repeated sightings, not truth.
-
-## Storage and billing
-
-`RunStore` owns private files and a separate temporary checkout. Host runs retain prompts, replies and mappings; normal VM runs export only bounded report/summary/stats after confirmed cleanup. Internal artifact paths in a VM report refer to destroyed guest files. `--post` explicitly publishes the selected summary through the operator's GitHub CLI.
-
-API keys and subscription credentials are separate access modes. The common factory selects exactly one and strips unselected native credentials. API-key calls use estimated dollar allowances. Subscription calls use token allowances and report API cost as N/A. Unknown/incomplete subscription usage consumes the reserved allowance conservatively. Neither is a hard provider cap.
-
-## What is unfinished
-
-Both providers support explicit API-key/subscription access. ChatGPT-backed VM review is user-confirmed. Native Claude read-tool behavior, live persona coverage and long-running token refresh still need qualification. Optional metadata tracing is implemented in `tracing/`. REPL/replay restoration, LSP, context packs and full-content tracing remain later work.
-
-## Development checks
-
-Use Python 3.9+ with the standard library and `tomli` on older Python. Every module starts with `from __future__ import annotations`; avoid `match` and runtime `X | Y` types. Run the full suite on the oldest and newest available supported Python. Unit tests use temporary synthetic repositories, fake processes and simulated responses; they never read real keys or boot VMs. See [development](development.md), [the VM checklist](sandbox-todo.md) and [the current plan](proposal.md#checklist).
+The diagrams above map executable paths. For behavior and limits, use [architecture](architecture.md), [configuration/reports](usage.md), [authentication](llm.md), [tracing](tracing.md) and [VM controls](sandbox-architecture.md). [Development](development.md) owns test/setup instructions; [the roadmap](proposal.md#checklist) owns remaining work.

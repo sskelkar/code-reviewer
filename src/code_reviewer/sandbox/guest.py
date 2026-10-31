@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ..backends.openai import TokenPrices
 from ..backends.factory import create_runner
-from ..config import Config
+from ..shared.models import ReviewRefused
 from ..engine import Engine
 from ..shared import git_ops
 from .acquire import AcquisitionUnavailable, MetadataUnavailable
@@ -50,6 +50,8 @@ def validate_settings(value):
     if not isinstance(rates, list) or len(rates) != 3:
         raise ValueError('explicit token rates required')
     TokenPrices(*rates)
+    if not value['probe_only']:
+        raise ReviewRefused('VM review unavailable: complete operator job settings required')
     return value
 
 
@@ -133,17 +135,8 @@ def _run_job(sock, root, settings, *, probe_network, seal):
         files = {'boundary-report.json': base64.b64encode(json.dumps(checks).encode()).decode()}
         return {'kind': 'result', 'stop_reason': 'probes_passed', 'files': files, 'checks': checks}
     key = secret
-    if 'config' in settings:
-        from .settings import config_from_job
-        cfg = config_from_job(settings, root)
-    else:
-        cfg = Config(provider='openai', review_mode=settings['mode'], model_reviewer=settings['model'], model_comparator=settings['model'],
-                     model_resolver=settings['model'], model_verifier=settings['model'], criteria_mode='merge',
-                     min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
-                     persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],
-                     call_budget_usd=settings['call_budget'], call_timeout_s=120, runs_dir=str(root / 'runs'))
-    if 'config' not in settings:
-        cfg.openai_input_price, cfg.openai_cached_input_price, cfg.openai_output_price = settings['prices']
+    from .settings import config_from_job
+    cfg = config_from_job(settings, root)
     env = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL',
            'SSL_CERT_FILE', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL') if name in os.environ}
     env.update({'HTTPS_PROXY': 'http://%s:%d' % PROXY,

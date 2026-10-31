@@ -4,12 +4,14 @@ Provider, authentication and execution location are independent operator choices
 
 ## Support and qualification
 
-| Provider | Authentication | Implementation | Live qualification |
-|---|---|---|---|
-| Claude | API key | Claude Code adapter, `ANTHROPIC_API_KEY` | Successful VM inference unverified |
-| Claude | Subscription / enterprise | Claude Code adapter, explicit `CLAUDE_CODE_OAUTH_TOKEN` | Organization entitlement, native tools and successful VM inference unverified |
-| OpenAI | API key | Responses adapter, `OPENAI_API_KEY` | Successful VM inference unverified |
-| OpenAI | ChatGPT subscription | Reviewer-owned OAuth consent, private storage/refresh, streaming Responses | Successful VM review user-confirmed; long-running refresh and live persona coverage remain unqualified |
+| Provider | Authentication | Implementation |
+|---|---|---|
+| Claude | API key | Claude Code adapter, `ANTHROPIC_API_KEY` |
+| Claude | Subscription / enterprise | Claude Code adapter, explicit `CLAUDE_CODE_OAUTH_TOKEN` |
+| OpenAI | API key | Responses adapter, `OPENAI_API_KEY` |
+| OpenAI | ChatGPT subscription | Reviewer-owned OAuth consent, private storage/refresh, streaming Responses |
+
+[Qualification evidence and outstanding checks](proposal.md#qualification-evidence) are tracked centrally; implemented access paths do not establish account entitlement or live tool behavior.
 
 An enterprise seat must include Claude Code and permit its use. ChatGPT Plus/Pro plan access is separate from API credit. Eligibility and model availability come from the selected account; passing preflight does not verify them. No path reads browser/Codex credentials or silently changes billing mode.
 

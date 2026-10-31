@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .contract import TOKEN_KEYS, LLMResult, RunnerError
+from .contract import LLMResult, RunnerError
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:

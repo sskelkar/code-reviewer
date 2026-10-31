@@ -33,21 +33,12 @@ Optional Langfuse tracing returns only a closed, bounded metadata schema through
 
 The operator deliberately selects the host boundary. Acquisition uses the existing host/local-clone path and the same review core. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.
 
-## Current implementation and next work
-
-The REPL is parked with code/tests retained. The one-shot CLI provides credential-free preflight, explicit host dry-run/review and default VM review dispatch. VM dry-run and private in-VM source authentication remain unsupported. Both adapters and internal review algorithms exist. Keep those facts visible; do not make status-row edits stand in for implementation.
-
-The supported VM checks cover jailed lifecycle, host/native containment, clean image reuse, bounded public PR acquisition, source-access revocation, private results and recovery without credentials/inference. The execution selector and provider factory are wired to host acquisition/core. Normal-command VM dispatch, trusted deployment settings, provider-scoped endpoint policy, private credential transport and bounded report presentation are implemented. Simulated tests cover both providers/strategies; ChatGPT-backed VM review is user-confirmed; native Claude and broader mode/refresh qualification remain open. Preflight separates offline configuration readiness from qualification evidence.
-
-See [architecture](architecture.md), [VM design](sandbox-architecture.md) and [checklist](sandbox-todo.md).
-
-
 ## Supported limits and later work
 
 The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout`, `--dry-run` and the operator-file `criteria_manifest` override are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.
 
-The REPL and comparator replay are parked, with helpers/tests retained. Private source authentication and future review-quality experiments are separate milestones. Custom syscall filters, credential brokers, per-persona VMs and distributed infrastructure are outside this scope. None is an implicit prerequisite for the currently agreed boundary. Native Claude authentication/tools and broader mode/refresh behavior still need authorized qualification.
+Supported interfaces and parked code are listed in [usage](usage.md); outstanding qualification and extensions belong in [the roadmap](proposal.md#checklist).
 
 Binary contents are omitted from model checkouts and diff hunks in both execution locations. Prefix classification is a heuristic, not binary validation or malware scanning. Omission metadata and text/acquisition limits are documented in [usage](usage.md#binary-omissions); binary Git objects still cross the acquisition boundary and remain subject to its bounds.
 
-The common LLM contract and one host/guest adapter factory are implemented. Claude subscription access requires the selected explicit token; ambient API keys are not forwarded. ChatGPT uses reviewer-owned consent and private refresh storage. VM jobs receive only a bounded-lifetime access token after admission; refresh/identity tokens remain on the host. See [adapter support](llm.md).
+Authentication and credential lifetime are specified in [the LLM guide](llm.md).

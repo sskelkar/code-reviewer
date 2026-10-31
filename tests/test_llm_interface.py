@@ -107,12 +107,12 @@ class LLMInterfaceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'does not match'):
             settings.config_from_job(raw,Path('/synthetic'))
 
-    def test_old_vm_setting_migrates_without_silent_conflicting_preferences(self):
+    def test_removed_vm_auth_alias_is_rejected(self):
         with tempfile.TemporaryDirectory() as name:
             path=Path(name)/'review.toml'
-            path.write_text('vm_claude_auth = "oauth"\n')
-            path.chmod(0o600)
-            self.assertEqual(load_config(str(path)).auth_mode,'subscription')
-            path.write_text('vm_claude_auth = "oauth"\nauth_mode = "api-key"\n')
-            with self.assertRaisesRegex(ConfigError,'one explicit auth_mode'):
-                load_config(str(path))
+            for text in ('vm_claude_auth = "oauth"\n',
+                         'vm_claude_auth = "oauth"\nauth_mode = "api-key"\n'):
+                path.write_text(text)
+                path.chmod(0o600)
+                with self.assertRaisesRegex(ConfigError, 'unknown config key: vm_claude_auth'):
+                    load_config(str(path))

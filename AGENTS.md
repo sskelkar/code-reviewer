@@ -1,53 +1,35 @@
 # AGENTS.md
 
-Guidance for agents working on this repository. Read the [proposal checklist](docs/proposal.md#checklist), [architecture](docs/architecture.md) and [VM checklist](docs/sandbox-todo.md) for current work. Create a handover document only when the user explicitly requests one.
+Guidance for agents working on this repository. Create a handover document only when the user explicitly requests one.
 
 ## Product direction
 
 One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same review algorithms, criteria, validation, accounting and reports. `backends/contract.py` owns provider-neutral Runner/LLMResult/RunnerError; host and guest use one factory. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
 
-Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The flag is `--no-sandbox`; trusted operator config may also select `sandbox = false`. Both dispatch paths are implemented; ChatGPT-backed VM review is user-confirmed; native Claude qualification remains open. Host acquisition is a supported feature. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
+Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The flag is `--no-sandbox`; trusted operator config may also select `sandbox = false`. Host acquisition is a supported feature. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
 
 The supported VM backend uses the shared jailed lifecycle. Do not add a separate raw-Firecracker launcher.
 
 **Models propose; deterministic code validates and decides.** Every model reply is validated and the harness writes every artifact. Read/Grep/Glob are the only model code tools; no tests, builds, scripts or arbitrary model commands execute.
 
-## Current implementation
+## Working scope and references
 
-Both single-agent and four-persona algorithms are implemented. The CLI provider factory and explicit host acquisition/review dispatch use those same algorithms. The REPL is parked: keep `parked/repl.py`, `parked/repl_help.py` and their tests, but do not wire new features through them. Bare `reviewer` prints help without loading configuration or starting a session. Focus on the one-shot CLI.
+Focus on the one-shot CLI. Bare `reviewer` prints help without loading configuration. Preserve the parked `parked/repl.py`, `repl_help.py`, replay helpers and their tests; do not wire new features through them or restore forwarding wrappers.
 
-The public CLI runs explicit host reviews with either provider, while VM requests use trusted deployment settings and the shared jailed lifecycle. Host dry-run/preflight do not read model credentials; normal host execution reads credentials only after effective options/configuration are validated. OpenAI requires one explicit model ID for all roles. API-key access requires three positive operator token rates and reads OPENAI_API_KEY. Subscription access uses reviewer-owned OAuth consent/private storage, streaming Responses, token budgets and an access-token-only VM handoff. Preflight never reads that store. Preflight configuration readiness is separate from qualification evidence; real jobs enforce worker/artifact/admission/confinement checks.
+Read [architecture](docs/architecture.md) for ownership, [the roadmap](docs/proposal.md#checklist) for work and qualification evidence, [VM architecture](docs/sandbox-architecture.md) for controls and [VM setup](docs/sandbox-check.md) for deployment checks. Use [usage](docs/usage.md) for configuration/reports, [LLM](docs/llm.md) for authentication, [tracing](docs/tracing.md) for observability, [prompts](docs/prompts.md) for model contracts and [the walkthrough](docs/project-explainer.md) for method-level call chains.
 
-The supported `reviewer sandbox check` uses a dedicated mountless Lima Linux worker on macOS and one jailed Firecracker VM per workload. Checks cover simulated model execution in both flows, bounded input/result transfer, external phase-scoped network policy, non-root/no-new-privileges, read-only code, host-observed confinement/resource limits and cleanup. `--pr` fetches public GitHub input inside the review VM and revokes source access before inference. Optional capsule input remains; private in-VM source authentication is unsupported. `--lifecycle` tests cancellation/supervisor loss; `sandbox recover` resets abandoned dedicated-worker state. Clean cached images contain no target inputs, findings or credentials.
+Operator configuration and credentials remain separate from repository criteria. Preflight/doctor are offline configuration reports, not deployment certification: no target, credential, worker or artifact activity. Host dry-run reads no credentials. Real VM jobs enforce worker/artifact/admission/confinement checks before selected-credential handoff. Public in-VM acquisition revokes source access before inference; private in-VM source authentication is unsupported. Clean images contain no target inputs, findings or credentials. A VM cannot revoke copied credentials or enforce hard provider spending caps.
 
-Normal VM dispatch transports allowlisted settings, selected-adapter credentials and bounded reports through private SSH pipes/vsock. Fixed inference policies select the provider endpoints. API-key and native CLI API-key/OAuth paths are implemented. ChatGPT-backed VM review is user-confirmed; native Claude authentication/tool qualification remains open. Custom guest-wide syscall filtering and a custom credential broker are deferred. A VM does not revoke a copied provider credential or enforce a hard provider spending cap.
+Authentication is explicitly API-key or subscription; never infer or fall back between them. Claude subscription uses `CLAUDE_CODE_OAUTH_TOKEN`, not ambient API keys/cached login. ChatGPT uses reviewer-owned consent/private refresh storage and access-token-only VM handoff. OpenAI requires one explicit model for all roles and, for API-key access, three positive operator token rates; the key comes only from OPENAI_API_KEY.
 
-Review quality is judged manually. `doctor` and preflight share an offline configuration report. Deployment checks exercise the real backend; recorded-envelope parser regressions remain part of the tests.
-
-Optional local Langfuse tracing uses the standard-library recorder in both execution locations and a host-only SDK subprocess. Tracing is on by default; trusted operator config can set `tracing = false`. Invalid configuration, preflight and dry-run do not read tracing keys or export. Guest metadata fits existing stats/result limits and receives host schema validation; no guest egress or Langfuse keys are added. Local synthetic ingestion is audited for both flows/provider paths; actual VM/authenticated tracing qualification remains open; see [tracing](docs/tracing.md).
-
-## Where to read
-
-| Need | File |
-|---|---|
-| Current plan and experiments | [docs/proposal.md](docs/proposal.md) |
-| Architecture, execution choices and module ownership | [docs/architecture.md](docs/architecture.md) |
-| VM design and controls | [docs/sandbox-architecture.md](docs/sandbox-architecture.md) |
-| Supported no-key deployment command | [docs/sandbox-check.md](docs/sandbox-check.md) |
-| VM verification checklist | [docs/sandbox-todo.md](docs/sandbox-todo.md) |
-| Shared requirements and execution boundaries | [docs/security-contract.md](docs/security-contract.md) |
-| LLM contract, access modes and qualification | [docs/llm.md](docs/llm.md) |
-| Commands/configuration/reports | [docs/usage.md](docs/usage.md) |
-| Tests/debugging | [docs/development.md](docs/development.md) |
-| Model-facing contracts | [docs/prompts.md](docs/prompts.md) |
-| Python walkthrough | [docs/project-explainer.md](docs/project-explainer.md) |
+Tracing defaults on, with trusted `tracing = false` opt-out. Record bounded metadata in the core/guest; persist locally before optional host-only Langfuse export. Do not add guest egress, tracing keys in the VM/native model environment, full-content tracing or credential reads during preflight/dry-run. Qualification evidence belongs only in the roadmap.
 
 ## Setup and checks
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python3.13 -m venv .venv && source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e .
+pip install -e '.[tracing]'
 python3 -m unittest discover -s tests -t .
 PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 ```
@@ -65,5 +47,3 @@ Support Python **3.9+**. Run the whole suite on the oldest and newest Python ava
 - Never copy private source, saved-run contents, company/PR identifiers, PII or credentials into this repository. Use synthetic fixtures. Do not inspect previously restricted private material merely to develop the reviewer.
 - Canonical prompt changes require authorized before/after comparison evidence and honest results in proposal section 9. Paid comparator replay is parked; do not present its CLI as working. Infrastructure changes do not justify paid prompt calls.
 - Preserve no-target-IO/credential-free preflight and concrete VM admission checks; host execution requires the explicit operator selection. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.
-
-Authentication is explicit through `auth_mode = "api-key" | "subscription"` or one-shot `--auth`. Claude subscription selection uses `CLAUDE_CODE_OAUTH_TOKEN`, never an ambient API key or inferred cached login. ChatGPT uses reviewer-owned OAuth consent/storage/refresh, streamed Responses and an access-token-only VM handoff. A successful ChatGPT VM review is user-confirmed; do not extend that evidence to native Claude tools, live persona coverage or long-running refresh.
