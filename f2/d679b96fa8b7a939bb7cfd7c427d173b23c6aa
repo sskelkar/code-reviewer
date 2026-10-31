@@ -1,0 +1,56 @@
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_186e0dfe02a57d 16
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 46-54
+README.md
+  s_68cd0db0a8fc3a::t_fa0437a2afc835 105,108-118,137
+  s_68cd0db0a8fc3a::t_b4e926b6fd032b 107
+  s_68cd0db0a8fc3a::t_26ac5a29286da1 106
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_fa0437a2afc835 34,46,49,52,56-78
+  s_68cd0db0a8fc3a::t_b4c6a8b479edf4 79
+tests/test_security_boundary.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 30
+docs/usage.md
+  s_68cd0db0a8fc3a::t_fa0437a2afc835 286
+review.example.toml
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 105
+  s_68cd0db0a8fc3a::t_45888170b8285a 103
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 129
+tests/test_vm_review.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 38
+tests/test_host_execution.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 28
+tests/test_tracing.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 136,138
+tests/test_chatgpt.py
+  s_68cd0db0a8fc3a::t_fce0e0eacec5b2 33
+AGENTS.md
+  s_68cd0db0a8fc3a::t_6479f1e7783562 27
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_181861afd78281 32
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_6e797a2d360aa8 16,20-22,209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f2d679b96fa8b7a939bb7cfd7c427d173b23c6aa",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
