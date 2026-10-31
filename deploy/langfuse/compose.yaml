@@ -53,7 +53,7 @@ services:
       LANGFUSE_INIT_PROJECT_NAME: Code Reviewer
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?run setup.py}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?run setup.py}
-      LANGFUSE_INIT_USER_EMAIL: reviewer@localhost.invalid
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_USER_EMAIL:-reviewer@localhost.invalid}
       LANGFUSE_INIT_USER_NAME: Local Operator
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_USER_PASSWORD:?run setup.py}
   langfuse-worker:

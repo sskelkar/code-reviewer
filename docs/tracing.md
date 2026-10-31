@@ -14,7 +14,7 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
   -f deploy/langfuse/compose.yaml up -d
 ```
 
-Use `docker compose` instead of `docker-compose` if Compose is installed as a Docker plugin. Initial migrations can take a few minutes. Open **http://localhost:4000**. The local account is `reviewer@localhost.invalid`; its generated password is the `LANGFUSE_USER_PASSWORD` entry in `~/.code-reviewer/langfuse/local.env`. Setup creates the `reviewer` project and its keys automatically. The setup script preserves an existing file rather than rotating credentials underneath stored data.
+Use `docker compose` instead of `docker-compose` if Compose is installed as a Docker plugin. Initial migrations can take a few minutes. Open **http://localhost:4000**. The local account is `reviewer@localhost.invalid`; its username and generated password are the `LANGFUSE_USER_EMAIL` and `LANGFUSE_USER_PASSWORD` entries in `~/.code-reviewer/langfuse/local.env`. Setup creates the `reviewer` project and its keys automatically. The setup script preserves an existing file rather than rotating credentials underneath stored data.
 
 Only `127.0.0.1:4000` is published; host port 3000 and supporting database/storage ports are untouched. Web/worker server version is 4.72.0. All six images are digest-pinned in [compose.yaml](../deploy/langfuse/compose.yaml), including the MinIO storage/client images. Deployment telemetry is disabled. No Langfuse Cloud account is involved.
 

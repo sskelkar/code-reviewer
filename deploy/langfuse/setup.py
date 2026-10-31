@@ -18,6 +18,7 @@ def main():
     values = {key: secrets.token_hex(32) for key in ('POSTGRES_PASSWORD', 'CLICKHOUSE_PASSWORD', 'REDIS_AUTH',
               'MINIO_ROOT_PASSWORD', 'SALT', 'ENCRYPTION_KEY', 'NEXTAUTH_SECRET', 'LANGFUSE_USER_PASSWORD')}
     values.update(LANGFUSE_PUBLIC_KEY='pk-lf-' + secrets.token_hex(16), LANGFUSE_SECRET_KEY='sk-lf-' + secrets.token_hex(32))
+    values['LANGFUSE_USER_EMAIL'] = 'reviewer@localhost.invalid'
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     except FileExistsError:
