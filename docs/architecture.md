@@ -4,11 +4,32 @@ The [README](../README.md#review-flows) explains both flows at a glance. This gu
 
 ## Ownership
 
+The Python source uses packages to group one concern behind a small import API. Keep CLI entry points and shared operator configuration at the package root; avoid another folder for every small file.
+
+```text
+src/code_reviewer/
+  cli.py, config.py, review_flow.py       entry point, settings, execution dispatch
+  flows/single_agent/                   single-agent algorithm and canonical assets
+  flows/agent_personas/                 persona algorithm and canonical assets
+  shared/                              inputs, validation, accounting and storage
+  backends/                            adapters and provider authentication
+  sandbox/                             Firecracker/Lima execution boundary
+  tracing/                             metadata recorder, review lifecycle, optional exporter
+  parked/                              inactive REPL and replay helpers
+deploy/langfuse/                        local service Compose configuration and setup
+sandbox/firecracker/, sandbox/lima/     review VM deployment assets
+docs/                                  human guides, including prompts.md
+```
+
+`tracing/__init__.py` exposes the standard-library recording API. `tracing/recorder.py` owns recording/validation; `tracing/review.py` owns host persistence and guest merging; `tracing/langfuse.py` owns optional host export. Importing the recording API never imports the SDK. Langfuse deployment files do not belong to the review VM's sandbox package. Flow-owned prompt assets remain next to their algorithms; [the prompt guide](prompts.md) documents both.
+
 `Engine` selects one flow before PR preparation and asset loading. Each flow owns orchestration, model contracts, master/result types and presentation. `backends/` owns the provider-neutral runner contract and provider-specific transport; `shared/` owns git/diff handling, criteria discovery, model-call validation, grounding, storage and accounting; it imports neither flow. The CLI dispatches rendering through `presentation.py`. The REPL code/tests are retained but parked; bare `reviewer` shows help.
 
 Only Reviewers and the persona Verifier receive Read/Grep/Glob inside the temporary head checkout. Resolver, Classifier and Comparator calls have no code tools. Each native call is a fresh headless session. The API adapter uses fresh per-call conversation state. Models propose; Python validates, accounts and writes state.
 
 ## Execution choices
+
+Optional observability is independent of these choices. `tracing.review.review_trace` wraps real one-shot reviews with a standard-library recorder; shared role/stage/tool hooks produce bounded metadata. Persona tasks inherit context explicitly. VM settings carry only the enable flag and opaque parent identity; guest records return inside existing stats limits. After cleanup, `tracing.review.finish` validates/merges records and starts the host-only `tracing.langfuse` subprocess, with a fixed loopback destination and deadline. Tracing-off/preflight/dry-run skip credentials and export. See [local tracing](tracing.md) for deployment, privacy and qualification.
 
 Provider, authentication, review strategy and execution location are independent operator settings. See [LLM interface and access](llm.md). One core supports either provider and either strategy in the selected boundary. VM is the default; `--no-sandbox` (or trusted `sandbox = false`) explicitly selects host acquisition/review. Repository labels never select behavior. No automatic VM-to-host fallback exists.
 
@@ -21,6 +42,8 @@ flowchart TD
     HOST --> CORE
     CORE --> ADAPTER["Runtime-selected provider adapter"]
     ADAPTER --> VALIDATE["Shared validators, accounting and private reports"]
+    VALIDATE --> RETURN["Return result; finish checkout/VM cleanup"]
+    RETURN -.-> TRACE["Optional host tracing<br/>validate guest records; persist metadata;<br/>export to local Langfuse :4000"]
 ```
 
 Host/guest dispatch use the same adapter factory and common result/error contract. ChatGPT uses reviewer-owned consent, private refresh storage, streaming and token-only budgets. Current routing is below.
@@ -78,6 +101,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | Location | Responsibility |
 |---|---|
 | `security.py`, `review_flow.py` | Shared offline configuration report and explicit execution dispatch; real backends enforce their boundary |
+| `tracing/recorder.py`, `review.py`, `langfuse.py` | Bounded metadata/context, host lifecycle/guest validation and isolated optional SDK export |
 | `engine.py`, `flows/__init__.py` | Stable API and one-time mode selection |
 | `flows/single_agent/flow.py` | Complete current review sequence and pass loop |
 | `flows/single_agent/passes.py`, `stop_policy.py` | One pass and convergence/failure/budget rules |

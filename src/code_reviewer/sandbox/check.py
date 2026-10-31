@@ -1,5 +1,6 @@
 """Own Mac-to-Lima deployment checks, with optional in-guest public acquisition; no keys."""
 from __future__ import annotations
+from ..tracing import traced
 
 import fcntl
 import hashlib
@@ -165,6 +166,7 @@ def prepared_images(text, source_sha, builder_sha):
     return value
 
 
+@traced('vm.images')
 def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False):
     """Share trusted deployment preparation between checks and normal reviews."""
     filenames = ['firecracker', 'jailer', 'kernel', 'source.tar', 'build.sh']

@@ -8,11 +8,14 @@ One reviewer supports runtime-selected providers through a common LLM interface.
 - [x] VM-default and explicit-host dispatch, public in-VM acquisition, private reports and explicit posting.
 - [x] Jailed lifecycle, read-only admitted code, phase-scoped external networking, deadlines, recovery and clean image reuse.
 - [x] Persistent deployment setup, binary omission policy and safe bounded HTTP diagnostics/retries.
-- [x] Flow-owned implementations, shared mechanics and isolated inactive frontends.
+- [x] Flow-owned implementations/assets, shared mechanics, concern-owned tracing package and isolated inactive frontends.
 - [x] Provider-neutral runner/result/error contract and one adapter factory for host/guest execution.
 - [x] Explicit API-key versus subscription selection; Claude subscription token isolation with no automatic API-key fallback.
 - [x] Reviewer-owned ChatGPT consent, protected account storage/refresh, streaming transport and access-token-only VM handoff.
 - [x] Complete a ChatGPT-backed VM review (user-confirmed).
+- [x] Optional bounded metadata tracing in its own package, host-only Langfuse exporter and validated VM stats handoff; local persistence precedes export.
+- [x] Local Langfuse on port 4000, synthetic review ingestion and stored-trace hierarchy/usage/privacy audit.
+- [ ] Qualify tracing through a real VM workload and authenticated provider usage; see [qualification status](langfuse-plan.md#qualification-status).
 - [ ] Qualify native Claude tools, live persona coverage, long-running refresh and additional failure paths.
 - [ ] Compare review strategies/models manually; improve qualifications and criterion attribution described in §10.2.
 
@@ -64,7 +67,7 @@ Compare single-pass versus repeated review, self-check on/off, models and the tw
 
 | Stage | Work |
 |---|---|
-| Now | Qualify native Claude tools, live persona coverage and long-running token refresh; compare review quality manually |
+| Now | Qualify [VM/authenticated tracing](langfuse-plan.md#qualification-status); qualify native Claude tools, live persona coverage and long-running token refresh |
 | Next | Manually compare findings and address demonstrated report/criteria issues |
 | Later, if needed | Requalify parked frontends, private in-VM source authentication and scoped extensions below |
 
@@ -96,7 +99,7 @@ Suggested immediate follow-up: make existing verification qualifications visible
 - Claude enterprise access must include Claude Code and permit the intended automation; entitlement is not inferred from owning a subscription.
 - ChatGPT plan usage follows a documented preview protocol. Account eligibility, real consent/refresh and model access need live qualification.
 - Native Claude tools and broader mode/refresh qualification remain open. Unit tests do not establish live behavior.
-- LSP, project context packs, full agentic traces and generalized review skills are optional later milestones, not prerequisites for the current runner interface.
+- Local metadata tracing is implemented; deployment/trace qualification is tracked in [the Langfuse integration plan](langfuse-plan.md). LSP, project context packs, full-content tracing and generalized review skills remain optional later milestones, not prerequisites for the current runner interface.
 
 ## 12. Agreed persona design and next steps
 
@@ -122,7 +125,7 @@ Only flagged groups receive fresh verification with read tools. Ground non-unres
 
 ### 12.6 Report and exact prompt logging
 
-Both flows retain identical per-pass inputs within each reviewer/persona. Host runs save input and role-call artifacts; VM export intentionally omits them. Any future tracing must respect the same privacy/size boundaries. Keep per-persona source agreement, conflict annotations and incomplete verification visible.
+Both flows retain identical per-pass inputs within each reviewer/persona. Host runs save input and role-call artifacts; VM export intentionally omits them. Optional metadata tracing respects the same privacy/size boundaries. Keep per-persona source agreement, conflict annotations and incomplete verification visible.
 
 ### 12.7 Implementation and manual comparison
 

@@ -12,6 +12,7 @@ from .shared.models import ReviewRefused
 from .backends import factory
 from .engine import Engine
 from .progress import ProgressPrinter
+from .tracing.review import review_trace
 
 # What a review can fail with in an expected way. Frontends catch these and report them as an error message.
 REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, RunnerError)
@@ -26,6 +27,7 @@ class ReviewOutcome:
     preflight: Optional[Any] = None
 
 
+@review_trace
 def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:
     """Select the operator's boundary before Git or credentials; VM requests never fall back."""
     from .security import readiness

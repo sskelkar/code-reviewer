@@ -1,5 +1,6 @@
 """The on-disk layout of one review run (see proposal section 7). Only this module knows file names."""
 from __future__ import annotations
+from ..tracing import traced
 
 import json
 import shutil
@@ -87,6 +88,7 @@ class RunStore:
             "auto_included": project.auto_included, "ignored": project.ignored, "notes": project.notes, "warnings": criteria.warnings,
         })
 
+    @traced('review.report')
     def save_outputs(self, master: Dict[str, Any], stats: Dict[str, Any]) -> None:
         self.dump("master.json", master)
         self.dump("stats.json", stats)
@@ -98,6 +100,7 @@ class RunStore:
             stats['binary_omissions'] = ctx.binary_omissions
             self.dump('stats.json', stats)
 
+    @traced('review.cleanup')
     def cleanup_checkout(self) -> None:
         if self._checkout_parent is not None:
             shutil.rmtree(self._checkout_parent, ignore_errors=True)

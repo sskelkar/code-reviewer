@@ -10,6 +10,7 @@ from ..config import Config
 from .models import PassFailed
 from .run_store import dump_json
 from .stats import Stats
+from ..tracing import observation, result_usage, fingerprint
 
 Validator = Callable[[Dict[str, Any]], List[str]]
 
@@ -49,7 +50,11 @@ class ModelCaller:
         """Return a validated result, or raise PassFailed. Every attempt is logged to `raw_path`."""
         raw_log: List[Any] = []
         try:
-            return self._attempts(spec, validate, raw_log)
+            with observation('model.call', 'agent', role=spec.role, persona=getattr(self, 'persona', ''),
+                             model=spec.model, **{'pass': spec.pass_no},
+                             round=((spec.pass_no - 1) // 4 + 1) if self.cfg.review_mode == 'agent-personas' and spec.pass_no else None,
+                             prompt_hash=fingerprint(spec.system + '\n' + spec.user)):
+                return self._attempts(spec, validate, raw_log)
         finally:
             dump_json(raw_path, raw_log)
 
@@ -58,16 +63,25 @@ class ModelCaller:
         problems: List[str] = ["unknown error"]
         for attempt in (1, 2):
             limits = {'token_limit': self.cfg.call_budget_tokens} if self.cfg.auth_mode == 'subscription' else {}
-            result = self.runner.run(
-                system_prompt=spec.system, user_prompt=spec.user + feedback, schema=spec.schema, model=spec.model,
-                tools=spec.tools, cwd=spec.cwd, budget_usd=self.cfg.call_budget_usd, timeout_s=self.cfg.call_timeout_s, **limits,
-            )
-            if self.cfg.auth_mode == 'subscription' and result.budget_tokens_used is None:
-                result.budget_tokens_used = result.total_tokens if result.usage_known else max(result.total_tokens, self.cfg.call_budget_tokens)
-            self.stats.record(spec.role, spec.pass_no, result, attempt, spec.model)
-            raw_log.append({"attempt": attempt, "ok": result.ok, "error": result.error, "envelope": result.raw})
+            kind = 'generation' if self.cfg.provider == 'claude' else 'span'
+            name = 'model.aggregate' if kind == 'generation' else 'model.attempt'
+            with observation(name, kind, role=spec.role, attempt=attempt, model=spec.model,
+                             allowance_tokens=self.cfg.call_budget_tokens if self.cfg.auth_mode == 'subscription' else None,
+                             allowance_usd=self.cfg.call_budget_usd if self.cfg.auth_mode == 'api-key' else None,
+                             auth=self.cfg.auth_mode, visibility='native-aggregate' if kind == 'generation' else 'model-turn') as span:
+                result = self.runner.run(
+                    system_prompt=spec.system, user_prompt=spec.user + feedback, schema=spec.schema, model=spec.model,
+                    tools=spec.tools, cwd=spec.cwd, budget_usd=self.cfg.call_budget_usd, timeout_s=self.cfg.call_timeout_s, **limits,
+                )
+                result_usage(span, result)
+                if self.cfg.auth_mode == 'subscription' and result.budget_tokens_used is None:
+                    result.budget_tokens_used = result.total_tokens if result.usage_known else max(result.total_tokens, self.cfg.call_budget_tokens)
+                self.stats.record(spec.role, spec.pass_no, result, attempt, spec.model)
+                raw_log.append({"attempt": attempt, "ok": result.ok, "error": result.error, "envelope": result.raw})
 
-            problems = [result.error or "call failed"] if not result.ok else validate(result.parsed or {})
+                problems = [result.error or "call failed"] if not result.ok else validate(result.parsed or {})
+                if problems:
+                    span.update(outcome='error', rejected=len(problems))
             if not problems:
                 return result
             if result.budget_exceeded or not result.retryable:

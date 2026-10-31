@@ -9,6 +9,7 @@ from .config import Config
 from .flows import create_flow
 from .shared.events import EventSink
 from .shared.models import PRContext
+from .tracing import traced
 
 if TYPE_CHECKING:
     from .shared.git_ops import PRRef
@@ -21,9 +22,11 @@ class Engine:
                  prompts_dir: Optional[Path] = None, defaults_dir: Optional[Path] = None):
         self._flow = create_flow(cfg, runner, emit, prompts_dir, defaults_dir)
 
+    @traced('review.prepare')
     def prepare(self, ref: PRRef, local_path: Optional[Path] = None) -> PRContext:
         return self._flow.prepare(ref, local_path)
 
+    @traced('review.flow')
     def review(self, ctx: PRContext, keep_checkout: bool = False, prepared_checkout: Optional[Path] = None) -> Any:
         if prepared_checkout is not None:
             return self._flow.review(ctx, keep_checkout=keep_checkout, prepared_checkout=prepared_checkout)

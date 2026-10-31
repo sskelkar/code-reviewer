@@ -3,6 +3,7 @@
 Shared by both flows. Dry runs build the pinned diff and default criteria but omit project discovery and model calls.
 """
 from __future__ import annotations
+from ..tracing import traced
 
 import json
 from dataclasses import replace
@@ -76,6 +77,7 @@ class InputBuilder:
         """The criteria without the project's own rules. Resolving those needs a model call, which a dry run avoids."""
         return criteria_mod.assemble(self.default_rules(), criteria_mod.ProjectCriteria(), self.cfg.criteria_mode, [f.path for f in files])
 
+    @traced('criteria.resolve')
     def resolve_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ModelCaller, work_dir: Path) -> criteria_mod.CriteriaSet:
         """Default rules plus the project's own rules (from the base commit), merged with project precedence."""
         cfg = self.cfg

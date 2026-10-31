@@ -126,6 +126,7 @@ class Config:
     auth_mode: str = "api-key"
     chatgpt_account: str = "default"
     call_budget_tokens: int = 200000
+    tracing: bool = False
 
     def validate(self) -> None:
         for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',
@@ -140,6 +141,8 @@ class Config:
             raise ConfigError('ChatGPT call_timeout_s must be below 3380 seconds')
         if type(self.sandbox) is not bool:
             raise ConfigError('sandbox must be true or false')
+        if type(self.tracing) is not bool:
+            raise ConfigError('tracing must be true or false')
         for name in ('openai_input_price', 'openai_cached_input_price', 'openai_output_price'):
             value = getattr(self, name)
             try:

@@ -13,7 +13,7 @@ pip install -e .
 python3 -m unittest discover -s tests -t .
 ```
 
-There are no third-party runtime dependencies (only `tomli` on Python below 3.11) and no test dependencies; the tests use the standard `unittest` module. The tests need no network, no model and no GitHub.
+Core runtime dependencies are limited to `tomli` on Python below 3.11. Optional host tracing uses `langfuse==5.1.0` on Python 3.11+ (`pip install -e '.[tracing]'`); there are no required test dependencies; the tests use the standard `unittest` module. The tests need no network, no model and no GitHub.
 
 Supported Python is 3.9 and up. Before sending a change, run the tests on the oldest and newest Python you have (for example `python3.9 -m unittest discover -s tests -t .` and `python3.13 -m unittest discover -s tests -t .`). There is no CI yet.
 
@@ -52,6 +52,7 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_persona_parallel` | Overlapping Reviewer calls, concurrency limits, round barriers and ordered merges, isolated budget pools, proportional allocations, large-prompt delivery to slow stdin readers, and subprocess-group cancellation |
 | `test_persona_flow` | Configured round-robin counts, independent frozen prompts, classification/fallback, source-aware agreement, conflicts/remapping, advisory verification/grounding, budgets/failures/cancellation, CLI/REPL and dry runs |
 | `test_flow_selection` | Default/explicit mode selection, asset isolation, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
+| `test_tracing` | Closed metadata/privacy, disabled/preflight behavior, saturation, concurrent parentage, both flows, actual guest stats transfer, nonfatal export and optional SDK timestamp/usage mapping |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |
 
 Things to know when writing tests:
@@ -64,7 +65,7 @@ Things to know when writing tests:
 
 | To... | Do this |
 |---|---|
-| Change what a role is asked | Edit the selected flow's `prompts/` ([prompts/README.md](../prompts/README.md) lists the contracts and variables). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
+| Change what a role is asked | Edit the selected flow's `prompts/` ([prompt contracts](prompts.md) lists the contracts and variables). Prompt hashes are stored in each run's `config.json`, so runs stay comparable |
 | Change output structure | Edit the flow's `prompts/schemas/`, `shared/findings.py` or the flow's `master.py`, and its report |
 | Tune single-agent duplicate grouping | Edit its Comparator prompt or model and compare authorized before/after reviews. Comparator replay is parked; its offline helpers/tests remain, but its CLI performs no IO or model calls. |
 | Add or change default rules | Edit the selected flow's `criteria/*.md` using ID-bearing headings (`GEN-*` for single-agent, persona-prefixed IDs for personas). Persona allocation also lives in `personas.json`; shared rules retain one canonical definition. Tests check identity and coverage |
@@ -76,11 +77,11 @@ Things to know when writing tests:
 
 ## Code conventions
 
-- Standard library only at runtime. Compatible with Python 3.9: start modules with `from __future__ import annotations`, no `match` statements, no `X | Y` unions outside annotations.
+- Core runtime uses the standard library plus `tomli` below 3.11; the optional host tracing extra requires Python 3.11+. Compatible core Python is 3.9+: start modules with `from __future__ import annotations`, no `match` statements, no `X | Y` unions outside annotations.
 - LLMs propose, code decides: validate every model output in code and never execute it. All files are written by the harness.
 - Modules do one job; keep functions short and named for what they do. Put new logic in the module that owns the concept and keep each flow's `flow.py` a readable list of steps. `engine.py` only selects and delegates.
 - Keep prompts language-agnostic. Project- or language-specific guidance belongs in criteria, not in prompts.
-- Add a test for every behavior change. Keep the README and [prompts/README.md](../prompts/README.md) in sync with changes to usage or prompts, and update [proposal.md](proposal.md) if a design decision changes.
+- Add a test for every behavior change. Keep the README and [prompt contracts](prompts.md) in sync with changes to usage or prompts, and update [proposal.md](proposal.md) if a design decision changes.
 
 ## Debugging a review
 

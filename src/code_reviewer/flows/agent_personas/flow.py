@@ -6,6 +6,7 @@ from ...shared.git_content import omission_section
 from dataclasses import replace
 import copy
 import platform
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from ...shared.models import PassFailed
 from ...shared.pr_source import load_pr_context
 from ...shared.review_inputs import InputBuilder
 from ...shared.run_store import RunStore, dump_json
+from ...tracing import traced, event as trace_event
 from .caller import PersonaCaller, RunStopped
 from .budget import Budget, ConcurrentStats
 from .runner import ParallelRunner
@@ -45,6 +47,7 @@ class AgentPersonasFlow:
         self.inputs = InputBuilder(self.catalog.input_config(cfg), self.prompts, self.defaults_dir, self.emit)
 
     def emit(self, type_: str, **data: Any) -> None:
+        trace_event(type_, data)
         self.sink(Event(type_, data))
 
     def prepare(self, ref: Any, local_path: Any = None) -> Any:
@@ -175,7 +178,7 @@ class AgentPersonasFlow:
                     self.emit('persona_pass_started', persona=slot.persona, round_no=slot.round_no,
                               pass_no=slot.pass_no, rounds=self.cfg.persona_passes, scheduled=len(result.passes))
                     self.emit('reviewer_started', pass_no=slot.pass_no, model=self.cfg.model_reviewer)
-                    pending[slot.pass_no] = executor.submit(review, slot)
+                    pending[slot.pass_no] = executor.submit(copy_context().run, review, slot)
                 # Barrier: no consolidation or subsequent round until this round's reviews finish.
                 payloads = {}
                 numbers = {future: number for number, future in pending.items()}
@@ -233,6 +236,7 @@ class AgentPersonasFlow:
             return 'failures' if any(failures.values()) else 'budget_exceeded'
         return 'incomplete' if incomplete else 'completed'
 
+    @traced('review.consolidate')
     def _consolidate(self, result, roles, files, frozen, checkout, cache, store, slot, payload):
         directory = store.pass_dir(slot.pass_no)
         previous_master = result.master
@@ -277,6 +281,7 @@ class AgentPersonasFlow:
             dump_json(directory / 'slot.json', slot.to_dict())
 
 
+    @traced('review.verify')
     def _verify(self, result: Any, roles: Any, files: Any, checkout: Any, cache: Any, store: Any) -> None:
         diff = self.inputs.review_input(result.ctx, files, result.criteria, checkout).diff_block
         for group in result.master.conflicts.values():

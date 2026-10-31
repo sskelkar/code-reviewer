@@ -1,5 +1,6 @@
 """Normal Mac review dispatch using the shared jailed VM and review algorithms."""
 from __future__ import annotations
+from ..tracing import traced
 
 import hashlib
 import os
@@ -97,6 +98,7 @@ def converse(channel, cfg, source, key_reader):
     return {'kind': 'result', 'stop_reason': metadata.get('stop_reason'), 'checks': checks, 'files': value['files']}, key
 
 
+@traced('vm.execute')
 def execute(worker, arguments, cfg, source, key_reader):
     # Explicit no-TTY and a clean launcher environment. SSH carries framed private
     # stdin/stdout; stderr is deliberately discarded rather than echoing secrets.

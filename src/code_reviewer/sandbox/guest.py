@@ -1,5 +1,6 @@
 """One unprivileged guest job; bootstrap and reports stay off the VM console."""
 from __future__ import annotations
+from ..tracing import observation
 
 import base64
 import json
@@ -69,6 +70,26 @@ def collect_artifacts(paths, key):
 
 def run_job(sock, root, *, probe_network=network_probes, seal=None):
     settings = validate_settings(receive_json(sock))
+    context = settings.get('trace_context')
+    if context and settings.get('config', {}).get('tracing') is True:
+        from ..tracing import Recorder, activate, observation, attach
+        from .settings import config_from_job
+        config_from_job(settings, root)  # Validate context before allocating a recorder.
+        recorder = Recorder(context['trace_id'], context['parent_id'])
+        with activate(recorder), observation('review.guest'):
+            result = _run_job(sock, root, settings, probe_network=probe_network, seal=seal)
+        if 'stats.json' in result.get('files', {}):
+            # Preserve existing combined export bounds; telemetry gets only spare capacity.
+            files = result['files']
+            other = sum(len(base64.b64decode(body)) for name, body in files.items() if name != 'stats.json')
+            stats = json.loads(base64.b64decode(files['stats.json']))
+            stats = attach(stats, recorder.snapshot(), max_bytes=min(MAX_ARTIFACT, MAX_EXPORT - other))
+            files['stats.json'] = base64.b64encode((json.dumps(stats, indent=2, ensure_ascii=False) + '\n').encode()).decode()
+        return result
+    return _run_job(sock, root, settings, probe_network=probe_network, seal=seal)
+
+
+def _run_job(sock, root, settings, *, probe_network, seal):
     from .settings import provider
     selected = provider(settings)
     if sock is not None:
@@ -80,7 +101,8 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
         source = json.loads(data)
         if not isinstance(source, dict) or set(source) != {'kind', 'url'} or source['kind'] != 'github-pr':
             raise ValueError('invalid public acquisition request')
-        ctx = in_guest(source['url'], root / 'repo')
+        with observation('vm.acquire'):
+            ctx = in_guest(source['url'], root / 'repo')
         acquired = pin(dict(repo=ctx.repo, number=ctx.number, base=ctx.base_sha,
                             head=ctx.head_sha, merge_base=ctx.merge_base), source['url'])
         from .probes import source_tunnel
@@ -94,7 +116,8 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
         ctx = prepare_repository(data, root / 'repo')
     snapshot = None
     if seal is not None:
-        snapshot = seal(ctx, root, exported=True) if acquired else seal(ctx, root)
+        with observation('vm.admit'):
+            snapshot = seal(ctx, root, exported=True) if acquired else seal(ctx, root)
     checks = {'file_tools': file_probes(root), 'network': probe_network(selected) if probe_network is network_probes else probe_network()}
     if acquired:
         from .probes import source_denied

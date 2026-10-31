@@ -25,6 +25,10 @@ One disposable VM contains acquisition, Python orchestration and all model sessi
 
 A compromised guest can corrupt its findings/accounting and expose a credential available to it. Keep credential lifetime/exposure explicit; no custom credential broker or guest-wide syscall allow-list is mandated by this plan. Preserve tested isolation controls rather than describing a VM as absolute protection.
 
+## Optional tracing
+
+Optional Langfuse tracing returns only a closed, bounded metadata schema through the existing VM stats artifact. The host validates one connected guest subtree, rejects span IDs colliding with host observations, and checks timing, model names and fields before exporting to the fixed local endpoint. Local metadata is persisted atomically before export starts. Source, prompts, findings text, raw errors and authentication material are excluded. Langfuse keys remain on the host and are not passed to native model processes. No new guest egress is granted. SDK export runs in a deadline-bounded subprocess without ambient exporters/proxies or redirects; failures do not change review outcomes or cleanup. See [tracing](tracing.md) for storage and limitations.
+
 ## Direct-host execution
 
 The operator deliberately selects the host boundary. Acquisition uses the existing host/local-clone path and the same review core. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.

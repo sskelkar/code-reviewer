@@ -18,7 +18,7 @@ pip install -e .
 reviewer --help
 ```
 
-Keep the checkout: prompts and criteria load from it. Runtime dependencies are the standard library and `tomli` below Python 3.11. ChatGPT sign-in also requires `/usr/bin/openssl` for identity-signature verification.
+Keep the checkout: prompts and criteria load from it. Core runtime dependencies are the standard library and `tomli` below Python 3.11. Optional local tracing uses the `tracing` extra on Python 3.11+. ChatGPT sign-in also requires `/usr/bin/openssl` for identity-signature verification.
 
 Provider, authentication, strategy and execution location are independent:
 
@@ -102,6 +102,8 @@ Use `~/.code-reviewer/review.toml` or `reviewer --config /absolute/path/review.t
 
 The VM enforces read-only admitted code, non-root/no-new-privileges, jailer/systemd limits, external egress policy and private transfers. It cannot prove model findings, prevent exposure of a copied runtime token, or enforce provider billing. See the [execution contract](docs/security-contract.md).
 
+Optional [local Langfuse tracing](docs/tracing.md) uses **localhost:4000**. Set `tracing = true` in operator configuration to record stage/model/tool timing, retries and cache/token usage without source, prompts or findings text. VM traces return through the existing result channel; only the host exports to Langfuse. Tracing failures do not fail reviews.
+
 ## Development and next work
 
 ```bash
@@ -111,7 +113,7 @@ PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 
 Tests use synthetic Git repositories, fake executables and simulated providers; no real credentials, networking or VM boots. Check actual deployment separately with `reviewer sandbox check`; it performs no inference. Run the oldest and newest available supported Python before finishing changes.
 
-Next: qualify real sign-in and subscription-backed inference through the VM, then compare review quality manually. REPL/replay remain in `parked/`, disconnected from the CLI. No eval framework, distributed scheduler or per-persona VMs are maintained.
+Next: qualify VM tracing, native Claude tools, live persona coverage and long-running refresh, then compare review quality manually. REPL/replay remain in `parked/`, disconnected from the CLI. No eval framework, distributed scheduler or per-persona VMs are maintained.
 
 ## Documentation
 
@@ -127,4 +129,4 @@ Next: qualify real sign-in and subscription-backed inference through the VM, the
 | [VM checklist](docs/sandbox-todo.md) | Controls and outstanding qualification |
 | [Development](docs/development.md) | Tests and debugging |
 | [Python walkthrough](docs/project-explainer.md) | Reading this code as a Java developer |
-| [Prompt contracts](prompts/README.md) | Canonical assets and harness validation |
+| [Prompt contracts](docs/prompts.md) | Canonical assets and harness validation |

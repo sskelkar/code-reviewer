@@ -98,7 +98,7 @@ API-key calls use operator-supplied token prices and estimated dollar allowances
 
 Token admission estimates, pass counts, timeouts and cancellation bound work but cannot enforce a hard provider spending/token cap: subscription requests cannot set `max_output_tokens`, and native usage is observed after process completion. One response can exceed its allowance before the harness stops. Claude subscription calls omit the native API-dollar flag and use the shared token/pass/time controls. Never treat native API-equivalent costs as a subscription balance or invoice.
 
-See [HTTP errors](usage.md#api-errors-and-retries). Safe codes/validated headers reach stats; raw provider error bodies and credentials do not. Agentic tracing is later work.
+See [HTTP errors](usage.md#api-errors-and-retries). Safe codes/validated headers reach stats; raw provider error bodies and credentials do not. Optional [local Langfuse tracing](tracing.md) records model/tool timing, safe error codes and usage. The native Claude adapter exposes aggregate invocation usage rather than intermediate tool events.
 
 ## Native runtime artifact
 

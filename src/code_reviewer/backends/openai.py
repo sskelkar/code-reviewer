@@ -1,5 +1,6 @@
 """Responses API adapter shared by execution paths; no SDK or model command tools."""
 from __future__ import annotations
+from ..tracing import observation
 
 import copy
 import http.client
@@ -151,6 +152,27 @@ class OpenAIRunner:
     def run(self, **kwargs):
         return self.run_cancellable(None, **kwargs)
 
+    def _trace_usage(self, span, reply, subscription):
+        usage = reply.get('usage') if isinstance(reply, dict) else None
+        details = usage.get('input_tokens_details') if isinstance(usage, dict) else None
+        span.update(usage_known=False, cache_read_known=False, cache_write_known=False)
+        if not isinstance(usage, dict) or not isinstance(details, dict):
+            return
+        input_, output, cached = usage.get('input_tokens'), usage.get('output_tokens'), details.get('cached_tokens')
+        if any(type(v) is not int or not 0 <= v <= 10**12 for v in (input_, output, cached)) or cached > input_:
+            return
+        values = dict(input=input_ - cached, output=output, cache_read=cached, usage_known=True,
+                      cache_read_known=True, cache_read_share=cached / input_ if input_ else 0)
+        writes = details.get('cache_write_tokens')
+        if type(writes) is int and 0 <= writes <= input_ - cached:
+            values.update(cache_write_reported=writes, cache_write_known=True)
+        if not subscription:
+            values['cost_usd'] = self.prices.cost(input_, cached, output)
+            # No write-price assumption: only claim net savings when writes explicitly equal zero.
+            if type(writes) is int and writes == 0:
+                values['cache_savings_usd'] = max(0, self.prices.cost(input_, 0, output) - values['cost_usd'])
+        span.update(**values)
+
     def _request(self, payload, deadline, cancelled, errors):
         # Retry the same HTTP request, not a fresh agent conversation. All waits
         # share the existing call deadline and no extra budget is allocated.
@@ -168,9 +190,14 @@ class OpenAIRunner:
                         raise TimeoutError
                     if cancelled is not None and cancelled.is_set():
                         raise KeyboardInterrupt
-                if self._transport is not None:
-                    return self._transport(payload,self._api_key,remaining)
-                return request_response(payload,self._api_key,remaining,proxy=self.proxy,cancelled=cancelled)
+                with observation('http.attempt', attempt=attempt) as request_span:
+                    try:
+                        if self._transport is not None:
+                            return self._transport(payload,self._api_key,remaining)
+                        return request_response(payload,self._api_key,remaining,proxy=self.proxy,cancelled=cancelled)
+                    except ProviderHTTPError as exc:
+                        request_span.update(error_code=exc.details.get('code'), status=exc.details.get('status'))
+                        raise
             except ProviderHTTPError as exc:
                 detail = dict(exc.details, turn_attempt=attempt)
                 errors.append(detail)
@@ -242,7 +269,16 @@ class OpenAIRunner:
                         raise ProviderError('OpenAI call allowance insufficient for another request')
                 pending = True
                 phase = 'transport'
-                reply = self._request(payload, started + timeout_s, cancelled, http_errors)
+                with observation('model.turn', 'generation', model=self.model, auth='subscription' if subscription else 'api-key',
+                                 visibility='model-turn') as span:
+                    try:
+                        reply = self._request(payload, started + timeout_s, cancelled, http_errors)
+                    except BaseException:
+                        span.update(usage_known=False)
+                        for error in http_errors[-1:]:
+                            span.update(error_code=error.get('code'), status=error.get('status'))
+                        raise
+                    self._trace_usage(span, reply, subscription)
                 phase = 'usage'
                 if not isinstance(reply, dict):
                     raise ProviderError('invalid OpenAI response envelope')
@@ -304,8 +340,12 @@ class OpenAIRunner:
                             result.retryable = False
                             raise ProviderError('OpenAI function-call arguments must decode to an object; tool call refused')
                         phase = 'tool execution'
-                        history.append({'type': 'function_call_output', 'call_id': call['call_id'],
-                                        'output': files.execute(call['name'], arguments)})
+                        with observation('tool.' + call['name'], 'tool') as tool_span:
+                            tool_output = files.execute(call['name'], arguments)
+                            tool_value = json.loads(tool_output)
+                            tool_span.update(ok='error' not in tool_value, truncated=tool_value.get('truncated'),
+                                             bytes=len(tool_output.encode()), rows=len(tool_value.get('text', '').splitlines()))
+                        history.append({'type': 'function_call_output', 'call_id': call['call_id'], 'output': tool_output})
                     continue
                 phase = 'message content'
                 texts = []

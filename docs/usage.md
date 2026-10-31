@@ -281,6 +281,10 @@ Known quota, credit and spending/usage-limit errors stop immediately, as do auth
 
 This behavior follows the [provider's rate-limit guidance](https://developers.openai.com/api/docs/guides/rate-limits). It requires no additional dependency, tracing service or outbound endpoint.
 
+## Optional local tracing
+
+Set `tracing = true` in trusted operator configuration to record metadata in local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.11+ and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. See [setup, trace contents, caching and troubleshooting](tracing.md); no new review command or guest-network permission is required.
+
 
 ## Subscription commands and limits
 

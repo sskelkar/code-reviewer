@@ -16,7 +16,7 @@ CORE = ('provider', 'auth_mode', 'chatgpt_account', 'call_budget_tokens', 'revie
         'candidate_all_threshold', 'candidate_max', 'max_diff_lines', 'criteria_max_chars', 'exclude_patterns',
         'extra_exclude_patterns', 'grounding_line_window', 'redact_emails', 'call_budget_usd', 'call_timeout_s',
         'run_budget_usd', 'run_budget_tokens', 'post_tiers', 'persona_prompt_max_chars', 'persona_passes',
-        'persona_parallel', 'openai_input_price', 'openai_cached_input_price', 'openai_output_price')
+        'persona_parallel', 'openai_input_price', 'openai_cached_input_price', 'openai_output_price', 'tracing')
 ENDPOINTS = {'openai': ('api.openai.com',), 'claude': ('api.anthropic.com', 'platform.claude.com')}
 
 
@@ -39,13 +39,24 @@ def errors(cfg):
 
 
 def job_settings(cfg):
-    return {'config': {name: getattr(cfg, name) for name in CORE}, 'auth': cfg.auth_mode,
-            'probe_only': False, 'timeout_s': cfg.vm_timeout_s}
+    from ..tracing import context, current
+    value = {'config': {name: getattr(cfg, name) for name in CORE}, 'auth': cfg.auth_mode,
+             'probe_only': False, 'timeout_s': cfg.vm_timeout_s}
+    if cfg.tracing and context():
+        value['trace_context'] = context()
+        current().guest_context = value['trace_context']
+    return value
 
 
 def config_from_job(value, root):
-    if not isinstance(value, dict) or set(value) != {'config', 'auth', 'probe_only', 'timeout_s'} or value['probe_only'] is not False:
+    if not isinstance(value, dict) or set(value) - {'trace_context'} != {'config', 'auth', 'probe_only', 'timeout_s'} or value['probe_only'] is not False:
         raise ValueError('invalid review job settings')
+    if 'trace_context' in value:
+        context = value['trace_context']
+        if (not isinstance(context, dict) or set(context) != {'trace_id', 'parent_id'}
+                or not isinstance(context['trace_id'], str) or not re.fullmatch('[0-9a-f]{32}', context['trace_id'])
+                or not isinstance(context['parent_id'], str) or not re.fullmatch('[0-9a-f]{16}', context['parent_id'])):
+            raise ValueError('invalid trace context')
     if type(value['timeout_s']) is not int or not 60 <= value['timeout_s'] <= 1800:
         raise ValueError('invalid whole-job timeout')
     raw = value['config']

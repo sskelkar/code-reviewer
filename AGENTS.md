@@ -24,6 +24,8 @@ Normal VM dispatch transports allowlisted settings, selected-adapter credentials
 
 Review quality is judged manually. `doctor` and preflight share an offline configuration report. Deployment checks exercise the real backend; recorded-envelope parser regressions remain part of the tests.
 
+Optional local Langfuse tracing uses the standard-library recorder in both execution locations and a host-only SDK subprocess. Tracing is off by default; preflight/dry-run do not read tracing keys or export. Guest metadata fits existing stats/result limits and receives host schema validation; no guest egress or Langfuse keys are added. Local synthetic ingestion is audited for both flows/provider paths; actual VM/authenticated tracing qualification remains open; see [tracing](docs/tracing.md).
+
 ## Where to read
 
 | Need | File |
@@ -37,7 +39,7 @@ Review quality is judged manually. `doctor` and preflight share an offline confi
 | LLM contract, access modes and qualification | [docs/llm.md](docs/llm.md) |
 | Commands/configuration/reports | [docs/usage.md](docs/usage.md) |
 | Tests/debugging | [docs/development.md](docs/development.md) |
-| Model-facing contracts | [prompts/README.md](prompts/README.md) |
+| Model-facing contracts | [docs/prompts.md](docs/prompts.md) |
 | Python walkthrough | [docs/project-explainer.md](docs/project-explainer.md) |
 
 ## Setup and checks
@@ -50,7 +52,7 @@ python3 -m unittest discover -s tests -t .
 PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
 ```
 
-Support Python **3.9+**. Run the whole suite on the oldest and newest Python available before finishing a change. Standard library only, plus `tomli` below Python 3.11; do not add dependencies. Tests use FakeRunners, fake executables and throwaway repositories: no real models, credentials, networking or VM boots. Real inference requires the user's request. Check deployment separately from unit tests.
+Support Python **3.9+**. Run the whole suite on the oldest and newest Python available before finishing a change. The core and VM recorder use the standard library plus `tomli` below Python 3.11. The approved optional host tracing extra uses Langfuse 5.1.0 on Python 3.11+; do not add other dependencies. Tests use FakeRunners, fake executables and throwaway repositories: no real models, credentials, networking or VM boots. Real inference requires the user's request. Check deployment separately from unit tests.
 
 ## Code and working rules
 

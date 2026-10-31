@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from ...shared.llm import ModelCaller
 from ...shared.run_store import dump_json
 from ...shared.models import PassFailed
+from ...tracing import annotate
 
 from .budget import Budget, RunStopped
 
@@ -30,6 +31,7 @@ class BudgetRunner:
         limit_key = 'token_limit' if self.budget.subscription else 'budget_usd'
         allowance = self.budget.reserve(self.pool, kwargs[limit_key])
         kwargs[limit_key] = allowance
+        annotate(pool=self.pool, **{'allowance_tokens' if self.budget.subscription else 'allowance_usd': allowance})
         self.requests[-1][limit_key] = allowance
         self.requests[-1]['invoked'] = True
         dump_json(self.path, self.requests)

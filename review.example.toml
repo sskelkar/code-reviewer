@@ -99,3 +99,7 @@ runs_dir = ""
 # ChatGPT subscription access (reviewer auth login; no key in this file).
 chatgpt_account = "default"
 call_budget_tokens = 200000
+
+# Optional local Langfuse: docs/tracing.md. Host SDK needs Python 3.11+ and .[tracing].
+# Project keys come only from LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY, never this file.
+tracing = false

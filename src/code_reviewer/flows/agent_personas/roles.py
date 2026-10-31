@@ -1,5 +1,6 @@
 """Fresh persona Reviewer sessions, classification, consolidation and targeted verification."""
 from __future__ import annotations
+from ...tracing import traced
 
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -62,6 +63,7 @@ class Roles:
                         REVIEW_TOOLS if reads_code else '', checkout if reads_code else self.work_dir)
         return self.caller.call(spec, validate, raw).parsed
 
+    @traced('criteria.route')
     def classify(self, rules: Any, definitions: Any, warnings: List[str]) -> Dict[str, List[str]]:
         project = [r for r in rules if r.source == 'project']
         ids = list(dict.fromkeys(r.rule_id for r in project))

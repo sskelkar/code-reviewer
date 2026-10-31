@@ -4,6 +4,7 @@ A finding is only trusted if its evidence can be found: an exact quote in the co
 or an anchor over a changed hunk (`absent`). Findings that fail are set aside and counted, never merged.
 """
 from __future__ import annotations
+from ..tracing import traced
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -196,6 +197,7 @@ class FindingsPreparer:
         self.diff = diff
         self.line_window = line_window
 
+    @traced('review.ground')
     def prepare(self, raw_findings: Any, pass_no: int) -> PreparedFindings:
         prepared = PreparedFindings()
         if not isinstance(raw_findings, list):

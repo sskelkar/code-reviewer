@@ -13,7 +13,7 @@ flowchart TD
     START["reviewer review PR"] --> CLI["cli.main() → build_parser()"]
     CLI --> CONFIG["config.load_config()"]
     CONFIG --> OPTIONS["git_ops.parse_pr_ref()<br/>review_options.apply_run_options()"]
-    OPTIONS --> DISPATCH["review_flow.run_review()"]
+    OPTIONS --> DISPATCH["tracing.review.review_trace() wrapper<br/>review_flow.run_review()"]
     DISPATCH --> READY["security.readiness()"]
     READY --> PREFLIGHT{"--preflight?"}
     PREFLIGHT -->|yes| OFFLINE["Return configuration report<br/>cli.main() prints JSON; exit"]
@@ -30,7 +30,8 @@ flowchart TD
     KIND -->|no| REVIEW["Engine.review() → selected flow.review()<br/>Expand in diagram 3"]
     REVIEW --> OUTCOME["Return ReviewOutcome.result"]
     VM --> OUTCOME
-    OUTCOME --> DISPLAY["cli.main()<br/>presentation.render_summary() + run_line()<br/>print report_path"]
+    OUTCOME --> TRACE["If tracing: tracing.review.finish()<br/>validate guest metadata, save stats,<br/>bounded host export to localhost:4000"]
+    TRACE --> DISPLAY["cli.main()<br/>presentation.render_summary() + run_line()<br/>print report_path"]
     DISPLAY --> POST{"--post?"}
     POST -->|yes| GITHUB["post.format_comment() → post.post_comment()"]
     POST -->|no| EXIT["Return CLI exit status"]
@@ -58,11 +59,12 @@ sequenceDiagram
     Worker->>Worker: connect_bootstrap() → vm.confinement()
     Worker->>VM: connected.exchange(): settings + acquisition request over vsock
     VM->>VM: guest.main() → run_job() → validate_settings()
+    Note over VM: Optional guest Recorder wraps _run_job()
     VM->>VM: acquire.in_guest() pins PR commits
-    VM->>Worker: Send acquired identity; wait for source-access revocation
+    VM->>Worker: Send acquired identity, wait for source-access revocation
     Worker->>Worker: Network.inference()
     Worker->>VM: Acknowledge source-access revocation
-    VM->>VM: snapshot.prepare() seals code / drops privileges; boundary probes
+    VM->>VM: snapshot.prepare() seals code / drops privileges, boundary probes
     VM->>Worker: Send ready checks
     Worker->>Worker: connected.ready() validates checks
     Worker->>CLI: dispatch.read_key() requests selected credential
@@ -72,12 +74,13 @@ sequenceDiagram
     VM->>Core: factory.create_runner() → Engine(...).review(ctx, prepared_checkout=snapshot)
     Note over Core: Diagram 3, then diagram 4 for each model call
     Core-->>VM: RunResult with report, summary and stats
-    VM->>VM: collect_artifacts() bounds / validates export
+    VM->>VM: _run_job(): collect_artifacts() bounds / validates export
+    VM->>VM: run_job(): close Recorder, attach bounded metadata if enabled
     VM-->>Worker: Result envelope + allowed artifacts
-    Worker->>Worker: export_result(); VirtualMachine / Network context cleanup
+    Worker->>Worker: export_result(), VirtualMachine / Network context cleanup
     Worker->>Worker: dispatch() → verify_idle() → collect_artifacts()
     Worker-->>CLI: Finished envelope confirms cleanup
-    CLI->>CLI: converse() validates pins / checks; remote scratch cleanup
+    CLI->>CLI: converse() validates pins / checks, remote scratch cleanup
     CLI->>Worker: Worker.session() shuts dedicated worker down
     CLI->>CLI: export_result() → ExportedReview
 ```
@@ -199,6 +202,23 @@ flowchart TD
 
 `auth status` uses `Store.records()` without network/refresh. `auth models` calls `Store.access()` then `models.catalog()`. `auth logout` calls `Store.logout()` to attempt revocation and clear local tokens. Identity/refresh credentials stay on the host; host and VM registrations use separate runtime identities. See [LLM access](llm.md#chatgpt-sign-in) for exact limits and the outstanding live qualification.
 
+### 6. Optional tracing across the VM boundary
+
+`tracing.review.review_trace()` creates a `tracing.Recorder` only for enabled real reviews. `tracing.observation()` and `traced()` record closed metadata, not method arguments. `ModelCaller.call()` creates role agents; OpenAI records individual turns/tools, while Claude records aggregate native generations. Persona executor submissions use `copy_context().run` to preserve parentage.
+
+```mermaid
+flowchart LR
+    ROOT["Host review_trace() → Recorder"] --> JOB["settings.job_settings()<br/>enable flag + trace/parent IDs"]
+    JOB --> GUEST["guest.run_job() → activate guest Recorder<br/>_run_job() → same Engine/flow"]
+    GUEST --> STATS["attach bounded snapshot to stats.json<br/>private result channel + cleanup"]
+    STATS --> FINISH["Host finish()<br/>validate → merge → persist"]
+    ROOT -->|"Host mode: no guest handoff"| FINISH
+    FINISH --> CHILD["tracing.langfuse.export() subprocess<br/>send(): public OTel timestamps + Langfuse wrappers"]
+    CHILD --> LOCAL["Local Langfuse :4000"]
+```
+
+The exporter is optional, host-only and deadline-bounded. It has no provider credentials or guest network route. `finish()` also runs on failure, preserving available host metadata; an unavailable exporter cannot replace a review exception or result. Preflight/dry-run bypass the recorder/export lifecycle. See [trace configuration and limits](tracing.md).
+
 ## Where to start reading
 
 | Module | Question it answers |
@@ -273,7 +293,7 @@ API keys and subscription credentials are separate access modes. The common fact
 
 ## What is unfinished
 
-Both providers support explicit API-key/subscription access. ChatGPT-backed VM review is user-confirmed. Native Claude read-tool behavior, live persona coverage and long-running token refresh still need qualification. REPL/replay restoration, LSP, context packs and agentic traces are later work.
+Both providers support explicit API-key/subscription access. ChatGPT-backed VM review is user-confirmed. Native Claude read-tool behavior, live persona coverage and long-running token refresh still need qualification. Optional metadata tracing is implemented in `tracing/`. REPL/replay restoration, LSP, context packs and full-content tracing remain later work.
 
 ## Development checks
 

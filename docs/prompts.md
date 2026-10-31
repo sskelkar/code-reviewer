@@ -2,17 +2,17 @@
 
 The active single-agent templates and schemas live in [`src/code_reviewer/flows/single_agent/prompts/`](../src/code_reviewer/flows/single_agent/prompts/). Filenames in the table below are relative to that folder. The prompt loader is `flows/single_agent/prompt_contract.py`; generic rendering lives in `shared/templates.py`. Import these owning modules directly.
 
-Templates the harness renders for each LLM call. Each role has a **system** prompt (static instructions, passed with `--append-system-prompt`) and a **user** prompt (the request with data, sent on stdin in `-p` mode; persona transport uses an anonymous temporary file to deliver the complete UTF-8 input while polling for cancellation). Each role also has a JSON schema (passed with `--json-schema`).
+Each LLM call has a **system** prompt, a **user** prompt containing the request data, and a JSON output schema. The selected adapter transports the same rendered contracts: Claude uses headless CLI flags and stdin; OpenAI uses Responses instructions, input and structured output. Native cancellable transport uses an anonymous temporary file for complete UTF-8 stdin delivery. Neither adapter owns criteria or flow selection.
 
 | Role | System | User | Schema | Tools |
 |---|---|---|---|---|
-| Criteria Resolver (when project discovery needs it) | `resolver.system.md` | `resolver.user.md` | `schemas/resolver.schema.json` | none (`--tools ""`) |
+| Criteria Resolver (when project discovery needs it) | `resolver.system.md` | `resolver.user.md` | `schemas/resolver.schema.json` | none |
 | Reviewer (every pass) | `reviewer.system.md` | `reviewer.user.md` | `schemas/reviewer.schema.json` | `Read,Grep,Glob` |
-| Comparator (nontrivial batches) | `comparator.system.md` | `comparator.user.md` | `schemas/comparator.schema.json` | none (`--tools ""`) |
+| Comparator (nontrivial batches) | `comparator.system.md` | `comparator.user.md` | `schemas/comparator.schema.json` | none |
 
-## Persona prompts (implemented; offline-tested)
+## Persona prompts
 
-The optional mode is documented in [proposal section 12](../docs/proposal.md#12-agreed-persona-design-and-next-steps) and the [README flow](../README.md#agent-personas). Its own templates and schemas live in `flows/agent_personas/prompts/`, loaded by its `prompt_contract.py`. Selecting `--mode agent-personas` uses these contracts; single-agent templates/defaults remain unchanged.
+The optional mode is documented in [proposal section 12](proposal.md#12-agreed-persona-design-and-next-steps) and the [README flow](../README.md#agent-personas). Its own templates and schemas live in `flows/agent_personas/prompts/`, loaded by its `prompt_contract.py`. Selecting `--mode agent-personas` uses these contracts; single-agent templates/defaults remain unchanged.
 
 | Role | Input and output | Model / tools |
 |---|---|---|
@@ -80,14 +80,14 @@ The system prompt continues to define change scope, concrete consequences, evide
 - **Comparator validation:** one decision per new finding in the same order, `match` is a candidate `id` or `new`, `same_as` refers to an earlier new finding.
 - Keep all templates language-agnostic. Language- or project-specific guidance belongs in the criteria, not in these prompts.
 
-Persona pool ratios and exhaustion/accounting behavior are specified in the [usage reference](../docs/usage.md#persona-budget-pools). A persona can exhaust its pool without stopping the others. Criteria fallback, comparator exhaustion and verifier exhaustion have distinct handling; none creates votes from unconsolidated output. Cancellation waits for active subprocess groups before checkout cleanup. Model-facing templates are unchanged by parallel scheduling.
+Persona pool ratios and exhaustion/accounting behavior are specified in the [usage reference](usage.md#persona-budget-pools). A persona can exhaust its pool without stopping the others. Criteria fallback, comparator exhaustion and verifier exhaustion have distinct handling; none creates votes from unconsolidated output. Cancellation waits for active subprocess groups before checkout cleanup. Model-facing templates are unchanged by parallel scheduling.
 
 ## Runtime and execution boundaries
 
-VM and explicit host execution use the same canonical prompts, schemas, validators and selected flow. The common `ModelCaller`/`LLMResult` contract carries invocation, validation, usage and safe errors. Provider authentication is trusted operator configuration; repository content cannot choose it. See [LLM access](../docs/llm.md).
+VM and explicit host execution use the same canonical prompts, schemas, validators and selected flow. The common `ModelCaller`/`LLMResult` contract carries invocation, validation, usage and safe errors. Provider authentication is trusted operator configuration; repository content cannot choose it. See [LLM access](llm.md).
 
 OpenAI translates schemas into its closed/required-field format without mutating these assets. Its bounded Python Read/Grep/Glob implementation supplies file tools. Subscription requests use a namespaced tool group and streaming completion checks. Claude invokes the native CLI with explicit tool/isolation flags. Protocol fixtures establish plumbing, not live schema acceptance or review quality.
 
 The guest calls `Engine.review(..., prepared_checkout=...)` with sealed admitted input. The flow leaves that externally managed snapshot intact. Public acquisition pins commits and revokes source networking before credential release. Runtime images contain trusted source/prompts, never target inputs, credentials or prior findings. Normal VM results export only bounded report/summary/stats; internal artifact paths refer to ephemeral files.
 
-`reviewer review --preflight` is credential/target-free. `reviewer sandbox check` exercises no-key deployment and both simulated flows; it does not prove real account access or native tool behavior. ChatGPT-backed VM review is user-confirmed; native Claude tools and broader mode/refresh qualification remain open. Infrastructure and adapter changes do not authorize paid prompt comparisons. Canonical asset hashes guard the checked-in bytes; prompt changes require authorized before/after evidence in [proposal section 9](../docs/proposal.md#9-review-quality-experiments).
+`reviewer review --preflight` is credential/target-free. `reviewer sandbox check` exercises no-key deployment and both simulated flows; it does not prove real account access or native tool behavior. ChatGPT-backed VM review is user-confirmed; native Claude tools and broader mode/refresh qualification remain open. Infrastructure and adapter changes do not authorize paid prompt comparisons. Canonical asset hashes guard the checked-in bytes; prompt changes require authorized before/after evidence in [proposal section 9](proposal.md#9-review-quality-experiments).

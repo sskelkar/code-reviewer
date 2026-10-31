@@ -10,6 +10,7 @@ from ...shared.models import PassRecord
 from .roles import Comparator, Reviewer
 from ...shared.run_store import RunStore
 from ...shared.stats import Stats
+from ...tracing import traced
 
 
 class PassRunner:
@@ -18,6 +19,7 @@ class PassRunner:
         self.cfg, self.reviewer, self.comparator, self.preparer = cfg, reviewer, comparator, preparer
         self.master, self.stats, self.store, self.emit = master, stats, store, emit
 
+    @traced('review.pass')
     def run(self, pass_no: int) -> PassRecord:
         """Run one pass and merge its findings into the master list. Raises PassFailed if a model call cannot be used."""
         pass_dir = self.store.pass_dir(pass_no)

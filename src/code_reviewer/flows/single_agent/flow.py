@@ -5,6 +5,7 @@
 Every step lives in its own module; this file only wires them together and emits progress events.
 """
 from __future__ import annotations
+from ...tracing import event as trace_event
 
 from ...shared.git_content import omission_section
 
@@ -54,6 +55,7 @@ class SingleAgentFlow:
         self.inputs = InputBuilder(cfg, self.prompts, defaults_dir, self.emit)
 
     def emit(self, type_: str, **data: Any) -> None:
+        trace_event(type_, data)
         self.sink(Event(type_, data))
 
     def prepare(self, ref: git_ops.PRRef, local_path: Optional[Path] = None) -> PRContext:
