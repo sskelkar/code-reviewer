@@ -16,7 +16,7 @@ from code_reviewer.config import Config, ConfigError, DEFAULT_CRITERIA_DIR, PROM
 from code_reviewer.engine import Engine
 from code_reviewer.flows.single_agent.flow import SingleAgentFlow
 from code_reviewer.review_options import apply_run_options
-from code_reviewer.repl import Session
+from code_reviewer.parked.repl import Session
 from code_reviewer.shared import git_ops
 
 from .helpers import FakeRunner, TempDirTestMixin, make_repo
@@ -144,18 +144,6 @@ class FlowSelectionTests(TempDirTestMixin, unittest.TestCase):
         engine = Engine(Config(), self.runner, prompts_dir=PROMPTS_DIR, defaults_dir=DEFAULT_CRITERIA_DIR)
         self.assertEqual(engine.prompts_dir, PROMPTS_DIR)
         self.assertEqual(engine.defaults_dir, DEFAULT_CRITERIA_DIR)
-
-    def test_legacy_imports_share_canonical_implementations_and_patch_targets(self):
-        from code_reviewer import engine as legacy_engine
-        from code_reviewer import git_ops as legacy_git
-        from code_reviewer.master import MasterList as LegacyMaster
-        from code_reviewer.models import RunResult as LegacyResult
-        from code_reviewer.flows.single_agent.master import MasterList
-        from code_reviewer.flows.single_agent.models import RunResult
-        self.assertIs(legacy_git, git_ops)
-        self.assertIs(LegacyMaster, MasterList)
-        self.assertIs(LegacyResult, RunResult)
-        self.assertEqual(legacy_engine.__all__, ['Engine'])
 
     def test_shared_mechanics_have_no_workflow_dependencies(self):
         shared = REPO_ROOT / 'src/code_reviewer/shared'

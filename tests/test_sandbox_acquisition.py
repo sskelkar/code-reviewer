@@ -62,6 +62,37 @@ class AcquisitionTests(unittest.TestCase):
         self.assertNotIn('Authorization', headers)
         self.assertTrue(connection.close.called)
 
+    def test_source_failure_frames_accept_only_status_not_server_text(self):
+        for status in (301,401,403,404,429,503):
+            failure=acquire.source_failure(acquire.MetadataUnavailable(status).frame())
+            self.assertEqual(failure.status,status)
+            self.assertIn('HTTP %d' % status,str(failure))
+        for frame in ({'kind':'failed','code':'github_metadata_http','http_status':True},
+                      {'kind':'failed','code':'github_metadata_http','http_status':404,'body':'must not propagate'}):
+            with self.assertRaises(ValueError):
+                acquire.source_failure(frame)
+        self.assertIsNone(acquire.source_failure({'kind':'failed','error':'untrusted text'}))
+
+    def test_tree_limit_errors_include_bounded_escaped_metadata_not_exception_text(self):
+        from code_reviewer.sandbox import git_input
+        row=b'100644 blob '+b'a'*40+b' '+str(git_input.FILE_BYTES+1).encode()+b'\tfixture.bin\x00'
+        with patch.object(git_input,'git',return_value=row), patch.object(git_input,'blob_is_binary',return_value=False):
+            try:
+                git_input.admit_tree(self.root,'b'*40)
+            except ValueError as exc:
+                failure=acquire.acquisition_error(exc)
+        self.assertEqual(failure.reason,'file-bytes')
+        self.assertIn('2 MiB',str(failure))
+        self.assertEqual(failure.file, '"fixture.bin"')
+        self.assertEqual(acquire.source_failure(failure.frame()).size,git_input.FILE_BYTES+1)
+        escaped=acquire.acquisition_error(git_input.TreeFileTooLarge(b'\x1bunsafe\n.bin',git_input.FILE_BYTES+1))
+        self.assertNotIn('\x1b',escaped.file)
+        self.assertNotIn('\n',escaped.file)
+        self.assertEqual(acquire.acquisition_error(ValueError('arbitrary secret-like text')).reason,'unexpected')
+        self.assertNotIn('secret-like',str(acquire.acquisition_error(ValueError('arbitrary secret-like text'))))
+        with self.assertRaises(ValueError):
+            acquire.source_failure({'kind':'failed','code':'public_acquisition','reason':['not a code']})
+
     def test_metadata_cannot_select_another_repo_private_input_or_git_ref(self):
         acquire.describe(metadata(), URL)
         changes = [('private', True), ('full_name', 'example/other')]
@@ -118,6 +149,7 @@ class AcquisitionTests(unittest.TestCase):
         base = git('rev-parse', 'HEAD')
         (repo/'app.py').write_text('value = 2\n')
         (repo/'hook.sh').write_text('exit 99\n')
+        (repo/'dependency.bin').write_bytes(b'\0'*(2*1024*1024+1))
         (repo/'link').symlink_to('/outside')
         git('add', '.')
         git('commit', '-qm', 'Head')
@@ -134,6 +166,7 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual(value['merge_base'], base)
         self.assertEqual((job/'snapshot/app.py').read_text(), 'value = 2\n')
         self.assertFalse((job/'snapshot/link').exists())
+        self.assertFalse((job/'snapshot/dependency.bin').exists())
         ctx = acquire.context(value, URL, job/'repo')
         self.assertEqual(ctx.head_sha, head)
 

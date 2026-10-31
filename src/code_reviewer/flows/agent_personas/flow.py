@@ -1,6 +1,8 @@
 """Configured round-robin persona review, then advisory verification of flagged groups."""
 from __future__ import annotations
 
+from ...shared.git_content import omission_section
+
 from dataclasses import replace
 import copy
 import platform
@@ -10,7 +12,7 @@ from typing import Any
 
 from ...config import ConfigError, REPO_ROOT
 from ...shared import git_ops
-from ...shared.claude_cli import ClaudeError
+from ...backends.contract import RunnerError
 from ...shared.diffview import DiffIndex
 from ...shared.events import Event, null_sink
 from ...shared.findings import FileCache, FindingsPreparer
@@ -97,7 +99,7 @@ class AgentPersonasFlow:
                 role: {'system': digest(p.system), 'user': digest(p.user)} for role, p in self.prompts.items()},
                 'schemas': {role: p.schema for role, p in self.prompts.items()},
                 'versions': {'python': platform.python_version(),
-                    'claude_code': self.runner.version() if hasattr(self.runner, 'version') else 'unknown'}})
+                    'adapter': self.runner.version() if hasattr(self.runner, 'version') else 'unknown'}})
             self.emit('checkout_ready', path=str(checkout), kept=keep_checkout,
                       **({} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)))
             result.criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
@@ -121,7 +123,7 @@ class AgentPersonasFlow:
             result.stop_reason = 'budget_exceeded'
         except KeyboardInterrupt:
             result.stop_reason = 'cancelled'
-        except (ClaudeError, PassFailed) as exc:
+        except (RunnerError, PassFailed) as exc:
             result.stop_reason = 'failures'
             result.warnings.append(str(exc))
         finally:
@@ -136,8 +138,9 @@ class AgentPersonasFlow:
                     'completed_by_persona': result.completed_by_persona, 'stop_reason': result.stop_reason,
                     'validation_errors': result.diagnostics, 'warnings': result.warnings, 'budget_pools': budget.snapshot()})
                 result.budget_pools = budget.snapshot()
-                store.report_path.write_text(render_report(result), encoding='utf-8')
+                store.report_path.write_text(render_report(result) + omission_section(ctx), encoding='utf-8')
                 store.summary_path.write_text(render_summary(result, cfg.post_tiers, []), encoding='utf-8')
+                store.save_binary_omissions(ctx)
                 self.emit('report_ready', path=str(store.report_path), stop_reason=result.stop_reason)
             finally:
                 if not keep_checkout:
@@ -178,14 +181,14 @@ class AgentPersonasFlow:
                 numbers = {future: number for number, future in pending.items()}
                 for future in as_completed(numbers):
                     payload = future.result()
-                    if isinstance(payload, (KeyboardInterrupt, ClaudeError)):
+                    if isinstance(payload, (KeyboardInterrupt, RunnerError)):
                         raise payload
                     payloads[numbers[future]] = payload
                 for slot in wave:
                     if slot.pass_no not in payloads:
                         continue
                     payload = payloads[slot.pass_no]
-                    if isinstance(payload, (KeyboardInterrupt, ClaudeError)):
+                    if isinstance(payload, (KeyboardInterrupt, RunnerError)):
                         raise payload
                     try:
                         self._consolidate(result, roles, files, frozen, checkout, cache, store, slot, payload)
@@ -262,7 +265,7 @@ class AgentPersonasFlow:
             result.master, slot.ok = previous_master, False
             slot.error, slot.status = str(exc), 'failed'
             raise
-        except (RunStopped, KeyboardInterrupt, ClaudeError):
+        except (RunStopped, KeyboardInterrupt, RunnerError):
             result.master, slot.ok = previous_master, False
             slot.status, slot.error = 'failed', 'interrupted before review and consolidation completed'
             raise

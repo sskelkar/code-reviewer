@@ -2,6 +2,7 @@
 # Project-directory review.toml is not loaded. VM-default and explicit host reviews are wired; live VM inference remains untested.
 # Every key is optional; the values below are the defaults.
 provider = "claude"  # runtime adapter: claude or openai
+auth_mode = "api-key" # subscription selects CLAUDE_CODE_OAUTH_TOKEN for Claude; ChatGPT login is not implemented
 sandbox = true       # default VM request; false or --no-sandbox explicitly selects the host
 
 # OpenAI: set one explicit model ID for all model_* roles, supply current positive USD/million token rates,
@@ -83,7 +84,8 @@ redact_emails = true
 # Where runs are stored (default: ~/.code-reviewer/runs)
 runs_dir = ""
 
-# VM-default execution: prepare the dedicated worker separately (docs/sandbox-check.md).
+# VM-default execution: use the persistent setup in docs/sandbox-check.md.
+# Keep installed artifacts/Lima state outside /tmp and /private/tmp; these paths must be absolute.
 # vm_artifacts = "/absolute/path/to/verified-artifacts"
 # vm_lima_home = "/absolute/path/to/dedicated-lima-state"
 # vm_instance = "reviewer-sandbox"
@@ -91,5 +93,5 @@ runs_dir = ""
 # Required only when provider = "claude": a verified Linux ARM64 native artifact.
 # vm_claude_binary = "/absolute/path/to/linux-arm64-claude"
 # vm_claude_sha256 = "verified-lowercase-sha256"
-# vm_claude_auth = "api-key" # or "oauth"; explicit billing, no fallback
+
 # Credentials come from the selected process environment; NEVER put key/token values here.

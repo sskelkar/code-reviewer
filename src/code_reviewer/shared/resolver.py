@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from ..config import Config
-from .llm import CallSpec, ClaudeCaller, requires_lists
+from .llm import CallSpec, ModelCaller, requires_lists
 from .models import PRContext
 from .templates import PromptSet, escape_untrusted, render
 
@@ -13,7 +13,7 @@ from .templates import PromptSet, escape_untrusted, render
 class CriteriaResolver:
     """Asks the model which in-repo files hold the project's review criteria. The model only proposes."""
 
-    def __init__(self, caller: ClaudeCaller, prompt: PromptSet, cfg: Config, ctx: PRContext,
+    def __init__(self, caller: ModelCaller, prompt: PromptSet, cfg: Config, ctx: PRContext,
                  work_dir: Path, emit: Callable[..., None]):
         self.caller, self.prompt, self.cfg, self.ctx = caller, prompt, cfg, ctx
         self.work_dir, self.emit = work_dir, emit

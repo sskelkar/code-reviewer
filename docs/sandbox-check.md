@@ -15,6 +15,44 @@ Supply an operator-controlled artifact directory containing:
 
 It deliberately does not download arbitrary URLs or calculate trust from whatever file it finds. Changing these pinned versions requires updating deployment evidence. The current runtime derives from the worker's installed Ubuntu libraries; it is not a reproducible, production-qualified image.
 
+## Persistent first-time setup
+
+Runtime artifacts and Lima state are installations, not per-review scratch. Store them under a durable operator directory such as `~/.code-reviewer/runtime/artifacts` and `~/.code-reviewer/lima`. Do not point `vm_artifacts` or `vm_lima_home` at `/tmp` or `/private/tmp`: OS cleanup can remove the archive, kernel or worker definition even when the parent directory still exists.
+
+Download the exact pinned public artifacts once, then verify both digests before use:
+
+```bash
+artifact_dir="$HOME/.code-reviewer/runtime/artifacts"
+mkdir -p "$artifact_dir"
+chmod 700 "$artifact_dir"
+curl --fail --location --proto '=https' --tlsv1.2 \
+  'https://github.com/firecracker-microvm/firecracker/releases/download/v1.17.0/firecracker-v1.17.0-aarch64.tgz' \
+  --output "$artifact_dir/firecracker.tgz"
+curl --fail --location --proto '=https' --tlsv1.2 \
+  'https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261023-dd7c24b0d165-0/aarch64/vmlinux-6.1.188' \
+  --output "$artifact_dir/vmlinux-6.1.188"
+printf '%s  %s\n' \
+  e351ebe4f7a16b5873bbd51005d2e6767103cff4d5ebc829df2d3f95a93e2256 "$artifact_dir/firecracker.tgz" \
+  52748cec9d75865246d95906021fea6754bc0abc2cba0cfc792dac5ec7f46f83 "$artifact_dir/vmlinux-6.1.188" \
+  | shasum -a 256 -c -
+```
+
+The checked-in [worker template](../sandbox/lima/reviewer.yaml) pins the Ubuntu image and provisions only the existing required worker packages. It keeps the same plain/mountless/nested-KVM profile. It does not review code, receive credentials or call a model. From the reviewer checkout, create and then stop this dedicated worker:
+
+```bash
+mkdir -p "$HOME/.code-reviewer/lima"
+env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 \
+  LIMA_HOME="$HOME/.code-reviewer/lima" \
+  limactl start --tty=false --name reviewer-sandbox sandbox/lima/reviewer.yaml
+env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 \
+  LIMA_HOME="$HOME/.code-reviewer/lima" \
+  limactl stop --tty=false reviewer-sandbox
+```
+
+Do not overwrite another instance or use an unrelated Lima/Colima installation. The template's image URL is digest-pinned; if the upstream image changes, deliberately verify/update that digest instead of removing pinning. Existing workers retain their own disk; normal reviews do not reprovision them.
+
+Set `vm_instance = "reviewer-sandbox"` and the two persistent **absolute** paths in your local config, then run the no-key command below with those same paths. TOML paths do not expand shell `$HOME` variables. Only per-run staging, guest scratch and result temporaries belong under system temp. A missing input now produces a specific setup error before any credential access; later errors name the failed phase without echoing raw provider/guest messages. Public-source metadata failures carry only a validated HTTP status across the private channel; server bodies, target text and credentials are excluded. Other acquisition failures use closed reason codes; oversized-file diagnostics include only escaped bounded filename/size metadata. The binary omission policy preserves text/count/object limits; see [binary omissions](usage.md#binary-omissions).
+
 ## Command
 
 ```bash
@@ -47,7 +85,7 @@ Inside the same connected review VM, `acquire.py` runs as UID/GID 65534 with no-
 
 Acquisition permits only `github.com:443` and `api.github.com:443` CONNECT authorities. After the guest reports admitted commits, the trusted supervisor kills the entire old proxy process group, closing existing tunnels, and starts the inference-only policy. The guest checks an already-open GitHub tunnel closes, fresh source tunnels are denied, and provider TLS works before readiness. The phase can only advance once; failures stop the job. Restarting the proxy does not extend its original lifetime. No provider credential is requested by this check.
 
-Limits: 512 KiB API metadata; 256-commit shallow fetch; 120-second fetch deadline; monitored 128 MiB retained Git files / 10,000 entries, plus the guest's 512 MiB scratch, file/resource and external VM limits. Storage monitoring is periodic, not an exact network-byte quota. Missing commits, redirects, rate limits, unrelated histories or a merge-base beyond the shallow history fail closed; there is no unbounded deepening or alternate clone fallback. GitHub Enterprise/private repositories, submodule content and LFS downloads are unsupported. The public API cannot provide an atomic snapshot across later upstream updates: a run reviews its initially observed hashes or fails, while a later run reads current metadata again. The private report records pins and source revocation; target contents remain inside the disposable VM.
+Limits: 2 MiB per admitted text file, 32 MiB of text per tree and 5000 tree entries (including binaries). Binary contents are omitted using an 8000-byte prefix heuristic (NUL or invalid UTF-8), not expanded into the snapshot. Their compressed Git objects still count toward acquisition storage. 512 KiB API metadata; 256-commit shallow fetch; 120-second fetch deadline; monitored 128 MiB retained Git files / 10,000 entries, plus the guest's 512 MiB scratch, file/resource and external VM limits. Storage monitoring is periodic, not an exact network-byte quota. Missing commits, redirects, rate limits, unrelated histories or a merge-base beyond the shallow history fail closed; there is no unbounded deepening or alternate clone fallback. GitHub Enterprise/private repositories, submodule content and LFS downloads are unsupported. The public API cannot provide an atomic snapshot across later upstream updates: a run reviews its initially observed hashes or fails, while a later run reads current metadata again. The private report records pins and source revocation; target contents remain inside the disposable VM.
 
 The metadata endpoint and shallow-fetch behavior follow [GitHub's pull-request API](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request) and [Git's fetch documentation](https://git-scm.com/docs/git-fetch); trusted transport restrictions are set using [Git configuration](https://git-scm.com/docs/git-config).
 
@@ -74,3 +112,5 @@ The exit status is zero only after validated results and cleanup. Ctrl-C, SIGTER
 If a shutdown/cleanup operation itself fails, the command fails; do not assume success. Secondary scratch-cleanup failures do not hide the original error. The transient systemd unit bounds the VM independently of Python (180 seconds normally, 360 seconds for the public acquisition workload, 30 seconds in the lifecycle test), kills the whole process group immediately on stop, and bounds stop time; the proxy retains its separate deadline. Python `finally` cannot run after SIGKILL, so use explicit worker recovery for abandoned state. Host failure can still lose the run/result; automatic resume is not implemented. A stale network policy refuses reuse rather than being overwritten. The report confirms only the named tests, not every possible escape or correct model behavior.
 
 Normal VM review/report dispatch is implemented. This no-key command checks deployment without provider credentials; an authorized real PR run must still verify authentication, native tools and actual model/report behavior. See the [security roadmap](proposal.md#checklist), [architecture](sandbox-architecture.md) and [alternative designs](sandbox-alternatives.md).
+
+Checks remain credential-free after LLM separation. Normal host/guest jobs now share the neutral adapter factory and explicit `auth_mode`; unsupported ChatGPT subscription access is not enabled by a passing deployment check. See [LLM access](llm.md).

@@ -1,6 +1,8 @@
 """Persona reports show agreement by source, and verification as separate annotations."""
 from __future__ import annotations
 
+from ...shared.git_content import omission_notice
+
 import json
 import re
 from typing import Any
@@ -74,6 +76,8 @@ def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
     lines.extend(text for text in (conflict_text(g, visible) for g in result.master.conflicts.values()) if text)
     if result.warnings:
         lines += ['', 'Warnings:'] + ['- ' + w for w in result.warnings]
+    if omission_notice(result.ctx):
+        lines += [omission_notice(result.ctx)]
     return '\n\n'.join(lines) + '\n'
 
 

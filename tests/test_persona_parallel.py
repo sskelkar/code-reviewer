@@ -15,7 +15,8 @@ from code_reviewer.engine import Engine
 from code_reviewer.flows.agent_personas.budget import Budget, RunStopped
 from code_reviewer.flows.agent_personas.criteria import PERSONAS
 from code_reviewer.flows.agent_personas.runner import ParallelRunner
-from code_reviewer.shared.claude_cli import ClaudeResult, ClaudeRunner
+from code_reviewer.backends.contract import LLMResult
+from code_reviewer.backends.claude import ClaudeRunner
 from .helpers import TempDirTestMixin, finding, make_repo
 from .test_persona_flow import PersonaRunner, block
 
@@ -37,7 +38,7 @@ class BudgetTests(unittest.TestCase):
         amount = budget.reserve('correctness', .5)
         with self.assertRaises(RunStopped):
             budget.reserve('correctness', .5)
-        budget.settle('correctness', amount, ClaudeResult(ok=True, cost_usd=.1))
+        budget.settle('correctness', amount, LLMResult(ok=True, cost_usd=.1))
         self.assertEqual(budget.reserve('correctness', .5), .4)
         budget.settle('correctness', .4, None)
         with self.assertRaises(RunStopped):
@@ -100,14 +101,14 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
                 barrier.wait(timeout=5)
                 with lock:
                     active[0] -= 1
-                return ClaudeResult(ok=True, parsed={'findings': []}, cost_usd=.001, raw={})
+                return LLMResult(ok=True, parsed={'findings': []}, cost_usd=.001, raw={})
         self.cfg.persona_parallel = 2
         self.assertEqual(Engine(self.cfg, Runner()).review(self.ctx).passes_completed, 8)
         self.assertEqual(peak[0], 2)
 
     def test_exhausted_persona_does_not_stop_other_personas(self):
         self.cfg.persona_parallel = 1
-        first = ClaudeResult(ok=True, parsed={'findings': [finding(rule_id='none')]}, cost_usd=.5, raw={})
+        first = LLMResult(ok=True, parsed={'findings': [finding(rule_id='none')]}, cost_usd=.5, raw={})
         result = Engine(self.cfg, PersonaRunner(reviewer=[first, {'findings': []}])).review(self.ctx)
         self.assertEqual(result.stop_reason, 'incomplete')
         self.assertEqual(result.completed_by_persona, dict(zip(PERSONAS, (1, 2, 2, 2))))

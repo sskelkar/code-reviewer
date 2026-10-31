@@ -1,6 +1,6 @@
 # Prompts and schemas
 
-The active single-agent templates and schemas live in [`src/code_reviewer/flows/single_agent/prompts/`](../src/code_reviewer/flows/single_agent/prompts/). Filenames in the table below are relative to that folder. The prompt loader is `flows/single_agent/prompt_contract.py`; generic rendering lives in `shared/templates.py`. Legacy package-root modules only re-export these implementations.
+The active single-agent templates and schemas live in [`src/code_reviewer/flows/single_agent/prompts/`](../src/code_reviewer/flows/single_agent/prompts/). Filenames in the table below are relative to that folder. The prompt loader is `flows/single_agent/prompt_contract.py`; generic rendering lives in `shared/templates.py`. Import these owning modules directly; legacy forwarding modules were removed.
 
 Templates the harness renders for each LLM call. Each role has a **system** prompt (static instructions, passed with `--append-system-prompt`) and a **user** prompt (the request with data, sent on stdin in `-p` mode; persona transport uses an anonymous temporary file to deliver the complete UTF-8 input while polling for cancellation). Each role also has a JSON schema (passed with `--json-schema`).
 
@@ -86,7 +86,7 @@ Persona pool ratios and exhaustion/accounting behavior are specified in the [usa
 
 The [VM runtime](../docs/sandbox-architecture.md) packages these same assets and exercises both flows with synthetic code and fake headless Claude inside one guest. VM and explicit host dispatch use the same canonical model-facing prompts. The separate real-runtime probe starts the pinned native CLI offline and confirms an unauthenticated refusal using the harness command builder. Host/native no-key OS/network checks now pass; normal selected-adapter dispatch is wired; authenticated inference/native-tool qualification remains untested.
 
-The [experimental OpenAI backend](../docs/sandbox-openai.md) reuses these prompts for synthetic sandbox tests. It translates output schemas into the provider's closed/required-field format without mutating common assets; bounded local function definitions supply Read/Grep/Glob. This adapter translation does not alter model-facing prose. Offline protocol/guest tests are evidence of plumbing, not live model quality or schema acceptance.
+The [experimental OpenAI backend](../docs/llm.md) reuses these prompts for synthetic sandbox tests. It translates output schemas into the provider's closed/required-field format without mutating common assets; bounded local function definitions supply Read/Grep/Glob. This adapter translation does not alter model-facing prose. Offline protocol/guest tests are evidence of plumbing, not live model quality or schema acceptance.
 
 The runtime-selected provider and execution location reuse the same prompts, validators and review algorithms. Synthetic replies/fixed finding counts belong only to automated checks; an actual review may find no issues. The VM supervisor adds private transport and external policy, while explicit host execution is now wired through the same core. Repository labels never choose another prompt or provider.
 
@@ -104,3 +104,5 @@ The REPL is parked with its implementation/tests retained. This changes command 
 
 
 Detailed prompt/request artifacts are retained in host runs; VM runs export only report, summary and stats and destroy internal raw prompts/replies with guest scratch. REPL and paid comparator replay are parked. The audit changed configuration, storage and process supervision, not canonical prompt prose, schemas or default criteria.
+
+Provider-neutral `ModelCaller`/`LLMResult` and the selected adapter implement invocation/accounting without changing these canonical templates, schemas or criteria. Authentication is configured outside repository content. See [the LLM layer](../docs/llm.md); ChatGPT subscription consent/streaming is not implemented yet.

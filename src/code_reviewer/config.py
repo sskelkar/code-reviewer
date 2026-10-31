@@ -123,7 +123,7 @@ class Config:
     vm_timeout_s: int = 1800
     vm_claude_binary: str = ""
     vm_claude_sha256: str = ""
-    vm_claude_auth: str = "api-key"
+    auth_mode: str = "api-key"
 
     def validate(self) -> None:
         for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',
@@ -141,6 +141,8 @@ class Config:
                 valid = False
             if not valid:
                 raise ConfigError('%s must be finite and nonnegative' % name)
+        if self.auth_mode not in ("api-key", "subscription"):
+            raise ConfigError("auth_mode must be api-key or subscription; no fallback")
         if self.provider not in ("claude", "openai"):
             raise ConfigError("provider must be claude or openai; no fallback")
         for name in ("call_budget_usd", "run_budget_usd"):
@@ -283,6 +285,10 @@ def load_config(explicit: Optional[str] = None) -> Config:
             if isinstance(exc, ConfigError):
                 raise
             raise ConfigError("cannot read valid trusted operator configuration") from exc
+        if 'vm_claude_auth' in data:
+            if 'auth_mode' in data or data['vm_claude_auth'] not in ('api-key', 'oauth'):
+                raise ConfigError('replace vm_claude_auth with one explicit auth_mode = "api-key" or "subscription"')
+            data['auth_mode'] = 'subscription' if data.pop('vm_claude_auth') == 'oauth' else 'api-key'
         known = {f.name: f for f in fields(Config)}
         for key, value in data.items():
             if key not in known:

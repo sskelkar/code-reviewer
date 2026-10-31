@@ -2,12 +2,12 @@ import json
 import unittest
 from pathlib import Path
 
-from code_reviewer import git_ops
-from code_reviewer.claude_cli import ClaudeResult
+from code_reviewer.shared import git_ops
+from code_reviewer.backends.contract import LLMResult
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
-from code_reviewer.models import ReviewRefused
-from code_reviewer.repl import Session, load_labels
+from code_reviewer.shared.models import ReviewRefused
+from code_reviewer.parked.repl import Session, load_labels
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
 
@@ -77,7 +77,7 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertFalse(Path(runner.calls_for("reviewer")[0]["cwd"]).exists())  # the checkout is cleaned up
         config = json.loads((run / "config.json").read_text())
         self.assertEqual(len(config["prompt_hashes"]), 9)
-        self.assertEqual(config["versions"]["claude_code"], "fake-1.0")
+        self.assertEqual(config["versions"]["adapter"], "fake-1.0")
         report = result.report_path.read_text()
         for expected in ("## High confidence (1)", "Seen in **3/3** passes", "SQL built by concatenation", "`app.py:2`",
                          "docs/review.md", "Ignored reference: `https://wiki.example.com/review`", "Pass-to-pass overlap",
@@ -122,8 +122,8 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn("Findings located in excluded files", result.report_path.read_text())
 
     def test_excluded_files_do_not_pull_in_the_rules_of_their_directory(self):
-        from code_reviewer.diffview import FileDiff
-        from code_reviewer.review_inputs import InputBuilder
+        from code_reviewer.shared.diffview import FileDiff
+        from code_reviewer.shared.review_inputs import InputBuilder
         files = [FileDiff(path="docs/plans/plan.md", excluded=True), FileDiff(path="app/service.py")]
         self.assertEqual(InputBuilder.scope_paths(files), ["app/service.py"])
 
@@ -136,7 +136,7 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
             self.engine(FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER_OK), everything).review(self.ctx)
 
     def test_failed_passes_abort_after_two_in_a_row(self):
-        bad = ClaudeResult(ok=False, error="timed out")
+        bad = LLMResult(ok=False, error="timed out")
         runner = FakeRunner(reviewer=[bad], resolver=RESOLVER_OK)
         result = self.engine(runner).review(self.ctx)
         self.assertEqual(result.stop_reason, "failures")
@@ -164,7 +164,7 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(result.passes_completed, 1)
 
     def test_resolver_failure_falls_back_to_defaults(self):
-        runner = FakeRunner(reviewer=[{"findings": []}], resolver=ClaudeResult(ok=False, error="boom"))
+        runner = FakeRunner(reviewer=[{"findings": []}], resolver=LLMResult(ok=False, error="boom"))
         cfg = Config(runs_dir=str(self.tmp / "runs"), max_passes=1, min_passes=1)
         result = self.engine(runner, cfg).review(self.ctx)
         self.assertEqual(result.passes_completed, 1)

@@ -1,7 +1,7 @@
 import unittest
 
-from code_reviewer import diffview
-from code_reviewer.findings import FileCache, FindingsPreparer, find_quote, resolve_rule_id
+from code_reviewer.shared import diffview
+from code_reviewer.shared.findings import FileCache, FindingsPreparer, find_quote, resolve_rule_id
 
 from .helpers import TempDirTestMixin, finding
 

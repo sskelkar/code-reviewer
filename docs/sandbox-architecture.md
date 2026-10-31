@@ -1,10 +1,10 @@
 # VM execution architecture
 
-The reviewer chooses provider, review strategy and execution location independently. VM execution is the default; `--no-sandbox` explicitly selects the implemented direct-host path. Neither path is selected from repository ownership or purpose. See the [shared execution contract](security-contract.md).
+The reviewer chooses provider, authentication, review strategy and execution location independently. VM execution is the default; `--no-sandbox` explicitly selects the implemented direct-host path. Neither path is selected from repository ownership or purpose. See the [shared execution contract](security-contract.md).
 
 ## Boundaries and process placement
 
-One disposable Firecracker VM contains acquisition, Python orchestration, every persona and model/tool session. On macOS, dedicated mountless Lima supplies the Linux/KVM environment; on native Linux that outer compatibility layer is unnecessary. Normal Mac dispatch uses the components below; authenticated inference is implemented but remains untested. The normal launcher currently supports the Mac/Lima deployment, not a standalone native-Linux CLI path.
+One disposable Firecracker VM contains acquisition, Python orchestration, every persona and model/tool session. On macOS, dedicated mountless Lima supplies the Linux/KVM environment; on native Linux that outer compatibility layer is unnecessary. Normal Mac dispatch uses the components below; adapter dispatch is implemented but successful live inference remains unverified. The normal launcher currently supports the Mac/Lima deployment, not a standalone native-Linux CLI path.
 
 ```mermaid
 flowchart TB
@@ -54,7 +54,7 @@ A guest compromise can falsify results/accounting and expose a credential availa
 
 ## Acquisition and input
 
-`sandbox/acquire.py` runs API/Git parsing, pinned fetch, tree admission and export unprivileged inside the review VM. Public GitHub URLs are supported by normal review dispatch and no-key checks; private source authentication is not implemented. Limits include bounded metadata, shallow history, retained Git bytes/file count, admitted trees, scratch and deadlines. Missing commits or merge-base fail instead of silently widening history or changing pins. See [exact limits](sandbox-check.md#public-pr-acquisition-check).
+`sandbox/acquire.py` runs API/Git parsing, pinned fetch, tree admission and export unprivileged inside the review VM. Public GitHub URLs are supported by normal review dispatch and no-key checks; private source authentication is not implemented. Limits include bounded metadata, shallow history, retained Git bytes/file count, admitted text trees, scratch and deadlines. Binary contents are detected from a bounded prefix and omitted before snapshot export; text-file/text-tree limits and the all-entry count remain enforced. No full target archive is generated in the guest. Reports and stats record omissions rather than claiming binary content coverage. Missing commits or merge-base fail instead of silently widening history or changing pins. See [exact limits](sandbox-check.md#public-pr-acquisition-check).
 
 The optional capsule path transfers bounded file-only Git objects from a chosen existing clone; it invokes no target Git on the workstation and copies no target configuration/hooks. It can include other history from that object store. Guest admission reconstructs clean Git state, admits the pinned trees and exports the head. This remains separate from the implemented direct-host acquisition feature, which reuses the existing host acquisition implementation.
 
@@ -69,10 +69,12 @@ The optional capsule path transfers bounded file-only Git objects from a chosen 
 7. Stop/join the VM and proxy, remove network/scratch state and confirm worker shutdown. Failures do not select host execution automatically.
 8. Save the private local files and print the summary. GitHub posting requires explicit `--post`.
 
-Normal CLI dispatch, selected-adapter private credentials and report transfer are wired. Authenticated provider calls remain untested. Explicit direct-host execution is implemented with the provider factory and same Engine. No-key checks exercise the listed components without claiming review-quality evidence.
+Normal CLI dispatch, selected-adapter private credentials and report transfer are wired. Real OpenAI requests have reached the endpoint and returned account/authentication errors; successful inference remains unverified. Explicit direct-host execution is implemented with the provider factory and same Engine. No-key checks exercise the listed components without claiming review-quality evidence.
 
 ## Development and current work
 
 Use [the supported deployment command](sandbox-check.md), [VM checklist](sandbox-todo.md) and [development guide](development.md). Checks run an offline simulated-provider workload and a sequential connected probe workload; these are tests, not additional VM layers or per-persona isolation.
 
 The standalone raw-Firecracker experiment was moved outside the project. Its old console-based launcher is not an alternative reviewer entry point. `sandbox/runtime.py` now contains only the bounded subprocess, boot configuration and result-validation utilities used by the supported components. See [the code map](architecture.md#code-map).
+
+The guest and explicit host path use the same provider/authentication factory and `LLMResult` contract. The VM still determines confinement, endpoint policy and delayed credential release; adapters do not change these. ChatGPT subscription consent/streaming is not yet implemented. See [LLM access](llm.md).

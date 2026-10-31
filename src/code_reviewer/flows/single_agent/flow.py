@@ -6,6 +6,8 @@ Every step lives in its own module; this file only wires them together and emits
 """
 from __future__ import annotations
 
+from ...shared.git_content import omission_section
+
 import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,7 +18,7 @@ from ...shared.diffview import DiffIndex
 from .dry_run import DryRun, reviewer_command
 from ...shared.events import Event, EventSink, null_sink
 from ...shared.findings import FileCache, FindingsPreparer
-from ...shared.llm import ClaudeCaller
+from ...shared.llm import ModelCaller
 from .master import MasterList
 from ...shared.models import PassFailed, PassRecord, PRContext
 from .models import RunResult
@@ -77,7 +79,7 @@ class SingleAgentFlow:
             self.emit("checkout_ready", path=str(checkout), kept=keep_checkout,
                       **({} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)))
 
-            caller = ClaudeCaller(self.runner, cfg, stats)
+            caller = ModelCaller(self.runner, cfg, stats)
             criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
             review_input = self.inputs.review_input(ctx, files, criteria, checkout)
             store.save_inputs(review_input, criteria)
@@ -99,8 +101,9 @@ class SingleAgentFlow:
                 passes_completed=completed, criteria=criteria, report_path=store.report_path, diff_summary=diff_summary,
             )
             store.save_outputs(master.to_dict(), {**stats.to_dict(), "passes": [p.to_dict() for p in passes], "stop_reason": stop_reason})
-            store.report_path.write_text(render_report(result), encoding="utf-8")
+            store.report_path.write_text(render_report(result) + omission_section(ctx), encoding="utf-8")
             store.summary_path.write_text(render_summary(result, cfg.post_tiers, []), encoding="utf-8")
+            store.save_binary_omissions(ctx)
             self.emit("report_ready", path=str(store.report_path), stop_reason=stop_reason)
             return result
         finally:
@@ -130,7 +133,7 @@ class SingleAgentFlow:
     def _run_metadata(self, ctx: PRContext) -> Dict[str, Any]:
         versions = {"python": platform.python_version()}
         if hasattr(self.runner, "version"):
-            versions["claude_code"] = self.runner.version()
+            versions["adapter"] = self.runner.version()
         return {
             "config": self.cfg.to_dict(),
             "versions": versions,

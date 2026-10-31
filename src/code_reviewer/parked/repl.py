@@ -8,15 +8,15 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .shared import git_ops
-from .config import Config, ConfigError
-from .presentation import render_dry_run
-from .post import format_comment, post_comment
-from .presentation import TIERS, render_finding
+from ..shared import git_ops
+from ..config import Config, ConfigError
+from ..presentation import render_dry_run
+from ..post import format_comment, post_comment
+from ..presentation import TIERS, render_finding
 from .repl_help import HELP, REVIEW_USAGE, welcome_text
-from .review_flow import REVIEW_ERRORS, run_review
-from .review_options import OptionError, ReplArgumentParser, add_run_options, apply_run_options
-from .presentation import render_summary, run_line
+from ..review_flow import REVIEW_ERRORS, run_review
+from ..review_options import OptionError, ReplArgumentParser, add_run_options, apply_run_options
+from ..presentation import render_summary, run_line
 
 try:  # command history and line editing where available
     import readline  # noqa: F401

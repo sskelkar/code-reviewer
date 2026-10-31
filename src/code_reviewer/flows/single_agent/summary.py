@@ -5,6 +5,8 @@ you see is exactly what would be posted. The long report (`report.md`) is for di
 """
 from __future__ import annotations
 
+from ...shared.git_content import omission_notice
+
 from typing import Any, Dict, List, Sequence
 
 from ...shared.findings import SEVERITY_RANK
@@ -96,6 +98,8 @@ def render_summary(result: RunResult, tiers: Sequence[str], dropped: Sequence[st
     rules = result.criteria.index()
     for item in shown:
         lines += _finding_block(item, _level(result, item), result.passes_completed, rules)
+    if omission_notice(ctx):
+        lines += [omission_notice(ctx), ""]
     return "\n".join(lines).rstrip() + "\n"
 
 

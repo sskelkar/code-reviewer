@@ -7,9 +7,9 @@ from pathlib import Path
 from unittest import mock
 
 from code_reviewer import cli
-from code_reviewer.claude_cli import ClaudeError
+from code_reviewer.backends.contract import RunnerError
 from code_reviewer.config import Config
-from code_reviewer.dry_run import render_dry_run
+from code_reviewer.flows.single_agent.dry_run import render_dry_run
 from code_reviewer.engine import Engine
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
@@ -54,9 +54,9 @@ class CheckoutLocationTests(TempDirTestMixin, unittest.TestCase):
             def run(self, **kwargs):
                 checkout = Path(kwargs["cwd"])
                 seen.append((checkout, (checkout / "app.py").exists()))  # the checkout existed and was populated
-                raise ClaudeError("claude binary not found")
+                raise RunnerError("claude binary not found")
 
-        with self.assertRaises(ClaudeError):
+        with self.assertRaises(RunnerError):
             self.engine(Boom(reviewer=[{"findings": []}]), criteria_mode="defaults_only").review(self.ctx)
         self.assertEqual([populated for _, populated in seen], [True])
         self.assertFalse(seen[0][0].parent.exists())  # removed although the run raised
@@ -108,7 +108,7 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
     def test_only_an_allow_list_of_pr_fields_is_fetched_from_github(self):
         """Review comments, review threads and issue comments must never be fetched. Adding any of them here must be a
         deliberate decision that also changes this test (and the README's privacy section)."""
-        from code_reviewer import git_ops
+        from code_reviewer.shared import git_ops
         captured = []
 
         def fake_run(cmd, *args, **kwargs):
@@ -144,7 +144,7 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
 
     def test_dry_run_calls_no_model_and_creates_no_checkout(self):
         runner, engine = self.make()
-        with mock.patch("code_reviewer.git_ops.export_tree") as export:
+        with mock.patch("code_reviewer.shared.git_ops.export_tree") as export:
             dry = engine.dry_run(self.ctx)
         self.assertEqual(runner.calls, [])
         export.assert_not_called()
@@ -172,7 +172,7 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
         self.assertNotIn("You are a meticulous senior engineer", text)  # the command shows placeholders, not the prompt itself
 
     def test_dry_run_refuses_the_same_prs_a_real_review_refuses(self):
-        from code_reviewer.models import ReviewRefused
+        from code_reviewer.shared.models import ReviewRefused
         _, engine = self.make(max_diff_lines=2)
         with self.assertRaises(ReviewRefused):
             engine.dry_run(self.ctx)

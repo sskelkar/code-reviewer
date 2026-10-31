@@ -1,6 +1,6 @@
 import unittest
 
-from code_reviewer.master import MasterList, confidence, pass_overlap, tier, validate_decisions
+from code_reviewer.flows.single_agent.master import MasterList, confidence, pass_overlap, tier, validate_decisions
 
 from .helpers import finding
 
@@ -103,12 +103,12 @@ class RateTests(unittest.TestCase):
     ITEM = {"seen_in_passes": [1]}
 
     def test_fewer_than_two_passes_is_unrated(self):
-        from code_reviewer.master import UNRATED, rate
+        from code_reviewer.flows.single_agent.master import UNRATED, rate
         self.assertEqual(rate(self.ITEM, 1, 0.75, 0.4), UNRATED)
         self.assertEqual(rate(self.ITEM, 0, 0.75, 0.4), UNRATED)
 
     def test_two_or_more_passes_use_the_tiers(self):
-        from code_reviewer.master import rate
+        from code_reviewer.flows.single_agent.master import rate
         self.assertEqual(rate({"seen_in_passes": [1, 2]}, 2, 0.75, 0.4), "High")
         self.assertEqual(rate(self.ITEM, 2, 0.75, 0.4), "Medium")
         self.assertEqual(rate(self.ITEM, 4, 0.75, 0.4), "Low")

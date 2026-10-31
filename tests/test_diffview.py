@@ -1,6 +1,6 @@
 import unittest
 
-from code_reviewer import diffview
+from code_reviewer.shared import diffview
 
 SAMPLE = """diff --git a/app.py b/app.py
 index 111..222 100644

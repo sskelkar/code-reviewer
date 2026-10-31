@@ -59,15 +59,19 @@ class HostExecutionTests(unittest.TestCase):
         import sys
         ctx=make_repo(self.root)
         binary=self.root/'fake-native'
-        binary.write_text('#!'+sys.executable+'\nimport json\n'
+        binary.write_text('#!'+sys.executable+'\nimport json,os\n'
+                          'assert not os.environ.get("ANTHROPIC_API_KEY")\n'
+                          'assert os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") == "synthetic-subscription"\n'
                           'print(json.dumps({"type":"result","structured_output":{"findings":[]},"total_cost_usd":0.001}))\n')
         binary.chmod(0o700)
         for mode in ('single-agent','agent-personas'):
-            cfg=replace(self.cfg,claude_bin=str(binary),review_mode=mode)
-            with patch.object(Engine,'prepare',return_value=ctx):
+            cfg=replace(self.cfg,claude_bin=str(binary),review_mode=mode,auth_mode='subscription',runs_dir=str(self.root/('native-'+mode)))
+            with patch.object(Engine,'prepare',return_value=ctx), patch.dict(os.environ, {'CLAUDE_CODE_OAUTH_TOKEN':'synthetic-subscription','ANTHROPIC_API_KEY':'unselected-key'}):
                 status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
             self.assertEqual(status,0,(mode,err))
             self.assertIn('full report:',out)
+            stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
+            self.assertTrue(all(c['billing_mode']=='subscription' for c in stats['calls']))
 
     def test_invalid_host_manifest_is_a_configuration_error_instead_of_traceback(self):
         ctx=make_repo(self.root)
@@ -122,11 +126,12 @@ class HostExecutionTests(unittest.TestCase):
                         return dict(status='completed', usage=dict(input_tokens=100, output_tokens=20), output=items)
                     cfg = replace(self.cfg, runs_dir=str(self.root/(provider+'-'+mode)))
                     def api_runner(*args, **kwargs):
-                        return OpenAIRunner(*args, **kwargs, transport=transport)
+                        kwargs['transport'] = transport
+                        return OpenAIRunner(*args, **kwargs)
                     with patch.object(Engine, 'prepare', return_value=ctx), \
                          patch.object(factory, 'ClaudeRunner', return_value=FakeRunner(reviewer=[{'findings':[]}])) as native, \
                          patch.object(factory, 'OpenAIRunner', side_effect=api_runner) as api, \
-                         patch.dict(os.environ, {'OPENAI_API_KEY':'synthetic-runtime-test-key'}):
+                         patch.dict(os.environ, {'OPENAI_API_KEY':'synthetic-runtime-test-key','ANTHROPIC_API_KEY':'synthetic-native-key'}):
                         args = ['--no-sandbox', '--provider', provider, '--mode', mode, '--passes', '1']
                         if provider == 'openai':
                             args += ['--model', 'synthetic-model']

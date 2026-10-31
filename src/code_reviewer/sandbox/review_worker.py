@@ -5,6 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .acquire import AcquisitionUnavailable, MetadataUnavailable
 from .artifacts import Artifact
 from .channel import Channel
 from .check import FIRECRACKER_SHA, JAILER_SHA, KERNEL_SHA
@@ -48,6 +49,8 @@ def main():
     channel = Channel(sys.stdin.fileno(), sys.stdout.fileno(), args.timeout + 30)
     try:
         value = dispatch(channel, args.root, args.image, args.image_sha256, args.timeout)
+    except (MetadataUnavailable, AcquisitionUnavailable) as exc:
+        value = exc.frame()
     except BaseException:
         value = {'kind': 'failed', 'error': 'VM admission, review or cleanup failed'}
     send_json(channel, value, RESULT_LIMIT)

@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .claude_cli import TOKEN_KEYS, ClaudeResult
+from ..backends.contract import TOKEN_KEYS, LLMResult
 
 
 class Stats:
-    """Records every `claude` invocation, including failed and retried ones."""
+    """Records every model invocation, including failed and retried ones."""
 
     def __init__(self) -> None:
         self.calls: List[Dict[str, Any]] = []
 
-    def record(self, role: str, pass_no: Optional[int], result: ClaudeResult, attempt: int, model: str) -> None:
+    def record(self, role: str, pass_no: Optional[int], result: LLMResult, attempt: int, model: str) -> None:
         self.calls.append({
             "role": role,
             "pass": pass_no,
@@ -24,6 +24,8 @@ class Stats:
             "tokens": dict(result.tokens),
             "duration_ms": result.duration_ms,
             "num_turns": result.num_turns,
+            **({"billing_mode": result.billing_mode} if result.billing_mode != "unknown" else {}),
+            **({"http_errors": result.http_errors} if result.http_errors else {}),
         })
 
     def total_cost(self) -> float:
@@ -33,7 +35,7 @@ class Stats:
         return all(c["cost_usd"] is not None for c in self.calls)
 
     def total_tokens(self) -> int:
-        """Every token Claude Code reported, including cache reads."""
+        """Every token the adapter reported, including cache reads."""
         return sum(sum(c["tokens"].values()) for c in self.calls)
 
     def budget_tokens(self) -> int:

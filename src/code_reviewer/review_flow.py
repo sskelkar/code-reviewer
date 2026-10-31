@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from .shared.claude_cli import ClaudeError
+from .backends.contract import RunnerError
 from .config import Config, ConfigError
 from .shared.git_ops import GitError, PRRef
 from .shared.models import ReviewRefused
@@ -14,7 +14,7 @@ from .engine import Engine
 from .progress import ProgressPrinter
 
 # What a review can fail with in an expected way. Frontends catch these and report them as an error message.
-REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, ClaudeError)
+REVIEW_ERRORS = (GitError, ConfigError, ReviewRefused, RunnerError)
 
 
 @dataclass

@@ -8,35 +8,10 @@ import os
 import signal
 import tempfile
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-TOKEN_KEYS = ("input", "output", "cache_creation", "cache_read")
-
-
-class ClaudeError(RuntimeError):
-    """Raised when the claude binary cannot be run at all."""
-
-
-@dataclass
-class ClaudeResult:
-    ok: bool
-    parsed: Optional[Dict[str, Any]] = None
-    text: str = ""
-    error: Optional[str] = None
-    cost_usd: Optional[float] = None
-    tokens: Dict[str, int] = field(default_factory=lambda: {k: 0 for k in TOKEN_KEYS})
-    duration_ms: Optional[int] = None
-    num_turns: Optional[int] = None
-    model: Optional[str] = None
-    budget_exceeded: bool = False
-    timed_out: bool = False
-    raw: Any = None
-
-    @property
-    def total_tokens(self) -> int:
-        return sum(self.tokens.values())
+from .contract import TOKEN_KEYS, LLMResult, RunnerError
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -66,22 +41,22 @@ def _as_int(value: Any) -> int:
         return 0
 
 
-def _decode_envelope(stdout: str) -> Tuple[Optional[Dict[str, Any]], Optional[ClaudeResult]]:
-    """The result object printed by `claude -p --output-format json`, or a failed ClaudeResult explaining why there is none."""
+def _decode_envelope(stdout: str) -> Tuple[Optional[Dict[str, Any]], Optional[LLMResult]]:
+    """The result object printed by `claude -p --output-format json`, or a failed LLMResult explaining why there is none."""
     stdout = (stdout or "").strip()
     if not stdout:
-        return None, ClaudeResult(ok=False, error="empty output from claude")
+        return None, LLMResult(ok=False, error="empty output from claude")
     try:
         envelope = json.loads(stdout)
     except ValueError:
-        return None, ClaudeResult(ok=False, error="claude output is not JSON: %s" % stdout[:200], text=stdout)
+        return None, LLMResult(ok=False, error="claude output is not JSON: %s" % stdout[:200], text=stdout)
     if isinstance(envelope, list):  # some modes print every message; the last "result" message is the answer
         results = [item for item in envelope if isinstance(item, dict) and item.get("type") == "result"]
         if not results:
-            return None, ClaudeResult(ok=False, error="no result message in claude output", raw=envelope)
+            return None, LLMResult(ok=False, error="no result message in claude output", raw=envelope)
         envelope = results[-1]
     if not isinstance(envelope, dict):
-        return None, ClaudeResult(ok=False, error="unexpected claude output shape", raw=envelope)
+        return None, LLMResult(ok=False, error="unexpected claude output shape", raw=envelope)
     return envelope, None
 
 
@@ -95,7 +70,7 @@ def _token_counts(envelope: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
-def parse_envelope(stdout: str) -> ClaudeResult:
+def parse_envelope(stdout: str) -> LLMResult:
     """Parse the JSON envelope printed by `claude -p --output-format json`."""
     envelope, failure = _decode_envelope(stdout)
     if envelope is None:
@@ -107,7 +82,7 @@ def parse_envelope(stdout: str) -> ClaudeResult:
     subtype = str(envelope.get("subtype") or "")
     is_error = bool(envelope.get("is_error")) or subtype.startswith("error")
 
-    result = ClaudeResult(
+    result = LLMResult(
         ok=False,
         text=text,
         cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
@@ -166,7 +141,8 @@ def build_command(
 class ClaudeRunner:
     """Runs one headless Claude Code call. The user prompt is sent on stdin."""
 
-    def __init__(self, claude_bin: str = "claude", isolation_flags: Optional[Sequence[str]] = None, *, env: Optional[Dict[str, str]] = None):
+    def __init__(self, claude_bin: str = "claude", isolation_flags: Optional[Sequence[str]] = None, *, env: Optional[Dict[str, str]] = None, billing_mode: str = 'unknown'):
+        self.billing_mode = billing_mode
         self.env = env
         self.claude_bin = claude_bin
         self.isolation_flags = list(isolation_flags if isolation_flags is not None else ["--safe-mode", "--restricted"])
@@ -178,12 +154,12 @@ class ClaudeRunner:
             return "unknown"
         return (proc.stdout or proc.stderr).strip() or "unknown"
 
-    def run(self, **kwargs) -> ClaudeResult:
+    def run(self, **kwargs) -> LLMResult:
         return self.run_cancellable(None, **kwargs)
 
     def run_cancellable(self, cancelled, *, system_prompt: str, user_prompt: str, schema: Dict[str, Any],
                         model: str, tools: str, cwd: Optional[Path], budget_usd: float, timeout_s: int,
-                        add_dirs: Sequence[str] = ()) -> ClaudeResult:
+                        add_dirs: Sequence[str] = ()) -> LLMResult:
         cmd = build_command(self.claude_bin, system_prompt=system_prompt, schema=schema, model=model, tools=tools,
                             budget_usd=budget_usd, isolation_flags=self.isolation_flags, add_dirs=add_dirs)
         # A temporary stdin file avoids partial-pipe writes across communicate polls.
@@ -195,20 +171,21 @@ class ClaudeRunner:
                                         text=True, encoding='utf-8', errors='replace', cwd=str(cwd) if cwd else None,
                                         env=self.env, start_new_session=os.name == 'posix')
             except FileNotFoundError as exc:
-                raise ClaudeError('claude binary not found: %s' % self.claude_bin) from exc
+                raise RunnerError('claude binary not found: %s' % self.claude_bin) from exc
             started = time.monotonic()
             try:
                 while True:
                     if cancelled is not None and cancelled.is_set():
                         raise KeyboardInterrupt
                     if time.monotonic() - started >= timeout_s:
-                        return ClaudeResult(ok=False, error='timed out after %ss' % timeout_s, timed_out=True)
+                        return LLMResult(ok=False, error='timed out after %ss' % timeout_s, timed_out=True, billing_mode=self.billing_mode)
                     try:
                         out, err = proc.communicate(timeout=.1)
                         break
                     except subprocess.TimeoutExpired:
                         pass
                 result = parse_envelope(out)
+                result.billing_mode = self.billing_mode
                 if proc.returncode and result.ok:
                     result.ok, result.error = False, 'claude exited with status %d: %s' % (proc.returncode, err[-300:])
                 elif result.raw is None and not result.ok and err:

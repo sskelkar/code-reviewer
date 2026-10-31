@@ -8,8 +8,8 @@ from code_reviewer import cli
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
 from code_reviewer.post import MARKER, format_comment
-from code_reviewer.report import humanize, render_finding, rule_label
-from code_reviewer.summary import render_summary, run_line, select_findings
+from code_reviewer.flows.single_agent.report import humanize, render_finding, rule_label
+from code_reviewer.flows.single_agent.summary import render_summary, run_line, select_findings
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
 
@@ -66,8 +66,8 @@ class SummaryTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn("**No findings.**", render_summary(result, ["High"], []))
 
     def test_no_completed_pass_has_no_review_to_share(self):
-        from code_reviewer.claude_cli import ClaudeResult
-        runner = FakeRunner(reviewer=[ClaudeResult(ok=False, error="timed out")], resolver=RESOLVER)
+        from code_reviewer.backends.contract import LLMResult
+        runner = FakeRunner(reviewer=[LLMResult(ok=False, error="timed out")], resolver=RESOLVER)
         result = Engine(Config(runs_dir=str(self.tmp / "runs")), runner).review(self.ctx)
         self.assertIn("No pass completed, so there is no review to share", render_summary(result, ["High"], []))
 

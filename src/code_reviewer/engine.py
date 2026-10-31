@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
+from .backends.contract import Runner
 from .config import Config
 from .flows import create_flow
 from .shared.events import EventSink
@@ -16,7 +17,7 @@ __all__ = ["Engine"]
 
 
 class Engine:
-    def __init__(self, cfg: Config, runner: Any, emit: Optional[EventSink] = None,
+    def __init__(self, cfg: Config, runner: Optional[Runner], emit: Optional[EventSink] = None,
                  prompts_dir: Optional[Path] = None, defaults_dir: Optional[Path] = None):
         self._flow = create_flow(cfg, runner, emit, prompts_dir, defaults_dir)
 

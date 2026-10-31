@@ -114,9 +114,12 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
     send_json(sock, settings)
     acquired = None
     if source is not None:
-        from .acquire import pin
+        from .acquire import pin, source_failure
         send_json(sock, {'kind': 'github-pr', 'url': source})
         value = receive_json(sock)
+        failure = source_failure(value)
+        if failure:
+            raise failure
         if not isinstance(value, dict) or set(value) != {'kind', 'source'} or value['kind'] != 'acquired':
             raise ValueError('public acquisition did not complete')
         acquired = pin(value['source'], source)

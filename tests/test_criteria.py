@@ -1,6 +1,6 @@
 import unittest
 
-from code_reviewer import criteria
+from code_reviewer.shared import criteria
 from code_reviewer.config import DEFAULT_CRITERIA_DIR
 
 TREE = {

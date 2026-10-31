@@ -52,13 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=REVIEW_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     review.add_argument("pr", metavar="PR", help="pull request URL, or owner/repo#number")
     add_run_options(review)
+    review.add_argument('--auth', choices=('api-key', 'subscription'), help='authentication/access mode; no automatic billing fallback')
     review.add_argument("--post", action="store_true",
                         help="post the summary comment to the pull request after the review (explicit opt-in; nothing is posted without it)")
     review.add_argument("--local-path", metavar="DIR",
                         help="host-only clone to use as the git object store (default: current directory when it matches)")
 
     doctor = sub.add_parser("doctor", help="show offline execution status without commands or credentials")
-    doctor.add_argument("--live", action="store_true", help="unsupported legacy option; use sandbox check for no-key deployment checks")
     sandbox = sub.add_parser('sandbox', help='run the supported sandbox deployment checks')
     checks = sandbox.add_subparsers(dest='sandbox_command', required=True)
     check = checks.add_parser('check', help='build and check Firecracker in a dedicated Lima worker; no key or inference')
@@ -95,10 +95,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "doctor":
         from .security import readiness
         report = readiness(cfg)
-        if args.live:
-            report['diagnostic'] = 'live sandbox diagnostic is not integrated; no host fallback'
         print(json.dumps(report, indent=2))
-        return 0 if report['ready'] and not args.live else 1
+        return 0 if report['ready'] else 1
 
     if args.command == "review":
         try:

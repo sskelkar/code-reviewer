@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import http.client
+import errno
 import json
 import os
 import re
@@ -12,14 +13,104 @@ import tempfile
 import time
 from pathlib import Path
 
+from ..config import ConfigError
 from ..shared.models import PRContext
-from .git_input import admit_tree, bounded_export, git
+from .git_input import TreeFileTooLarge, admit_tree, bounded_export, git
 from .network import PROXY
 
 META_BYTES = 512 * 1024
 GIT_BYTES = 128 * 1024 * 1024
 GIT_FILES = 10000
 DEPTH = 256
+
+
+class MetadataUnavailable(ConfigError):
+    """Only a numeric public-source HTTP status may cross the private failure channel."""
+    def __init__(self, status):
+        if type(status) is not int or not 300 <= status <= 599:
+            raise ValueError('invalid metadata HTTP status')
+        self.status = status
+        super().__init__('GitHub public PR metadata returned HTTP %d; check that the PR exists and is publicly accessible, '
+                         'and check unauthenticated API rate limits. Private source authentication is unsupported in VM mode.' % status)
+
+    def frame(self):
+        return {'kind': 'failed', 'code': 'github_metadata_http', 'http_status': self.status}
+
+
+SOURCE_REASONS = {
+    'git': 'Git could not read/init the admitted repository or find its merge base',
+    'fetch': 'pinned Git commits could not be fetched within the configured limits',
+    'tree': 'the repository exceeded archive/export limits',
+    'file-bytes': 'a repository text file exceeds the current 2 MiB per-file admission limit',
+    'tree-bytes': 'a repository text tree exceeds the current 32 MiB total admission limit',
+    'tree-count': 'a repository tree exceeds the current 5000-file admission limit',
+    'tree-path': 'a repository path exceeds the current 4096-byte path limit',
+    'metadata': 'public PR metadata did not satisfy the requested repository/text limits',
+    'permission': 'guest filesystem permissions prevented public acquisition',
+    'missing-file': 'a required guest file or executable is missing',
+    'timeout': 'public acquisition exceeded its deadline',
+    'unexpected': 'public acquisition failed before admission completed',
+}
+
+
+class AcquisitionUnavailable(ConfigError):
+    def __init__(self, reason, file=None, size=None):
+        if not isinstance(reason, str) or reason not in SOURCE_REASONS:
+            raise ValueError('invalid acquisition failure code')
+        self.reason, self.file, self.size = reason, file, size
+        if file is not None or size is not None:
+            if (reason != 'file-bytes' or not isinstance(file, str) or not 1 <= len(file) <= 256
+                    or any(ord(c) < 32 or ord(c) > 126 for c in file)
+                    or type(size) is not int or not 0 < size < 2**63):
+                raise ValueError('invalid bounded file metadata')
+        detail = ('; file %s (%d bytes)' % (file, size)) if file is not None else ''
+        super().__init__('VM public acquisition failed: ' + SOURCE_REASONS[reason] + detail + '; no model credential was released')
+
+    def frame(self):
+        value = {'kind': 'failed', 'code': 'public_acquisition', 'reason': self.reason}
+        if self.file is not None:
+            value.update(file=self.file, bytes=self.size)
+        return value
+
+
+def acquisition_error(exc):
+    if isinstance(exc, TreeFileTooLarge):
+        return AcquisitionUnavailable('file-bytes', exc.label, exc.size)
+    if isinstance(exc, subprocess.TimeoutExpired) or isinstance(exc, TimeoutError):
+        return AcquisitionUnavailable('timeout')
+    if isinstance(exc, OSError):
+        if exc.errno in (errno.EACCES, errno.EPERM):
+            return AcquisitionUnavailable('permission')
+        if exc.errno == errno.ENOENT:
+            return AcquisitionUnavailable('missing-file')
+    # Only code-owned messages are mapped; arbitrary exception/server text is never exported.
+    reasons = {
+        'admitted Git operation failed': 'git', 'Git output limit exceeded': 'git',
+        'pinned commits unavailable within acquisition limits': 'fetch',
+        'public Git acquisition deadline exceeded': 'timeout',
+        'acquired Git bytes exceeded their limit': 'fetch', 'acquired Git file count exceeded its limit': 'fetch',
+        'tree single file byte limit exceeded': 'file-bytes', 'tree total byte limit exceeded': 'tree-bytes',
+        'tree file count limit exceeded': 'tree-count', 'tree path length limit exceeded': 'tree-path',
+        'archive generation failed or exceeded limits': 'tree', 'export byte/count limit exceeded': 'tree',
+        'invalid PR metadata': 'metadata', 'only the requested public repository is supported': 'metadata',
+        'invalid PR commit hash': 'metadata', 'PR text exceeded its limit': 'metadata',
+        'PR metadata exceeded its limit': 'metadata',
+    }
+    if isinstance(exc, ValueError) and str(exc) in reasons:
+        return AcquisitionUnavailable(reasons[str(exc)])
+    return AcquisitionUnavailable('unexpected')
+
+
+def source_failure(value):
+    if isinstance(value, dict) and value.get('kind') == 'failed' and value.get('code') == 'github_metadata_http':
+        if set(value) != {'kind', 'code', 'http_status'}:
+            raise ValueError('invalid metadata failure frame')
+        return MetadataUnavailable(value['http_status'])
+    if isinstance(value, dict) and value.get('kind') == 'failed' and value.get('code') == 'public_acquisition':
+        if set(value) not in ({'kind', 'code', 'reason'}, {'kind', 'code', 'reason', 'file', 'bytes'}):
+            raise ValueError('invalid acquisition failure frame')
+        return AcquisitionUnavailable(value['reason'], value.get('file'), value.get('bytes'))
+    return None
 
 
 def parse_pr(url):
@@ -53,7 +144,7 @@ def metadata(url):
             'X-GitHub-Api-Version': '2022-11-28'})
         response = connection.getresponse()
         if response.status != 200:  # Redirects, authentication and rate limits fail closed.
-            raise ValueError('public PR metadata unavailable')
+            raise MetadataUnavailable(response.status)
         data = response.read(META_BYTES + 1)
         if len(data) > META_BYTES:
             raise ValueError('PR metadata exceeded its limit')
@@ -175,14 +266,24 @@ def in_guest(url, root):
         if proc.returncode or out.tell() > 65536:
             raise ValueError('isolated public acquisition failed')
         out.seek(0)
-        return context(json.loads(out.read(65537)), url, root)
+        value = json.loads(out.read(65537))
+        failure = source_failure(value)
+        if failure:
+            raise failure
+        return context(value, url, root)
 
 
 def main():
     if os.geteuid() != 65534 or len(sys.argv) != 2:
         raise ValueError('acquisition only runs as the unprivileged guest user')
     url = sys.stdin.buffer.read(257).decode('ascii')
-    print(json.dumps(acquire(url, Path(sys.argv[1]))))
+    try:
+        value = acquire(url, Path(sys.argv[1]))
+    except MetadataUnavailable as exc:
+        value = exc.frame()
+    except Exception as exc:
+        value = acquisition_error(exc).frame()
+    print(json.dumps(value))
 
 
 if __name__ == '__main__':

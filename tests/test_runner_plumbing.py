@@ -7,7 +7,8 @@ import time
 import unittest
 from pathlib import Path
 
-from code_reviewer.claude_cli import ClaudeError, ClaudeRunner
+from code_reviewer.backends.contract import RunnerError
+from code_reviewer.backends.claude import ClaudeRunner
 
 from .helpers import TempDirTestMixin
 
@@ -92,7 +93,7 @@ class RunnerPlumbingTests(TempDirTestMixin, unittest.TestCase):
         self.assertFalse(canary.exists(),'native helper outlived timeout and continued executing')
 
     def test_missing_binary_raises(self):
-        with self.assertRaises(ClaudeError):
+        with self.assertRaises(RunnerError):
             self.run_runner(str(self.tmp / "does-not-exist"))
 
 

@@ -2,17 +2,25 @@
 from __future__ import annotations
 
 import subprocess
-import tarfile
+import json
 import tempfile
 from pathlib import Path
 
-from ..shared import git_ops
+from ..shared.git_content import blob_is_binary
 from ..shared.models import PRContext
 from .capsule import unpack
 
 TREE_BYTES = 32 * 1024 * 1024
 FILE_BYTES = 2 * 1024 * 1024
 TREE_FILES = 5000
+
+
+class TreeFileTooLarge(ValueError):
+    def __init__(self, path, size):
+        # Escaped, bounded filename metadata only; contents are never included here.
+        self.label = json.dumps(path.decode('utf-8', 'replace'), ensure_ascii=True)[:256]
+        self.size = size
+        super().__init__('tree single file byte limit exceeded')
 
 
 def git(repo, *args, limit=2 * 1024 * 1024):
@@ -30,19 +38,30 @@ def git(repo, *args, limit=2 * 1024 * 1024):
 def admit_tree(repo, sha):
     output = git(repo, 'ls-tree', '-rzl', sha)
     count = total = 0
+    entries = {}
     for row in output.split(b'\x00'):
         if not row:
             continue
         fields, path = row.split(b'\t', 1)
         mode, kind, object_, size = fields.split()
         count += 1
-        if count > TREE_FILES or len(path) > 4096:
-            raise ValueError('tree path/count limit exceeded')
+        if count > TREE_FILES:
+            raise ValueError('tree file count limit exceeded')
+        if len(path) > 4096:
+            raise ValueError('tree path length limit exceeded')
         if kind == b'blob':
             size = int(size)
+            binary = mode in (b'100644', b'100755') and blob_is_binary(str(repo), object_.decode('ascii'), size)
+            entries[path] = dict(mode=mode, oid=object_.decode('ascii'), size=size, binary=binary)
+            if binary:
+                continue
             total += size
-            if size > FILE_BYTES or total > TREE_BYTES:
-                raise ValueError('tree byte limits exceeded')
+            if size > FILE_BYTES:
+                raise TreeFileTooLarge(path, size)
+            if total > TREE_BYTES:
+                raise ValueError('tree total byte limit exceeded')
+
+    return entries
 
 
 def prepare_repository(data, root):
@@ -66,34 +85,30 @@ def prepare_repository(data, root):
 
 
 def bounded_export(git_dir, sha, dest):
+    # Export admitted regular text blobs by object ID. Do not generate an archive:
+    # omitted binaries must never expand into an unbounded temporary tar file.
+    from pathlib import PurePosixPath
+    entries = admit_tree(git_dir, sha)
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
-    stats = {'files': 0, 'skipped_links': 0}
-    total = 0
-    with tempfile.TemporaryFile() as archive:
-        proc = subprocess.run(['git', '-C', str(git_dir), 'archive', '--format=tar', sha],
-                              stdout=archive, stderr=subprocess.DEVNULL, timeout=60)
-        if proc.returncode or archive.tell() > TREE_BYTES + 8 * 1024 * 1024:
-            raise ValueError('archive generation failed or exceeded limits')
-        archive.seek(0)
-        with tarfile.open(fileobj=archive, mode='r:') as tar:
-            for member in tar:
-                from pathlib import PurePosixPath
-                path = PurePosixPath(member.name)
-                if path.is_absolute() or '..' in path.parts:
-                    raise ValueError('unsafe exported path')
-                target = dest / member.name
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                elif member.isfile():
-                    total += member.size
-                    stats['files'] += 1
-                    if member.size > FILE_BYTES or total > TREE_BYTES or stats['files'] > TREE_FILES:
-                        raise ValueError('export byte/count limit exceeded')
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    with target.open('xb') as out:
-                        out.write(tar.extractfile(member).read())
-                    target.chmod(0o400)
-                else:
-                    stats['skipped_links'] += 1
+    stats = {'files': 0, 'skipped_links': 0, 'skipped_binaries': 0}
+    for name, entry in entries.items():
+        path = PurePosixPath(name.decode('utf-8', 'strict'))
+        if path.is_absolute() or '..' in path.parts or not path.parts:
+            raise ValueError('unsafe exported path')
+        if entry['mode'] not in (b'100644', b'100755'):
+            stats['skipped_links'] += 1
+            continue
+        if entry['binary']:
+            stats['skipped_binaries'] += 1
+            continue
+        target = dest.joinpath(*path.parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        data = git(git_dir, 'cat-file', 'blob', entry['oid'], limit=FILE_BYTES)
+        if len(data) != entry['size']:
+            raise ValueError('admitted Git operation failed')
+        with target.open('xb') as out:
+            out.write(data)
+        target.chmod(0o400)
+        stats['files'] += 1
     return stats

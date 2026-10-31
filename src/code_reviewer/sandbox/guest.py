@@ -9,10 +9,12 @@ import resource
 import socket
 from pathlib import Path
 
-from ..backends.openai import OpenAIRunner, TokenPrices, request_response
+from ..backends.openai import TokenPrices, request_response
+from ..backends.factory import create_runner
 from ..config import Config
 from ..engine import Engine
 from ..shared import git_ops
+from .acquire import AcquisitionUnavailable, MetadataUnavailable
 from .capsule import MAX_CAPSULE
 from .git_input import bounded_export, prepare_repository
 from .network import PROXY
@@ -117,21 +119,15 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
                      min_passes=1, max_passes=settings['passes'], persona_passes=settings['passes'],
                      persona_parallel=settings['parallel'], run_budget_usd=settings['budget'],
                      call_budget_usd=settings['call_budget'], call_timeout_s=120, runs_dir=str(root / 'runs'))
-    if selected == 'openai':
-        runner = OpenAIRunner(key, model=cfg.model_reviewer,
-                              prices=TokenPrices(cfg.openai_input_price, cfg.openai_cached_input_price, cfg.openai_output_price)
-                              if 'config' in settings else TokenPrices(*settings['prices']),
-                              transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
-    else:
-        from ..shared.claude_cli import ClaudeRunner
-        from .settings import credential_name
-        env = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL',
-               'SSL_CERT_FILE', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL') if name in os.environ}
-        env.update({credential_name(selected, settings['auth']): key,
-                    'HTTPS_PROXY': 'http://%s:%d' % PROXY,
-                    'CLAUDE_CONFIG_DIR': str(root / 'home' / '.claude'),
-                    'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'})
-        runner = ClaudeRunner('/usr/bin/claude', cfg.isolation_flags, env=env)
+    if 'config' not in settings:
+        cfg.openai_input_price, cfg.openai_cached_input_price, cfg.openai_output_price = settings['prices']
+    env = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL',
+           'SSL_CERT_FILE', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL') if name in os.environ}
+    env.update({'HTTPS_PROXY': 'http://%s:%d' % PROXY,
+                'CLAUDE_CONFIG_DIR': str(root / 'home' / '.claude'),
+                'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'})
+    runner = create_runner(cfg, selected_credential=key, env=env,
+                           transport=lambda payload, token, timeout: request_response(payload, token, timeout, proxy=PROXY))
     if snapshot is not None:
         result = Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)
     else:
@@ -171,6 +167,8 @@ def main():
             try:
                 from .snapshot import prepare
                 result = run_job(sock, root, seal=prepare)
+            except (MetadataUnavailable, AcquisitionUnavailable) as exc:
+                result = exc.frame()
             except Exception:
                 # Never send exception text: Git/provider errors may contain target data or credentials.
                 result = {'kind': 'failed', 'error': 'guest admission, probes or review failed'}

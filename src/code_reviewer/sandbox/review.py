@@ -63,6 +63,10 @@ def configuration_errors(cfg, ref=None, options=None):
 def converse(channel, cfg, source, key_reader):
     send_json(channel, {'settings': settings.job_settings(cfg), 'source': source})
     value = receive_json(channel, RESULT_LIMIT)
+    from .acquire import source_failure
+    failure = source_failure(value)
+    if failure:
+        raise failure
     if value != {'kind': 'credential', 'provider': cfg.provider, 'auth': settings.job_settings(cfg)['auth']}:
         raise ValueError('worker did not complete admission and boundary checks; no credential released')
     key = key_reader(cfg.provider, settings.job_settings(cfg)['auth'])
@@ -116,36 +120,59 @@ def execute(worker, arguments, cfg, source, key_reader):
         proc.stdout.close()
 
 
+def runtime_inputs(cfg):
+    """Check installed inputs only for real execution; preflight stays IO-free."""
+    required = [(Path(cfg.vm_artifacts) / 'firecracker.tgz', 'Firecracker archive', 'vm_artifacts'),
+                (Path(cfg.vm_artifacts) / 'vmlinux-6.1.188', 'guest kernel', 'vm_artifacts'),
+                (Path(cfg.vm_lima_home) / cfg.vm_instance / 'lima.yaml', 'Lima worker definition', 'vm_lima_home/vm_instance')]
+    if cfg.provider == 'claude':
+        required.append((Path(cfg.vm_claude_binary), 'native CLI binary', 'vm_claude_binary'))
+    for path, label, setting in required:
+        if not path.is_file():
+            raise ConfigError('VM setup missing %s; check %s and provision the dedicated runtime '
+                              'in a persistent directory (see docs/sandbox-check.md)' % (label, setting))
+
+
 def run(cfg, ref, options, *, key_reader=settings.credential):
     failures = configuration_errors(cfg, ref, options)
     if failures:
         raise ReviewRefused('VM review unavailable: ' + '; '.join(failures) + '; no host fallback')
+    runtime_inputs(cfg)
     worker = Worker(cfg.vm_lima_home, cfg.vm_instance)
     job = '/tmp/reviewer-check-' + uuid.uuid4().hex
     source = source_url(ref)
+    phase = 'artifact staging'
     try:
         with tempfile.TemporaryDirectory(prefix='reviewer-stage-') as name:
             stage = Path(name)
             stage_inputs(cfg.vm_artifacts, stage)
+            phase = 'reviewer source bundling'
             bundle = build_bundle(REPO_ROOT, stage/'source.tar')
             builder = regular(REPO_ROOT/'sandbox/firecracker/build-offline-guest.sh', 65536)
             (stage/'build.sh').write_bytes(builder)
             native = cfg.vm_claude_sha256 if cfg.provider == 'claude' else False
             if native:
                 Artifact(Path(cfg.vm_claude_binary), native, 300000000).stage(stage/'claude')
+            phase = 'dedicated worker startup'
             with worker.session():
                 worker.shell('mkdir', '-m', '700', job)
                 try:
+                    phase = 'runtime image preparation'
                     env, preparation = prepare_worker(worker, stage, job, bundle['sha256'], hashlib.sha256(builder).hexdigest(), native=native)
                     image = preparation['images']['connected']
                     arguments = (*env, 'PYTHONPATH='+image['path']+'/root/opt/reviewer/src', 'python3',
                                  '-m', 'code_reviewer.sandbox.review_worker', '--root', job, '--image', image['path'],
                                  '--image-sha256', image['sha256'], '--timeout', str(cfg.vm_timeout_s))
                     print('sandbox: reviewing pinned PR inside the VM; waiting for boundary checks', file=sys.stderr)
+                    phase = 'VM admission, review or result validation'
                     value, key = execute(worker, arguments, cfg, source, key_reader)
                 finally:
+                    if sys.exc_info()[0] is None:
+                        phase = 'remote scratch cleanup'
                     worker.shell('sudo', '-n', 'rm', '-rf', '--', job, timeout=30)
+                phase = 'dedicated worker shutdown'
             # Worker shutdown is confirmed before any result is published locally.
+            phase = 'local report export'
             runs = cfg.runs_path()
             runs.mkdir(mode=0o700, parents=True, exist_ok=True)
             output = runs / ('vm-' + uuid.uuid4().hex)
@@ -155,5 +182,5 @@ def run(cfg, ref, options, *, key_reader=settings.credential):
         raise
     except (Exception, KeyboardInterrupt):
         # Do not propagate SSH, native-client or provider text to the host console.
-        raise ReviewRefused('VM review failed during preparation, admission, inference or cleanup; no host fallback. '
-                            'Check the dedicated worker with reviewer sandbox check/recover.') from None
+        raise ReviewRefused('VM review failed during %s; no host fallback. '
+                            'Check the dedicated worker with reviewer sandbox check/recover.' % phase) from None

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..config import Config
 from ..engine import Engine
-from ..shared.claude_cli import ClaudeRunner
+from ..backends.claude import ClaudeRunner
 from ..shared.models import PRContext
 
 RESULT_PREFIX = 'REVIEWER_SMOKE_RESULT='

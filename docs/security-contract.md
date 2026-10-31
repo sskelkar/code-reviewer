@@ -7,6 +7,7 @@ Current direction, confirmed 2026-10-28: one reviewer, runtime-selected provider
 | Choice | Meaning |
 |---|---|
 | Provider | Claude or OpenAI adapter; same review algorithms and output contract |
+| Authentication | Explicit API-key or subscription access; unsupported combinations refuse without billing fallback |
 | Review strategy | Single-agent or agent-personas; independent of provider/execution location |
 | Execution | VM by default; explicit direct-host selection for trusted use without VM startup overhead |
 
@@ -42,3 +43,7 @@ See [architecture](architecture.md), [VM design](sandbox-architecture.md) and [c
 The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout`, `--dry-run` and the operator-file `criteria_manifest` override are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.
 
 The REPL and comparator replay are parked, with helpers/tests retained. Private source authentication and future review-quality experiments are separate milestones. Custom syscall filters, credential brokers, per-persona VMs and distributed infrastructure are outside this scope. None is an implicit prerequisite for the currently agreed boundary. Native authentication/tool behavior and real model/report integration still need an authorized live check.
+
+Binary contents are omitted from model checkouts and diff hunks in both execution locations. Prefix classification is a heuristic, not binary validation or malware scanning. Omission metadata and text/acquisition limits are documented in [usage](usage.md#binary-omissions); binary Git objects still cross the acquisition boundary and remain subject to its bounds.
+
+The common LLM contract and one host/guest adapter factory are implemented. Claude subscription access requires the selected explicit token; ambient API keys are not forwarded. ChatGPT subscription consent/streaming is a separate unfinished milestone and refuses at configuration readiness. See [adapter support](llm.md).

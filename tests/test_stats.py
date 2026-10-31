@@ -1,14 +1,14 @@
 import unittest
 
-from code_reviewer.claude_cli import ClaudeResult
-from code_reviewer.stats import Stats
+from code_reviewer.backends.contract import LLMResult
+from code_reviewer.shared.stats import Stats
 
 
 class StatsBudgetTokensTests(unittest.TestCase):
     def test_failed_call_without_usage_has_unknown_cost(self):
         stats = Stats()
-        stats.record('resolver', None, ClaudeResult(ok=True, cost_usd=.002), 1, 'fake')
-        stats.record('classifier', None, ClaudeResult(ok=False, timed_out=True), 1, 'fake')
+        stats.record('resolver', None, LLMResult(ok=True, cost_usd=.002), 1, 'fake')
+        stats.record('classifier', None, LLMResult(ok=False, timed_out=True), 1, 'fake')
         self.assertFalse(stats.cost_known())
         self.assertFalse(stats.to_dict()['cost_known_for_all_calls'])
         self.assertEqual(stats.total_cost(), .002)
@@ -16,7 +16,7 @@ class StatsBudgetTokensTests(unittest.TestCase):
     def test_budget_tokens_exclude_cache_reads(self):
         stats = Stats()
         tokens = {"input": 10, "output": 400, "cache_creation": 100, "cache_read": 700000}
-        stats.record("reviewer", 1, ClaudeResult(ok=True, tokens=tokens), 1, "haiku")
+        stats.record("reviewer", 1, LLMResult(ok=True, tokens=tokens), 1, "haiku")
         self.assertEqual(stats.total_tokens(), 700510)
         self.assertEqual(stats.budget_tokens(), 510)
         self.assertEqual(stats.to_dict()["budget_tokens"], 510)

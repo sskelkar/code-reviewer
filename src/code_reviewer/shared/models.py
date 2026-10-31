@@ -1,7 +1,7 @@
 """Plain data types shared across the engine, report and frontends."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -32,6 +32,7 @@ class PRContext:
     host: str = "github.com"
     author: str = ""
     state: str = ""
+    binary_omissions: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def label(self) -> str:

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from .git_content import binary_sample, blob_is_binary, SAMPLE_BYTES
 from ..config import DATA_DIR
 
 
@@ -191,14 +192,16 @@ def git_show(git_dir: Path, sha: str, path: str) -> Optional[str]:
     proc = subprocess.run(["git", "-C", str(git_dir), "show", "%s:%s" % (sha, path)], capture_output=True, timeout=60)
     if proc.returncode != 0:
         return None
+    if binary_sample(proc.stdout[:SAMPLE_BYTES]):
+        return None
     return proc.stdout.decode("utf-8", "replace")
 
 
 def export_tree(git_dir: Path, sha: str, dest: Path) -> Dict[str, int]:
-    """Export the tree at `sha` into `dest` using git archive. Symlinks and special files are skipped."""
+    """Export the tree at `sha` into `dest` using git archive. Symlinks, special files and detected binary contents are skipped."""
     dest.mkdir(parents=True, exist_ok=True)
     root = dest.resolve()
-    stats = {"files": 0, "skipped_links": 0}
+    stats = {"files": 0, "skipped_links": 0, "skipped_binaries": 0}
     with tempfile.TemporaryDirectory() as tmp:
         archive = os.path.join(tmp, "tree.tar")
         _run(["git", "-C", str(git_dir), "archive", "--format=tar", "-o", archive, sha], timeout=900)
@@ -217,7 +220,49 @@ def export_tree(git_dir: Path, sha: str, dest: Path) -> Dict[str, int]:
                     source = tar.extractfile(member)
                     if source is None:
                         continue
+                    prefix = source.read(SAMPLE_BYTES)
+                    if binary_sample(prefix):
+                        stats["skipped_binaries"] += 1
+                        continue
                     with open(target, "wb") as out:
-                        out.write(source.read())
+                        out.write(prefix)
+                        import shutil
+                        shutil.copyfileobj(source, out)
                     stats["files"] += 1
     return stats
+
+
+def binary_omissions(ctx):
+    """Head checkout omissions plus binary changes from the merge base, including deletions.
+
+    VM input has already passed tree admission. The explicit trusted-host path
+    uses the same metadata cap and prefix classifier without VM text limits.
+    """
+    trees = []
+    for sha in (ctx.merge_base, ctx.head_sha):
+        proc = subprocess.run(['git', '-C', str(ctx.git_dir), 'ls-tree', '-rzl', sha],
+                              capture_output=True, timeout=60)
+        if proc.returncode or len(proc.stdout) > 2 * 1024 * 1024:
+            raise GitError('Git tree metadata failed or exceeded its limit')
+        entries = {}
+        for row in proc.stdout.split(b'\0'):
+            if not row:
+                continue
+            fields, path = row.split(b'\t', 1)
+            mode, kind, oid, size = fields.split()
+            if kind != b'blob' or mode not in (b'100644', b'100755'):
+                continue
+            size = int(size)
+            entries[path] = (oid.decode('ascii'), size,
+                             blob_is_binary(str(ctx.git_dir), oid.decode('ascii'), size))
+        trees.append(entries)
+    base, head = trees
+    result = []
+    for path in sorted(set(base) | set(head)):
+        old, new = base.get(path), head.get(path)
+        if not ((old and old[2]) or (new and new[2])):
+            continue
+        status = 'added' if old is None else 'deleted' if new is None else 'unchanged' if old[0] == new[0] else 'modified'
+        result.append(dict(path=path.decode('utf-8', 'replace'), status=status,
+                           base_bytes=old[1] if old else None, head_bytes=new[1] if new else None))
+    return result

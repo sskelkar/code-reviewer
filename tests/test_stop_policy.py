@@ -1,7 +1,7 @@
 import unittest
 
 from code_reviewer.config import Config
-from code_reviewer.stop_policy import BUDGET_EXCEEDED, CONVERGED, FAILURES, MAX_PASSES, StopPolicy
+from code_reviewer.flows.single_agent.stop_policy import BUDGET_EXCEEDED, CONVERGED, FAILURES, MAX_PASSES, StopPolicy
 
 
 def policy(**overrides):

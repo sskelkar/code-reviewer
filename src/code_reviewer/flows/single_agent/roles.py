@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
-from ...shared.claude_cli import ClaudeResult
+from ...backends.contract import LLMResult
 from ...config import Config
 from ...shared.findings import compact
-from ...shared.llm import CallSpec, ClaudeCaller, requires_lists
+from ...shared.llm import CallSpec, ModelCaller, requires_lists
 from .master import validate_decisions
 from ...shared.models import ReviewInput
 from ...shared.templates import PromptSet, escape_untrusted, render
@@ -21,7 +21,7 @@ class Reviewer:
 
     TOOLS = "Read,Grep,Glob"
 
-    def __init__(self, caller: ClaudeCaller, prompt: PromptSet, cfg: Config, inputs: ReviewInput):
+    def __init__(self, caller: ModelCaller, prompt: PromptSet, cfg: Config, inputs: ReviewInput):
         self.caller, self.prompt, self.cfg, self.inputs = caller, prompt, cfg, inputs
 
     @staticmethod
@@ -48,7 +48,7 @@ class Reviewer:
         return (render(prompt.system, {}, {"self_check": cfg.self_check}),
                 render(prompt.user, Reviewer._variables(inputs)))
 
-    def review(self, pass_no: int, raw_path: Path) -> ClaudeResult:
+    def review(self, pass_no: int, raw_path: Path) -> LLMResult:
         """Run one review. Every pass receives identical input."""
         system, user = self.render(self.prompt, self.cfg, self.inputs)
         spec = CallSpec(
@@ -61,7 +61,7 @@ class Reviewer:
 class Comparator:
     """Maps this pass's findings onto the master list. It sees findings only, never the code, and has no tools."""
 
-    def __init__(self, caller: ClaudeCaller, prompt: PromptSet, cfg: Config, work_dir: Path):
+    def __init__(self, caller: ModelCaller, prompt: PromptSet, cfg: Config, work_dir: Path):
         self.caller, self.prompt, self.cfg, self.work_dir = caller, prompt, cfg, work_dir
 
     @staticmethod

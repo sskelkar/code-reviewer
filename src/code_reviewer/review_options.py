@@ -31,7 +31,7 @@ def positive_int(text: str) -> int:
 
 def add_run_options(parser: argparse.ArgumentParser) -> None:
     """Options that change how a review runs. Both frontends add exactly these."""
-    parser.add_argument("--preflight", action="store_true", help="show production readiness without fetching code, running a model or reading credentials")
+    parser.add_argument("--preflight", action="store_true", help="check configuration without fetching code, running a model or reading credentials")
     parser.add_argument("--provider", choices=("claude", "openai"), help="runtime inference adapter; independent of host/VM execution")
     parser.add_argument('--no-sandbox', action='store_true', help='explicit trusted direct-host acquisition/review, without starting a VM')
     parser.add_argument("--parallel", type=positive_int, metavar="N", help="persona-only concurrent calls, 1 to 4 (default: persona_parallel, 4)")
@@ -65,6 +65,8 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
     cfg = replace(cfg)
     if getattr(args, 'no_sandbox', False):
         cfg.sandbox = False
+    if getattr(args, 'auth', None):
+        cfg.auth_mode = args.auth
     if getattr(args, "provider", None):
         cfg.provider = args.provider
     if getattr(args, 'preflight', False) and getattr(args, 'dry_run', False):
@@ -94,7 +96,8 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
 # The options of `reviewer review`, one line each, for the banner it prints in a terminal. A test checks that every option
 # of the command is listed here. (`--config` belongs to `reviewer` itself and goes before `review`.)
 BANNER_OPTIONS = [
-    ("--preflight", "show release blockers; no fetch, model call or credential access"),
+    ("--auth NAME", "api-key or subscription; no automatic billing fallback"),
+    ("--preflight", "check configuration; no fetch, model call or credential access"),
     ("--provider NAME", "runtime adapter: claude or openai, independent of execution location"),
     ('--no-sandbox', 'explicit direct-host execution; default is VM, with no automatic fallback'),
     ("--parallel N", "persona-only concurrent calls, 1 to 4 (default 4)"),
@@ -125,7 +128,7 @@ def review_banner(pr: str, cfg: Config) -> str:
     ]
     if cfg.review_mode == 'agent-personas':
         lines.insert(3, 'Persona schedule: %d passes per persona; no quiet-pass stopping.' % cfg.persona_passes)
-    lines.insert(3, 'Execution: %s · provider %s' % ('VM' if cfg.sandbox else 'direct host (explicitly selected)', cfg.provider))
+    lines.insert(3, 'Execution: %s · provider %s · auth %s' % ('VM' if cfg.sandbox else 'direct host (explicitly selected)', cfg.provider, cfg.auth_mode))
     lines += ["  %s%s" % (flag.ljust(width), description) for flag, description in BANNER_OPTIONS]
     lines += [
         "",

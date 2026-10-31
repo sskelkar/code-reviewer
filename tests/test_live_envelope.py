@@ -5,7 +5,7 @@ import json
 import unittest
 from pathlib import Path
 
-from code_reviewer.claude_cli import parse_envelope
+from code_reviewer.backends.claude import parse_envelope
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "live_envelope_haiku.json"

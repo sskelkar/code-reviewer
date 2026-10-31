@@ -92,6 +92,12 @@ class RunStore:
         self.dump("stats.json", stats)
         self.dump("labels.json", {"marks": {}, "dropped": [], "missed": []})
 
+    def save_binary_omissions(self, ctx: PRContext) -> None:
+        if ctx.binary_omissions:
+            stats = json.loads((self.root / 'stats.json').read_text(encoding='utf-8'))
+            stats['binary_omissions'] = ctx.binary_omissions
+            self.dump('stats.json', stats)
+
     def cleanup_checkout(self) -> None:
         if self._checkout_parent is not None:
             shutil.rmtree(self._checkout_parent, ignore_errors=True)

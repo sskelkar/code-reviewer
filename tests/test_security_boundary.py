@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from code_reviewer import cli, config, security
 from code_reviewer.config import Config, ConfigError
-from code_reviewer.repl import Session
+from code_reviewer.parked.repl import Session
 from code_reviewer.shared.models import ReviewRefused
 from code_reviewer.sandbox import connected
 from tests.helpers import FakeRunner
@@ -105,11 +105,13 @@ class BoundaryTests(unittest.TestCase):
         with patch.object(cli, 'load_config', return_value=Config()), \
                 patch('subprocess.run', side_effect=AssertionError('no diagnostic host command')), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(cli.main(['doctor', '--live']), 1)
+            with self.assertRaises(SystemExit) as caught:
+                cli.main(['doctor', '--live'])
+            self.assertEqual(caught.exception.code, 2)
             self.assertEqual(cli.main(['doctor']), 1)
 
     def test_retained_replay_cannot_launch_models_outside_the_boundary(self):
-        from code_reviewer import replay
+        from code_reviewer.parked import replay
         with patch('subprocess.run', side_effect=AssertionError('no external process')), \
                 patch('pathlib.Path.read_text', side_effect=AssertionError('no target/saved-run reads')), \
                 contextlib.redirect_stderr(io.StringIO()):

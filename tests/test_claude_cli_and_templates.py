@@ -1,7 +1,9 @@
 import json
 import unittest
 
-from code_reviewer import claude_cli, templates
+from code_reviewer.backends import claude as claude_cli
+from code_reviewer.flows.single_agent import prompt_contract
+from code_reviewer.shared import templates
 from code_reviewer.config import Config, ConfigError
 
 
@@ -90,20 +92,20 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("</other>", escaped)
 
     def test_all_real_prompts_load_and_schemas_are_objects(self):
-        for role in templates.ROLES:
-            prompt = templates.load_prompt(role)
+        for role in prompt_contract.ROLES:
+            prompt = prompt_contract.load_prompt(role)
             self.assertEqual(prompt.schema["type"], "object")
             self.assertTrue(prompt.system.strip())
-        self.assertEqual(len(templates.prompt_hashes()), 9)
+        self.assertEqual(len(prompt_contract.prompt_hashes()), 9)
 
     def test_comparator_merges_by_the_one_change_test_and_not_by_wording(self):
-        system = templates.load_prompt("comparator").system
+        system = prompt_contract.load_prompt("comparator").system
         for phrase in ("one change would resolve both", "fixing one would leave the other still true",
                        "do not choose `new` merely because the wording differs", "When you cannot tell"):
             self.assertIn(phrase, system)
 
     def test_reviewer_self_check_section_toggles(self):
-        system = templates.load_prompt("reviewer").system
+        system = prompt_contract.load_prompt("reviewer").system
         self.assertIn("Self-check (second phase)", templates.render(system, {}, {"self_check": True}))
         self.assertNotIn("Self-check (second phase)", templates.render(system, {}, {"self_check": False}))
 

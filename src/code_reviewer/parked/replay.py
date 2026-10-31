@@ -8,12 +8,12 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from .config import Config
-from .shared.llm import ClaudeCaller
-from .flows.single_agent.master import MasterList
-from .flows.single_agent.roles import Comparator
-from .shared.stats import Stats
-from .flows.single_agent.prompt_contract import load_prompt
+from ..config import Config
+from ..shared.llm import ModelCaller
+from ..flows.single_agent.master import MasterList
+from ..flows.single_agent.roles import Comparator
+from ..shared.stats import Stats
+from ..flows.single_agent.prompt_contract import load_prompt
 
 PassFindings = List[Tuple[int, List[Dict[str, Any]]]]
 Groups = Dict[str, List[str]]  # master finding ID -> the local finding IDs merged into it
@@ -61,7 +61,7 @@ def replay_grouping(passes: PassFindings, cfg: Config, runner: Any, stats: Optio
     Pass a `Stats` to collect the cost of the comparator calls."""
     with tempfile.TemporaryDirectory(prefix="comparator-replay-") as name:
         scratch = Path(name)
-        comparator = Comparator(ClaudeCaller(runner, cfg, stats or Stats()), load_prompt("comparator"), cfg, scratch)
+        comparator = Comparator(ModelCaller(runner, cfg, stats or Stats()), load_prompt("comparator"), cfg, scratch)
 
         def decide(master: MasterList, pass_no: int, findings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
             candidates = master.candidates(findings, cfg.candidate_window, cfg.candidate_all_threshold, cfg.candidate_max)

@@ -233,11 +233,11 @@ def _usage_section(result: RunResult) -> List[str]:
         "- Total: %s, %s tokens (input %s, output %s, cache write %s, cache read %s)" % (
             money(stats.total_cost(), known), count(stats.total_tokens()), count(totals["input"]), count(totals["output"]),
             count(totals["cache_creation"]), count(totals["cache_read"])),
-        "- Claude invocations: %d (%d retries, %d failed); model time %.0fs" % (
+        "- Model calls: %d (%d retries, %d failed); model time %.0fs" % (
             counts["calls"], counts["retries"], counts["failed_calls"], stats.duration_s()),
         "- Budget: %s of %s; %s of %s counted tokens (input, output and cache writes; cache reads are not counted)" % (
             money(stats.total_cost(), known), money(cfg.run_budget_usd), count(stats.budget_tokens()), count(cfg.run_budget_tokens)),
-        "- Costs are estimates reported by Claude Code and may not match billing." + note,
+        "- Costs are adapter estimates or allocation units, not a provider-enforced cap or subscription balance." + note,
         "",
     ]
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from ...shared.claude_cli import build_command
+from ...backends.factory import preview_command
 from ...config import Config
 from ...shared.models import PRContext
 from .roles import Reviewer
@@ -30,14 +30,8 @@ class DryRun:
 
 
 def reviewer_command(cfg: Config) -> List[str]:
-    """The Reviewer's `claude` command line, with the two large arguments replaced by placeholders."""
-    if cfg.provider == 'openai':
-        return ['POST', 'https://api.openai.com/v1/responses', 'model=' + cfg.model_reviewer]
-    cmd = build_command(
-        cfg.claude_bin, system_prompt="", schema={}, model=cfg.model_reviewer, tools=Reviewer.TOOLS,
-        budget_usd=cfg.call_budget_usd, isolation_flags=cfg.isolation_flags)
-    placeholders = {"--append-system-prompt": "<system prompt: input/reviewer.system.md>", "--json-schema": "<JSON schema of the findings>"}
-    return [placeholders.get(cmd[i - 1], arg) if i else arg for i, arg in enumerate(cmd)]
+    """The selected adapter's credential-free request description."""
+    return preview_command(cfg, Reviewer.TOOLS)
 
 
 def _indented(text: str, limit: int = MAX_SHOWN_CHARS) -> str:

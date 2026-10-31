@@ -33,6 +33,7 @@ Use these with `reviewer review <url> ...`; `reviewer review --help` describes t
 |---|---|
 | `--no-sandbox` | Explicit direct-host acquisition/review; no VM startup. Also selectable with trusted `sandbox = false`; no automatic fallback |
 | `--preflight` | Show release blockers and effective request without target/model/credential activity |
+| `--auth NAME` | `api-key` (default) or `subscription`; independent of provider/location. ChatGPT subscription login is not implemented; Claude subscription requires its explicit OAuth token |
 | `--provider NAME` | `claude` or `openai`; identical security requirements |
 | `--parallel N` | Persona-only concurrency from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; rejected for single-agent |
 | `--mode NAME` | Select `single-agent` (default) or `agent-personas`. Each runs its own workflow. The REPL is parked |
@@ -42,7 +43,7 @@ Use these with `reviewer review <url> ...`; `reviewer review --help` describes t
 | `--keep-checkout` | Keep the temporary read-only checkout so you can inspect exactly what the reviewer saw. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
 | `--dry-run` | Host-only target/prompt preview without credentials or model calls; VM requests refuse. Use `--preflight` for no target IO |
 | `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
-| `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. In the interactive prompt use the `post` command instead |
+| `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. The retained interactive frontend is parked |
 | `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
 | `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (bare `reviewer` only shows help). Explicit trusted operator file outside Git working trees, replacing `~/.code-reviewer/review.toml` |
 
@@ -126,6 +127,8 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `provider` | `claude` | Select the runtime adapter: Claude or OpenAI |
+| `auth_mode` | `api-key` | Select API-key or subscription access; unsupported combinations refuse without billing fallback. See [LLM support](llm.md) |
 | `review_mode` | `single-agent` | Flow selected by default; override for one run with `--mode`. `agent-personas` uses `persona_passes` slots for each of four personas, then verifies flagged conflicts within budget |
 | `model_reviewer`, `model_comparator`, `model_resolver`, `model_verifier` | `haiku` | Model alias or full name per role. Persona classification uses `model_resolver`; `model_verifier` is persona-only. Historical Comparator comparisons are recorded in the proposal; replay instructions are in the development guide. |
 | `persona_parallel` | `4` | Persona-only concurrent model calls (1–4), overridden with `--parallel N`. Single-agent stays sequential |
@@ -207,6 +210,10 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `--passes applies to single-agent` after updating | Check for an outdated installed executable. Current persona mode accepts `--passes N` as passes per persona (default 3), so `--mode agent-personas --passes 1` schedules four total review slots |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Use a fresh one-shot invocation after updating. A new review fetches the latest branch tips; commits are pinned only within a run |
+| `VM setup missing Firecracker archive`, `guest kernel` or `Lima worker definition` | Check `vm_artifacts`, `vm_lima_home` and `vm_instance`; restore the [persistent installation](sandbox-check.md#persistent-first-time-setup). Existing empty parent directories are insufficient. No model credential has been read at this stage |
+| `GitHub public PR metadata returned HTTP ...` | The VM could not obtain public PR metadata, before credential handoff. Check that the PR exists and is publicly accessible and that unauthenticated API access is not rate-limited. Private source authentication is not implemented in VM mode; trusted host execution requires explicit `--no-sandbox` |
+| `VM public acquisition failed: ... admission limit` | The VM rejected repository input before credential handoff. Current caps are 2 MiB per text file, 32 MiB of text per tree and 5000 entries (including binaries). Binary contents are omitted rather than triggering text-size limits; retained Git acquisition limits still apply. An oversized-file error includes only an escaped bounded filename and byte count, not file contents. Changing input scope/limits is a separate explicit decision; recovery or a larger model budget will not fix it |
+| `VM review failed during ...` | The message identifies the failing preparation/startup/image/review/cleanup/export phase. Run the no-key deployment check for infrastructure failures; recovery is for abandoned worker state, not missing installations |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
 | `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` or `extra_exclude_patterns` |
 | `pass N FAILED: ... timed out` or `not a valid JSON object` | For host runs, inspect `pass-NN/reviewer.raw.json`. VM exports contain only report/summary/stats; use their failure accounting. Raise `call_timeout_s` or `call_budget_usd`, or try another model |
@@ -223,8 +230,7 @@ Normal VM reviews acquire public GitHub PRs inside the VM, select the configured
 
 ## Host adapter configuration
 
-Host reviews use `--no-sandbox` or trusted `sandbox = false`; preflight does not check/read model credentials. The native adapter uses its configured local login/token. The API adapter reads `OPENAI_API_KEY` only when a real host review starts; never put the key in arguments or TOML. Configure `openai_input_price`, `openai_cached_input_price` and `openai_output_price` as positive USD per million tokens. The current API adapter requires one explicit model ID across all `model_*` roles (`--model MODEL_ID` sets all of them). A host dry-run needs a valid model ID, but no key or rates. Missing/invalid configuration refuses before target acquisition. The [example TOML](../review.example.toml) lists the fields.
-
+Use the same provider/authentication settings and factory as the guest. `--no-sandbox` chooses host execution; it does not choose authentication. Set only the selected environment credential, as described in [the LLM support matrix](llm.md#selecting-access). OpenAI API-key access requires explicit model/token rates. Claude subscription selection requires `CLAUDE_CODE_OAUTH_TOKEN` even on the host; cached Console/browser credentials are not inferred as subscription access. ChatGPT sign-in remains unimplemented and preflight refuses it.
 
 ## VM review configuration
 
@@ -239,15 +245,39 @@ vm_timeout_s = 1800
 # For the native CLI adapter, also provide a verified Linux ARM64 artifact:
 vm_claude_binary = "/absolute/path/to/linux-arm64-claude"
 vm_claude_sha256 = "REPLACE_WITH_VERIFIED_64_CHARACTER_LOWERCASE_SHA256"
-vm_claude_auth = "api-key" # or "oauth"; never chooses billing automatically
+auth_mode = "api-key" # or "oauth"; never chooses billing automatically
 ```
 
-Use the worker/artifact prerequisites in [sandbox check](sandbox-check.md). Preflight checks configuration shape without opening artifacts, inspecting the worker or reading a key. Real execution hashes staged artifacts, validates/locks the dedicated stopped worker, prepares clean images and starts one jailed VM. The selected native binary digest joins the connected image's cache identity. The normal command currently supports **public github.com PR acquisition only**; it does not inspect/fetch the target on the workstation. `--local-path` and `--keep-checkout` refuse in VM mode.
+Use the [persistent worker/artifact setup](sandbox-check.md#persistent-first-time-setup). Keep both installed artifacts and Lima state outside system temporary directories; only per-review staging is temporary. Preflight checks configuration shape without opening artifacts, inspecting the worker or reading a key. Real execution hashes staged artifacts, validates/locks the dedicated stopped worker, prepares clean images and starts one jailed VM. The selected native binary digest joins the connected image's cache identity. The normal command currently supports **public github.com PR acquisition only**; it does not inspect/fetch the target on the workstation. `--local-path` and `--keep-checkout` refuse in VM mode.
 
-Set only the intended credential in the invoking process environment: `OPENAI_API_KEY`, or for Claude, `ANTHROPIC_API_KEY` with `vm_claude_auth = "api-key"`, or `CLAUDE_CODE_OAUTH_TOKEN` with `"oauth"`. No key/token value belongs in TOML, arguments, images or chat. The native adapter receives only its selected credential, fixed proxy configuration and a fresh guest home; host login files/keychains are not imported. OAuth and API billing never fall back to each other. For OpenAI, retain explicit model and token rates as described above.
+Set only the intended credential in the invoking process environment: `OPENAI_API_KEY`, or for Claude, `ANTHROPIC_API_KEY` with `auth_mode = "api-key"`, or `CLAUDE_CODE_OAUTH_TOKEN` with `auth_mode = "subscription"`. No key/token value belongs in TOML, arguments, images or chat. The native adapter receives only its selected credential, fixed proxy configuration and a fresh guest home; host login files/keychains are not imported. OAuth and API billing never fall back to each other. For OpenAI, retain explicit model and token rates as described above.
 
-The launcher reads that selected credential only after input admission, external source-access revocation and native/file/network probes pass. Private SSH process pipes and vsock carry bounded frames. The inference proxy permits only the selected provider's fixed endpoints: `api.openai.com`, or `api.anthropic.com` and `platform.claude.com`. Interactive login, SSO, extra providers/endpoints and custom gateways are unsupported. A missing endpoint fails under policy; it does not widen access automatically. See [native authentication details](sandbox-runtime-auth.md).
+The launcher reads that selected credential only after input admission, external source-access revocation and native/file/network probes pass. Private SSH process pipes and vsock carry bounded frames. The inference proxy permits only the selected provider's fixed endpoints: `api.openai.com`, or `api.anthropic.com` and `platform.claude.com`. Interactive login, SSO, extra providers/endpoints and custom gateways are unsupported. A missing endpoint fails under policy; it does not widen access automatically. See [native authentication details](llm.md).
 
 After VM/network cleanup and confirmed outer-worker shutdown, the host saves `report.md`, `summary.md` and `stats.json` in a fresh `vm-<random ID>` directory under `runs_dir`. The directory is 0700 and files 0600; internal prompts/raw replies remain ephemeral in the VM. The terminal/posting path uses the prefiltered summary generated inside the guest. `--post` remains explicit and uses the operator's host GitHub CLI after review. No untrusted Python result object is deserialized.
 
-This wiring is covered by simulated provider/transport tests; **authenticated VM inference has not yet been exercised**. A compromised guest can falsify findings/accounting or reuse the credential it receives. VM destruction does not revoke that credential or enforce a hard provider spending cap. Use revocable credentials and retain provider-side limits.
+This wiring is covered by simulated provider/transport tests; **successful live VM inference is still unverified**. A compromised guest can falsify findings/accounting or reuse the credential it receives. VM destruction does not revoke that credential or enforce a hard provider spending cap. Use revocable credentials and retain provider-side limits.
+
+## Binary omissions
+
+Both strategies omit binary contents from the model checkout and diff hunks, in VM and explicit host execution. Detection samples the first 8000 bytes for NUL or invalid UTF-8, independent of extensions; this is a heuristic, not format validation. UTF-16 files are therefore omitted too. Source, configuration, dependency declarations, checksums and documentation remain reviewable as text. Repository diff attributes cannot force detected binary contents into the model's diff.
+
+The summary warns about omissions. The report lists escaped paths, change types and base/head Git blob sizes, including unchanged checkout binaries and binary deletions. Here “base” means the pinned merge base used for the diff. Report details are capped at 200 with an explicit remaining count; `stats.json` retains the full omission metadata. Binaries are not certified safe or analyzed for their compiled behavior. A binary-only PR produces metadata and an omission warning, not a content review.
+
+VM tree admission still limits text to 2 MiB per file and 32 MiB per tree, and counts all entries against the 5000-entry cap. Binary blobs are sampled and excluded before snapshot export, without expanding a full binary archive. Fetch/object storage, deadlines, scratch and result bounds remain in force; a sufficiently large binary dependency can still exceed acquisition limits.
+
+## API errors and retries
+
+API failures report the HTTP status and a recognized provider error code/type. `stats.json` call entries include `http_errors` with allowlisted codes, validated request/token limit/reset headers, normalized `Retry-After` seconds and the retry decision. Unknown codes and raw error messages/bodies, arbitrary headers and request identifiers are discarded. A bare 429 can still be ambiguous when the server supplies no recognized code/type.
+
+Temporary HTTP 429 and 500/502/503/504 responses allow at most three attempts for the same request, including the initial attempt. A valid `Retry-After` is a minimum wait; otherwise delays use exponential backoff starting at one second, with a small random jitter. Waiting is cancellable in persona workers and interruptible in sequential calls. Waits and requests share the original call timeout and budget allowance. If the required delay exceeds the remaining deadline or the 60-second per-wait limit, the call stops and reports that it must be retried later; it never retries earlier than requested.
+
+Known quota, credit and spending/usage-limit errors stop immediately, as do authentication errors and other non-temporary HTTP statuses. The shared model-output retry does not restart exhausted/deferred HTTP retries. HTTP attempts are nested within a runner call; their diagnostic entries are separate from the outer call/retry counts. A provider limit is independent of the reviewer's estimated spending cap. Successful responses continue through the ordinary usage accounting; failed calls with unknown usage remain explicitly unknown.
+
+This behavior follows the [provider's rate-limit guidance](https://developers.openai.com/api/docs/guides/rate-limits). It requires no additional dependency, tracing service or outbound endpoint.
+
+## Adapter migration
+
+The internal forwarding modules have been removed. Import common types from `backends.contract`, provider implementations from `backends/`, and algorithm types from their owning flow. Parked frontends now live under `parked/`; there is no active REPL/replay command. This does not change canonical prompt/schema/criteria assets.
+
+Prefer the common `auth_mode` setting to the old VM-only `vm_claude_auth`; the loader migrates the old `oauth` value to `subscription`, rejects conflicting declarations and never changes billing on failure. Claude host callers that previously relied on an implicit cached login must now explicitly supply the selected credential. API credits and subscription allowances remain separate.

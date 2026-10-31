@@ -10,8 +10,8 @@ from unittest.mock import patch
 from code_reviewer import cli
 from code_reviewer.cli import build_parser
 from code_reviewer.config import Config, ConfigError
-from code_reviewer.repl import Session
-from code_reviewer.repl_help import HELP
+from code_reviewer.parked.repl import Session
+from code_reviewer.parked.repl_help import HELP
 from code_reviewer.review_options import apply_run_options
 
 from .helpers import FakeRunner

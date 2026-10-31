@@ -171,6 +171,13 @@ class VMReviewTests(unittest.TestCase):
         self.assertEqual(value['stop_reason'],'completed')
         self.assertEqual((self.root/'result').stat().st_mode & 0o777,0o700)
 
+    def test_public_metadata_failure_reaches_operator_before_key_access(self):
+        from code_reviewer.sandbox.acquire import MetadataUnavailable
+        for status in (403,404,429):
+            with patch.object(review,'send_json'),patch.object(review,'receive_json',return_value=MetadataUnavailable(status).frame()):
+                with self.assertRaisesRegex(MetadataUnavailable,'HTTP %d' % status):
+                    review.converse(None,self.cfg(),review.source_url(self.ref),lambda *args:self.fail('no credential'))
+
     def test_wrong_request_or_failed_admission_does_not_read_key(self):
         for value in ({'kind':'failed'}, {'kind':'credential','provider':'claude','auth':'oauth'}):
             with patch.object(review,'send_json'),patch.object(review,'receive_json',return_value=value):
@@ -189,6 +196,11 @@ class VMReviewTests(unittest.TestCase):
                 raise RuntimeError('shutdown failed')
             def shell(self,*args,**kwargs): pass
         cfg = self.cfg()
+        (self.root / 'firecracker.tgz').write_bytes(b'synthetic staged archive')
+        (self.root / 'vmlinux-6.1.188').write_bytes(b'synthetic staged kernel')
+        worker_root = self.root / cfg.vm_instance
+        worker_root.mkdir()
+        (worker_root / 'lima.yaml').write_text('synthetic worker')
         value = dict(kind='result',stop_reason='completed',checks=self.checks(),files=self.envelope()['files'])
         with patch.object(settings.sys,'platform','darwin'), patch.object(review,'Worker',Worker), \
              patch.object(review,'stage_inputs'),patch.object(review,'build_bundle',return_value={'sha256':'a'*64}), \
@@ -198,6 +210,19 @@ class VMReviewTests(unittest.TestCase):
                 review.run(cfg,self.ref,self.options)
         self.assertEqual(events,['start','stop'])
         self.assertFalse(cfg.runs_path().exists())
+
+    def test_missing_runtime_inputs_refuse_clearly_before_worker_or_credential_activity(self):
+        from code_reviewer.config import ConfigError
+        cfg = self.cfg()
+        for expected, create in (
+                ('Firecracker archive', lambda: (self.root / 'firecracker.tgz').write_bytes(b'fixture')),
+                ('guest kernel', lambda: (self.root / 'vmlinux-6.1.188').write_bytes(b'fixture')),
+                ('Lima worker definition', lambda: None)):
+            with patch.object(settings.sys, 'platform', 'darwin'), \
+                 patch.object(review, 'Worker', side_effect=AssertionError('must not start worker')):
+                with self.assertRaisesRegex(ConfigError, expected):
+                    review.run(cfg, self.ref, self.options, key_reader=lambda *args: self.fail('no credentials'))
+            create()
 
     def test_private_pipe_deadline_applies_to_partial_reads_and_blocked_writes(self):
         import os
@@ -219,11 +244,11 @@ class VMReviewTests(unittest.TestCase):
             a.close(); b.close()
 
     def test_native_parallel_subprocess_preserves_private_runner_environment(self):
-        from code_reviewer.shared.claude_cli import ClaudeRunner
+        from code_reviewer.backends.claude import ClaudeRunner
         from threading import Event
         runner = ClaudeRunner('/fake/claude', env={'ANTHROPIC_API_KEY':'fake-key', 'HTTPS_PROXY':'http://proxy'})
         budget = SimpleNamespace(cancelled=Event())
-        with patch('code_reviewer.shared.claude_cli.subprocess.Popen') as popen,              patch('code_reviewer.shared.claude_cli.os.killpg'):
+        with patch('code_reviewer.backends.claude.subprocess.Popen') as popen,              patch('code_reviewer.backends.claude.os.killpg'):
             proc = popen.return_value
             proc.communicate.return_value=(json.dumps({'type':'result','result':'{"findings":[]}'}),'')
             proc.returncode=0
@@ -272,16 +297,17 @@ class VMReviewTests(unittest.TestCase):
             value = {'criteria_files':[], 'inline_sections':[]} if 'criteria_files' in properties else {'findings':[]}
             return {'status':'completed','usage':{'input_tokens':10,'output_tokens':2},
                     'output':[{'type':'message','content':[{'type':'output_text','text':json.dumps(value)}]}]}
-        for provider in ('claude','openai'):
+        for provider,auth in (('claude','api-key'),('claude','subscription'),('openai','api-key')):
             for mode in ('single-agent','agent-personas'):
                 cfg = self.cfg(provider,mode)
+                cfg.auth_mode=auth
                 cfg.criteria_mode='defaults_only'
-                root = self.root/(provider+mode)
+                root = self.root/(provider+auth+mode)
                 root.mkdir()
                 with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
                      patch.object(guest,'receive',side_effect=[target.read_bytes(),b'fake-selected-key']), \
                      patch.object(guest,'send_json'),patch.object(guest,'request_response',api), \
-                     patch('code_reviewer.shared.claude_cli.ClaudeRunner') as native:
+                     patch('code_reviewer.backends.factory.ClaudeRunner') as native:
                     native.return_value=FakeRunner([{'findings':[]}] * 8)
                     result=guest.run_job(None,root,probe_network=lambda:self.checks()['network'])
                 self.assertIn(result['stop_reason'],('completed','max_passes'))
@@ -290,8 +316,9 @@ class VMReviewTests(unittest.TestCase):
                 self.assertEqual(metadata['criteria_mode'],'defaults_only')
                 if provider=='claude':
                     env=native.call_args.kwargs['env']
-                    self.assertEqual(env['ANTHROPIC_API_KEY'],'fake-selected-key')
-                    self.assertNotIn('CLAUDE_CODE_OAUTH_TOKEN',env)
+                    selected_name=settings.credential_name(provider,auth)
+                    self.assertEqual(env[selected_name],'fake-selected-key')
+                    self.assertNotIn('ANTHROPIC_API_KEY' if auth=='subscription' else 'CLAUDE_CODE_OAUTH_TOKEN',env)
                     self.assertNotIn('OPENAI_API_KEY',env)
                 self.assertNotIn('fake-selected-key',json.dumps(result))
                 self.assertIn('ephemeral guest files',base64.b64decode(result['files']['report.md']).decode())

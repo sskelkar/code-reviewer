@@ -11,7 +11,7 @@ from code_reviewer.flows.agent_personas.contracts import validate_annotation, va
 from code_reviewer.flows.agent_personas.criteria import PERSONAS
 from code_reviewer.flows.agent_personas.master import MasterList, agreement
 from code_reviewer.flows.agent_personas.report import render_summary
-from code_reviewer.shared.claude_cli import ClaudeResult
+from code_reviewer.backends.contract import LLMResult
 from code_reviewer.shared.findings import FileCache
 from .helpers import TempDirTestMixin, finding, make_repo
 
@@ -55,11 +55,11 @@ class PersonaRunner:
                                        'same_as': None, 'categories': ['production-safety']} for f in incoming], 'conflicts': []}
             else:
                 raise AssertionError('unexpected verifier call')
-        if isinstance(value, ClaudeResult):
+        if isinstance(value, LLMResult):
             if value.cost_usd is None:
                 value.cost_usd = self.cost
             return value
-        return ClaudeResult(ok=True, parsed=value, raw={'structured_output': value}, cost_usd=self.cost,
+        return LLMResult(ok=True, parsed=value, raw={'structured_output': value}, cost_usd=self.cost,
                             tokens={'input': 10, 'output': 5, 'cache_creation': 0, 'cache_read': 0})
 
 
@@ -195,7 +195,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(all(s.status == 'skipped' for s in result.passes[1:]))
 
     def test_failures_have_fixed_slots_and_do_not_supply_confidence_votes(self):
-        failed = ClaudeResult(ok=False, error='scripted failure', raw={})
+        failed = LLMResult(ok=False, error='scripted failure', raw={})
         runner = PersonaRunner(reviewer=[failed, failed, {'findings': [finding(rule_id='none')]}])
         result = self.run_flow(runner)
         self.assertEqual(result.passes_completed, 11)
@@ -252,7 +252,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn('example / error second line', rows[2])
 
     def test_terminal_failure_does_not_start_more_reviewers(self):
-        runner = PersonaRunner(reviewer=[ClaudeResult(ok=False, error='failure', raw={})])
+        runner = PersonaRunner(reviewer=[LLMResult(ok=False, error='failure', raw={})])
         result = self.run_flow(runner)
         self.assertEqual(result.stop_reason, 'failures')
         self.assertEqual(runner.counts, {'reviewer': 16})
@@ -378,7 +378,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         from code_reviewer.flows.agent_personas.budget import Budget
         budget = Budget(self.cfg)
         allowance = budget.reserve('verifier', .4)
-        budget.settle('verifier', allowance, ClaudeResult(ok=True, cost_usd=.4))
+        budget.settle('verifier', allowance, LLMResult(ok=True, cost_usd=.4))
         with patch('code_reviewer.flows.agent_personas.flow.Budget', return_value=budget):
             result = self.run_flow(runner)
         self.assertEqual(result.passes_completed, 12)
@@ -413,7 +413,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         from unittest.mock import patch
         from code_reviewer import cli
         from code_reviewer.post import format_comment
-        from code_reviewer.repl import Session
+        from code_reviewer.parked.repl import Session
         output = io.StringIO()
         runner = PersonaRunner()
         with patch.object(cli, 'load_config', return_value=self.cfg), patch('code_reviewer.backends.factory.create_runner', return_value=runner), \
@@ -487,7 +487,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         import contextlib
         import io
         from unittest.mock import patch
-        from code_reviewer import replay
+        from code_reviewer.parked import replay
         result = self.run_flow(PersonaRunner())
         error = io.StringIO()
         with patch('subprocess.Popen', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):

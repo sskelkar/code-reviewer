@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from code_reviewer.claude_cli import ClaudeResult
-from code_reviewer.models import PRContext
+from code_reviewer.backends.contract import LLMResult
+from code_reviewer.shared.models import PRContext
 
 APP_BASE = 'def get(user_id):\n    return db.run("SELECT 1")\n'
 APP_HEAD = (
@@ -86,7 +86,7 @@ class FakeRunner:
         self.counts[role] += 1
         return queue[index]
 
-    def run(self, **kwargs: Any) -> ClaudeResult:
+    def run(self, **kwargs: Any) -> LLMResult:
         system = kwargs["system_prompt"]
         if "identify which files" in system:
             role, payload = "resolver", self._next("resolver", [self.resolver])
@@ -95,9 +95,9 @@ class FakeRunner:
         else:
             role, payload = "reviewer", self._next("reviewer", self.reviewer)
         self.calls.append({"role": role, **kwargs})
-        if isinstance(payload, ClaudeResult):
+        if isinstance(payload, LLMResult):
             return payload
-        return ClaudeResult(
+        return LLMResult(
             ok=True, parsed=payload, text=json.dumps(payload), cost_usd=self.cost,
             tokens=dict(self.tokens),
             raw={"fake": True, "role": role}, duration_ms=1200, num_turns=3, model="fake-haiku",
@@ -134,7 +134,7 @@ def synthetic_frontend(test):
             return ReviewOutcome(dry_run=engine.dry_run(ctx))
         return ReviewOutcome(result=engine.review(ctx, keep_checkout=options.keep_checkout))
 
-    for name in ('code_reviewer.cli.run_review', 'code_reviewer.repl.run_review'):
+    for name in ('code_reviewer.cli.run_review', 'code_reviewer.parked.repl.run_review'):
         mocked = patch(name, side_effect=review)
         mocked.start()
         test.addCleanup(mocked.stop)

@@ -5,23 +5,33 @@ import copy
 import http.client
 import json
 import math
+import random
 import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..shared.claude_cli import ClaudeResult
+from .contract import LLMResult
 from .read_tools import ReadOnlyTools, definitions
+from .http_errors import diagnostics, error_message, temporary
 
 MAX_REQUEST = 2 * 1024 * 1024
 MAX_RESPONSE = 4 * 1024 * 1024
 MAX_TURNS = 8
 MAX_TOOL_CALLS = 32
 MAX_OUTPUT_TOKENS = 2048
+MAX_HTTP_ATTEMPTS = 3
+MAX_RETRY_DELAY = 60.0
 
 
 class ProviderError(ValueError):
     pass
+
+
+class ProviderHTTPError(ProviderError):
+    def __init__(self, details):
+        self.details = details
+        super().__init__(error_message(details))
 
 
 @dataclass(frozen=True)
@@ -75,8 +85,7 @@ def request_response(payload, key, timeout, *, proxy=None):
                            {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
         response = connection.getresponse()
         if response.status != 200:
-            # An error body could echo credentials, prompt text or provider identifiers.
-            raise ProviderError('OpenAI HTTP status %d' % response.status)
+            raise ProviderHTTPError(diagnostics(response))
         chunks, size = [], 0
         while True:
             remaining = timeout - (time.monotonic() - started)
@@ -116,11 +125,40 @@ class OpenAIRunner:
     def run(self, **kwargs):
         return self.run_cancellable(None, **kwargs)
 
+    def _request(self, payload, deadline, cancelled, errors):
+        # Retry the same HTTP request, not a fresh agent conversation. All waits
+        # share the existing call deadline and no extra budget is allocated.
+        for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
+            if cancelled is not None and cancelled.is_set():
+                raise KeyboardInterrupt
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError
+            try:
+                return self._transport(payload, self._api_key, remaining)
+            except ProviderHTTPError as exc:
+                detail = dict(exc.details, turn_attempt=attempt)
+                errors.append(detail)
+                if not temporary(exc.details) or attempt == MAX_HTTP_ATTEMPTS:
+                    detail['retry'] = 'stopped'
+                    raise
+                hint = exc.details['headers'].get('retry_after_s')
+                delay = (hint if hint is not None else 2 ** (attempt - 1)) + random.uniform(0, .25)
+                if delay > MAX_RETRY_DELAY or delay >= deadline - time.monotonic():
+                    detail['retry'] = 'deferred: delay exceeds call deadline or 60-second wait limit'
+                    raise
+                detail.update(retry='waiting', retry_delay_s=delay)
+                if cancelled is None:
+                    time.sleep(delay)
+                elif cancelled.wait(delay):
+                    raise KeyboardInterrupt
+
     def run_cancellable(self, cancelled, *, system_prompt, user_prompt, schema, model, tools, cwd,
                         budget_usd, timeout_s, add_dirs=()):
-        result = ClaudeResult(ok=False, model=self.model, cost_usd=0.0)
+        result = LLMResult(ok=False, model=self.model, cost_usd=0.0, billing_mode='api-key')
         started = time.monotonic()
         pending = False
+        http_errors = []
         try:
             if model != self.model or add_dirs or not math.isfinite(budget_usd) or budget_usd <= 0 or timeout_s <= 0:
                 raise ProviderError('invalid OpenAI call configuration')
@@ -153,7 +191,7 @@ class OpenAIRunner:
                     result.budget_exceeded = True
                     raise ProviderError('OpenAI call allowance insufficient for another request')
                 pending = True
-                reply = self._transport(payload, self._api_key, remaining)
+                reply = self._request(payload, started + timeout_s, cancelled, http_errors)
                 if not isinstance(reply, dict):
                     raise ProviderError('invalid OpenAI response envelope')
                 usage = reply.get('usage')
@@ -216,6 +254,15 @@ class OpenAIRunner:
                 raise ProviderError('OpenAI turn limit exceeded')
         except (TimeoutError, socket.timeout):
             result.error, result.timed_out = 'OpenAI call timed out', True
+            if http_errors:
+                result.retryable = False
+        except ProviderHTTPError as exc:
+            result.error = str(exc)
+            if http_errors and http_errors[-1]['retry'].startswith('deferred'):
+                result.error += '; server retry delay exceeds call deadline or 60-second wait limit; retry later'
+            # The transport already applied bounded retries, or requires operator
+            # action. Never let the shared JSON-validation retry multiply them.
+            result.retryable = False
         except ProviderError as exc:
             result.error = str(exc)
         except (OSError, ValueError, TypeError, KeyError, AttributeError, http.client.HTTPException):
@@ -228,4 +275,7 @@ class OpenAIRunner:
             result.raw = {'provider': 'openai', 'model': self.model, 'cost_source': 'operator_token_rates',
                           'cost_complete': result.cost_usd is not None, 'turns': result.num_turns,
                           'structured_output': result.parsed}
+            if http_errors:
+                result.http_errors = http_errors
+                result.raw['http_errors'] = http_errors
         return result

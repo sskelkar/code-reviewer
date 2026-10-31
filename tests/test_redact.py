@@ -3,9 +3,9 @@ import json
 import unittest
 
 from code_reviewer.config import Config
-from code_reviewer.dry_run import render_dry_run
+from code_reviewer.flows.single_agent.dry_run import render_dry_run
 from code_reviewer.engine import Engine
-from code_reviewer.redact import PLACEHOLDER, redact_emails
+from code_reviewer.shared.redact import PLACEHOLDER, redact_emails
 
 from .helpers import FakeRunner, TempDirTestMixin, make_repo
 

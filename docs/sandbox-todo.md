@@ -46,3 +46,17 @@ A scope/correctness audit additionally fixed a VM deadline mismatch, rejected un
 
 
 The final audit suite has 376 tests, including actual fake-native subprocesses through both one-shot host flows, malformed-manifest/limit errors, permissive-umask storage checks and sequential child-process timeout cleanup. Both Python 3.9 and 3.13 pass. The real no-key VM rerun also passed both simulated flows, connected boundary checks and confirmed worker shutdown. No credential, paid inference or private project material was used. Exported VM reports now explicitly identify internal artifact paths as ephemeral.
+
+## Evidence: 2026-10-30
+
+Persistent pinned artifacts and a checked-in mountless worker profile replace missing temporary deployment inputs. Runtime failures now identify the phase and allowlisted public-acquisition failure reason without forwarding arbitrary exception/server bodies. Oversized text failures include bounded escaped path/size metadata.
+
+All detected binary contents are now omitted from review snapshots and diff hunks, with path/change/size metadata in reports/stats and summary warnings. Text-size, all-entry, retained-object and resource limits remain enforced. Synthetic tests cover both flows/exports, small/large binaries, public acquisition, capsule reconstruction, unchanged/deleted binaries, forced-text attributes, escaped/capped report details and sampler timeout cleanup. All 388 tests pass on Python 3.9 and 3.13; canonical prompts and criteria are unchanged.
+
+The normal VM path also passed real public-PR acquisition/admission and boundary probes with binary omission, reached its delayed credential callback, then deliberately returned no credential. The dedicated worker shut down. This is no-key admission evidence only: no credential was read/transferred and no inference was performed. Actual authenticated inference and report export remain to be qualified.
+
+## LLM separation and cleanup: 2026-10-31
+
+Removed 21 obsolete forwarding modules and the unusable `doctor --live` option. Retained inactive REPL/replay code now lives under `parked/`; ordinary execution imports none of it. Consolidated provider runbooks into `llm.md` and replaced the stale Python walkthrough. VM lifecycle/containment/recovery and all existing boundary checks remain active.
+
+Review flows now use a neutral Runner/LLMResult/RunnerError contract and ModelCaller. Host and guest share one adapter factory; trusted `auth_mode` is carried/checked through the VM protocol. Claude subscription mode requires its explicitly selected token and does not inherit API credentials. The existing API HTTP diagnostics/retries remain. ChatGPT subscription consent/streaming is an unfinished milestone and fails offline readiness, not a silently substituted API-key run. No successful live inference or new deployment qualification is claimed by this refactor.

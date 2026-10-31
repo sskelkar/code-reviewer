@@ -45,7 +45,7 @@ def run_probe(binary=Path('/usr/bin/claude')):
         auth = json.loads(run('auth', 'status', '--json', allowed=(1,)))
         if auth.get('loggedIn') is not False or auth.get('authMethod') != 'none':
             raise ValueError('offline probe must not have credentials')
-        from ..shared.claude_cli import build_command
+        from ..backends.claude import build_command
         cmd = build_command(str(binary), system_prompt='Reply OK.', schema={'type': 'object'},
                             model='haiku', tools='', budget_usd=.01,
                             isolation_flags=['--safe-mode', '--restricted'])

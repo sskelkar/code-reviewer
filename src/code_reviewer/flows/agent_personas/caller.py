@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ...shared.llm import ClaudeCaller
+from ...shared.llm import ModelCaller
 from ...shared.run_store import dump_json
 from ...shared.models import PassFailed
 
@@ -40,7 +40,7 @@ class BudgetRunner:
             self.budget.settle(self.pool, allowance, result)
 
 
-class PersonaCaller(ClaudeCaller):
+class PersonaCaller(ModelCaller):
     def __init__(self, runner: Any, cfg: Any, stats: Any, budget: Any = None, persona: str = ''):
         self.persona = persona
         self.budget = budget or Budget(cfg)

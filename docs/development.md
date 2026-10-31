@@ -19,11 +19,11 @@ Supported Python is 3.9 and up. Before sending a change, run the tests on the ol
 
 ## Configuration and execution checks
 
-`reviewer review example/project#1 --provider claude --preflight` reports configuration errors without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; `runtime_checked: false` states that the backend has not run. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline configuration status; `doctor --live` refuses; use `sandbox check` for no-key deployment checks. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
+`reviewer review example/project#1 --provider claude --preflight` reports configuration errors without external commands, target reads, model calls or credential prompts. Exit 1 indicates missing/unsupported configuration. A ready offline configuration does not establish worker or authentication readiness; `runtime_checked: false` states that the backend has not run. Explicit `--no-sandbox --preflight` reports host configuration without target/credential activity. `doctor` reports offline configuration status; the old `doctor --live` option was removed; use `sandbox check` for no-key deployment checks. Explicit host dispatch is implemented via `--no-sandbox` or trusted `sandbox = false`; paid replay remains blocked too.
 
-The REPL is parked: its modules and regression tests remain, but bare `reviewer` only prints help and does not start a session. New end-to-end work targets the one-shot CLI.
+The REPL/replay are parked under `src/code_reviewer/parked/`: their modules and regression tests remain, but bare `reviewer` only prints help and does not start a session. New end-to-end work targets the one-shot CLI.
 
-`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the planned explicit host and default VM execution paths.
+`tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Older presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the implemented explicit-host and default-VM execution paths.
 
 Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.toml`, recommend 0600). The loader no longer considers cwd and rejects linked/non-regular/oversized/foreign-writable files. Canonical prompt prose is unchanged by this milestone, so no paid prompt replay is warranted.
 
@@ -51,7 +51,7 @@ python3 -m unittest tests.test_stop_policy -v              # one module
 | `test_sandbox_prototype` | Stable bounded trusted-source bundles, artifact digests, no-network boot config, both real flows using fake headless processes, result framing, output limits, child-process timeout cleanup, fresh runtime-probe environments and rejection of unexpected authentication |
 | `test_persona_parallel` | Overlapping Reviewer calls, concurrency limits, round barriers and ordered merges, isolated budget pools, proportional allocations, large-prompt delivery to slow stdin readers, and subprocess-group cancellation |
 | `test_persona_flow` | Configured round-robin counts, independent frozen prompts, classification/fallback, source-aware agreement, conflicts/remapping, advisory verification/grounding, budgets/failures/cancellation, CLI/REPL and dry runs |
-| `test_flow_selection` | Default/explicit mode selection, asset isolation, compatibility imports, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
+| `test_flow_selection` | Default/explicit mode selection, asset isolation, shared dependency boundaries and byte-identical relocated prompts/schemas/criteria |
 | `test_engine` | End to end with a throwaway git repository and a scripted `FakeRunner`: convergence, retries, failures, budget, criteria from the base branch, prompt-injection escaping, reviewer prompt properties (identical in every pass, thorough-review instructions), REPL commands, git helpers |
 
 Things to know when writing tests:
@@ -70,8 +70,8 @@ Things to know when writing tests:
 | Add or change default rules | Edit the selected flow's `criteria/*.md` using ID-bearing headings (`GEN-*` for single-agent, persona-prefixed IDs for personas). Persona allocation also lives in `personas.json`; shared rules retain one canonical definition. Tests check identity and coverage |
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration) |
 | Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
-| Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ClaudeCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
-| Resume the parked REPL (only if requested) | In `repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
+| Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ModelCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
+| Resume the parked REPL (only if requested) | In `parked/repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
 | Change the stop rules | `flows/single_agent/stop_policy.py` and `tests/test_stop_policy.py` |
 
 ## Code conventions
@@ -88,7 +88,7 @@ Host run directories retain the detailed artifacts below. VM runs export only `r
 
 | File | Question it answers |
 |---|---|
-| `pass-NN/reviewer.raw.json` | What did Claude actually return (every attempt, including errors)? |
+| `pass-NN/reviewer.raw.json` | What did the selected adapter retain for every attempt, including safe errors? |
 | `pass-NN/findings.json` | Which findings were kept or dropped, and why (`status` and `reason`)? |
 | `pass-NN/comparator.raw.json`, `pass-NN/mapping.json` | How were findings matched to earlier ones? `mapping.json` has each decision and `assigned`: which master finding each new finding was merged into |
 | `input/personas/<persona>/reviewer.*.md`, `settings.json` | Persona mode: exact frozen prompts, hashes, model/schema/tool settings |
@@ -97,14 +97,14 @@ Host run directories retain the detailed artifacts below. VM runs export only `r
 | `input/diff.txt`, `input/criteria_block.md`, `input/criteria_index.json` | The diff and criteria the Reviewer was given |
 | `input/criteria_manifest.json`, `input/resolver.raw.json` | Which project criteria files were chosen, and what was ignored |
 | `*.raw.requests.json` (persona mode) | Exact request text/schema/settings for each actual attempt, including validation-retry feedback. Reviewer logs stay outside the checkout |
-| `config.json` | Settings, Claude Code version, prompt hashes |
-| `stats.json` | Every call with tokens, cost, duration |
+| `config.json` | Settings, selected adapter version, prompt hashes |
+| `stats.json` | Every call with tokens, cost, duration; API HTTP failures also include safe codes, limit/reset headers and retry decisions |
 
 For an explicitly selected host review, re-run with `--no-sandbox --keep-checkout` to keep the exact checkout the Reviewer saw (its location is printed).
 
 ## Verifying against the real Claude CLI
 
-The offline tests cannot prove how Claude Code behaves. The previous host-based doctor implementation was removed; the CLI keeps only a refusal for `doctor --live`. Use the implemented normal VM path with explicit authorization after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These use paid model calls; agents need the user's request before running them. If the envelope shape differs from what `claude_cli.parse_envelope` expects, fix the parser and add a test using the real shape.
+The offline tests cannot prove how Claude Code behaves. The previous host-based doctor implementation was removed; the unsupported `doctor --live` option has also been removed. Use the implemented normal VM path with explicit authorization after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These consume API/subscription allowance; agents need the user's request before running them. If the envelope shape differs from what `backends.claude.parse_envelope` expects, fix the parser and add a test using the real shape.
 
 ## VM deployment checks
 
@@ -121,3 +121,11 @@ Use the repository-owned [sandbox check command](sandbox-check.md) for repeatabl
 `tests/test_sandbox_preparation.py` covers image reuse/invalidation, corrupt-cache refusal, partial-build/OS-update failures, runtime fingerprints, cache result paths and scoped recovery. Ordinary unittest discovery never invokes real recovery or SIGKILL. The actual `sandbox check --lifecycle` deployment check intentionally cancels a no-key VM and kills a supervisor subprocess, observes the independent 30-second service deadline, then cleans up. It found graceful-stop timeout and bind-mount detection defects; the launcher now uses immediate cgroup kill and mountinfo-based detection. Repeat unchanged checks to confirm image-cache hits; never infer enforcement from a faster run alone.
 
 Public acquisition regressions in `tests/test_sandbox_acquisition.py` use synthetic metadata and local throwaway Git, never GitHub or a model. They cover strict URLs/pins, bounded metadata/storage, credential-free transport options, helper reaping, unprivileged clean setup, real tree admission/export, one-way network phases and refusal before credential/result release. `sandbox check --pr` is a separate opt-in real deployment check, not part of the automated suite; it fetches only inside the review VM and performs no inference.
+
+`tests/test_openai_http_errors.py` covers bounded error-body parsing without raw-body logging, closed error codes, validated headers, seconds/date retry hints, same-request recovery across both flows/tool turns, retry caps without outer-loop multiplication, non-retryable quota/authentication, deadline deferral and cancellation. Transport and waits are simulated; these tests use no credentials or network. See [API errors and retries](usage.md#api-errors-and-retries).
+
+## LLM adapters
+
+Review algorithms and shared call/accounting code import `LLMResult`, `RunnerError` and the `Runner` protocol from `backends/contract.py`, not a native CLI module. Both host and guest create adapters through `backends.factory`; use an explicitly supplied private credential in the guest, not a read of ambient host auth. `auth_mode` is independent of provider/location. See [support and pending ChatGPT work](llm.md).
+
+`tests/test_llm_interface.py` checks neutral dependency direction, selected-only credentials, API/subscription isolation, unsupported-combination refusal before credential access, CLI independence, VM roundtrip mismatch rejection and old-setting migration. Existing both-flow transport/native tests cover common factory wiring. Package-root compatibility import tests were removed with the forwarding modules; parked frontend tests remain. Canonical prompt/schema/criteria hashes still guard their unchanged bytes.

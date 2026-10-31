@@ -13,7 +13,7 @@ from . import criteria as criteria_mod
 from . import git_ops
 from ..config import Config, ConfigError
 from .diffview import FileDiff, changed_line_count, mark_exclusions, parse_unified_diff, render_changed_files, render_diff_block, render_excluded, reviewable
-from .llm import ClaudeCaller
+from .llm import ModelCaller
 from .models import PRContext, ReviewInput, ReviewRefused
 from .redact import redact_emails
 from .resolver import CriteriaResolver
@@ -44,6 +44,15 @@ class InputBuilder:
     def load_diff(self, ctx: PRContext) -> Tuple[List[FileDiff], Dict[str, int]]:
         """Parse the merge-base diff, drop lockfiles/generated files, and refuse PRs that are empty or too large."""
         files = parse_unified_diff(git_ops.git_diff(ctx.git_dir, ctx.merge_base, ctx.head_sha))
+        ctx.binary_omissions = git_ops.binary_omissions(ctx)
+        omitted = {item['path'] for item in ctx.binary_omissions}
+        # Target .gitattributes may force binary blobs to appear as text. Never
+        # send those hunks merely because Git's diff driver called them text.
+        for file in files:
+            if file.path in omitted or file.old_path in omitted:
+                file.binary = True
+                file.hunks = []
+                file.added = file.removed = 0
         mark_exclusions(files, self.cfg.all_exclude_patterns())
         included = reviewable(files)
         lines = changed_line_count(files)
@@ -67,7 +76,7 @@ class InputBuilder:
         """The criteria without the project's own rules. Resolving those needs a model call, which a dry run avoids."""
         return criteria_mod.assemble(self.default_rules(), criteria_mod.ProjectCriteria(), self.cfg.criteria_mode, [f.path for f in files])
 
-    def resolve_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ClaudeCaller, work_dir: Path) -> criteria_mod.CriteriaSet:
+    def resolve_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ModelCaller, work_dir: Path) -> criteria_mod.CriteriaSet:
         """Default rules plus the project's own rules (from the base commit), merged with project precedence."""
         cfg = self.cfg
         project = criteria_mod.ProjectCriteria()
@@ -85,7 +94,7 @@ class InputBuilder:
         )
         return criteria
 
-    def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ClaudeCaller, work_dir: Path) -> criteria_mod.ProjectCriteria:
+    def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ModelCaller, work_dir: Path) -> criteria_mod.ProjectCriteria:
         tree = git_ops.ls_tree(ctx.git_dir, ctx.base_sha)
         agents_text = git_ops.git_show(ctx.git_dir, ctx.base_sha, "AGENTS.md") if "AGENTS.md" in tree else None
         override: Optional[Dict[str, Any]] = None

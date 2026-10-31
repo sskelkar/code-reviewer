@@ -1,7 +1,7 @@
 """The comparator replay tool: regroup the findings of a saved run with a (fake) comparator and report what changed."""
 import unittest
 
-from code_reviewer import replay
+from code_reviewer.parked import replay
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
 
