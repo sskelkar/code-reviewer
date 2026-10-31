@@ -1,0 +1,151 @@
+src/code_reviewer/shared/run_store.py
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 3,91,103
+src/code_reviewer/sandbox/guest.py
+  s_68cd0db0a8fc3a::t_f0647a87a226bd 87
+  s_68cd0db0a8fc3a::t_9946f14b3d6811 73-86,88-92
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 3,104-105,119-120
+tests/test_tracing.py
+  s_68cd0db0a8fc3a::t_74f5ad392dc1db 1-18,20-22,24-119,134-138,142-150,152-153,159-163,165-194,196-199,268-287,290-291,293-299,329-330,332-337,341-342,349
+  s_68cd0db0a8fc3a::t_9bbe87d23ff02e 140-141
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 19,23,139,151,164,195,288-289,292,308,331
+  s_68cd0db0a8fc3a::t_b547451b00ae48 300-307,309-328
+  s_68cd0db0a8fc3a::t_eb3c66e0dd55b6 200-240
+  s_68cd0db0a8fc3a::t_f0db7d05fb70ce 338-340,343-348
+  s_68cd0db0a8fc3a::t_a4ae13838bd30e 120-133
+  s_68cd0db0a8fc3a::t_c03521c2ad3554 241-267
+  s_68cd0db0a8fc3a::t_9c944579ba1de8 154-158
+README.md
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 116
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 21,105
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 132
+  s_68cd0db0a8fc3a::t_8200b23ce2d36b 106
+src/code_reviewer/tracing/review.py
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 1-11,23-35,39-46,51-54,57-84
+  s_68cd0db0a8fc3a::t_b48b06da6be5e8 12-22,36-38,47-50,55-56
+src/code_reviewer/flows/agent_personas/roles.py
+  s_68cd0db0a8fc3a::t_6e5d6d7fc9fae3 3,66
+pyproject.toml
+  s_68cd0db0a8fc3a::t_2ab3010d80f455 15-17
+src/code_reviewer/sandbox/settings.py
+  s_68cd0db0a8fc3a::t_9946f14b3d6811 19,42-48,52,54-59
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_2ab3010d80f455 129,144-145
+src/code_reviewer/shared/review_inputs.py
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 6,80
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_cb15a41d5cb337 1-11,13,15-18,20-26,28,30-53,55-57,59-61,63,65-81,85-88
+  s_68cd0db0a8fc3a::t_adc2ff4e33a253 89
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 12,14,19,27,29,82
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 54,58,62
+  s_68cd0db0a8fc3a::t_6e5d6d7fc9fae3 64
+  s_68cd0db0a8fc3a::t_df28c1ec87df5e 83-84
+docs/llm.md
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 101
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_6e5d6d7fc9fae3 28,31
+  s_68cd0db0a8fc3a::t_82ca8bc85bae12 30
+  s_68cd0db0a8fc3a::t_7ad1422a86c469 29
+src/code_reviewer/sandbox/check.py
+  s_68cd0db0a8fc3a::t_6e5d6d7fc9fae3 3,169
+src/code_reviewer/flows/agent_personas/caller.py
+  s_68cd0db0a8fc3a::t_bf2cc5e414988c 10,34
+src/code_reviewer/shared/llm.py
+  s_68cd0db0a8fc3a::t_bf2cc5e414988c 55,69-70
+  s_68cd0db0a8fc3a::t_30bd5e95bb2930 77-84
+  s_68cd0db0a8fc3a::t_9d18126745f55a 13,53-54,56-57,66-68,71-76
+docs/langfuse-plan.md
+  s_68cd0db0a8fc3a::t_df4f6fcf1ce909 1,3,5,7-15,19,21,23-25,27,29,31-33
+  s_68cd0db0a8fc3a::t_4aa203ddc6de22 17-18
+  s_68cd0db0a8fc3a::t_b76fb49bbfdce3 2,4,6,16,20,22,26,28,30
+docs/sandbox-architecture.md
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 63
+  s_68cd0db0a8fc3a::t_88f8a9c313f11e 37-38
+  s_68cd0db0a8fc3a::t_62918934d6cf61 46-62,64-87
+src/code_reviewer/shared/findings.py
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 7,200
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_cb059a23a86553 33
+  s_68cd0db0a8fc3a::t_a4ae13838bd30e 7-13,15-25,45-46,104
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 14
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 32
+docs/usage.md
+  s_68cd0db0a8fc3a::t_cb059a23a86553 284-287
+src/code_reviewer/flows/single_agent/flow.py
+  s_68cd0db0a8fc3a::t_0d0483d44f97db 8,58
+src/code_reviewer/sandbox/review.py
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 3,101
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 16,33,207,216
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 34
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 62,77,296
+  s_68cd0db0a8fc3a::t_350c2b0c9052dc 64,67,78,80,83
+  s_68cd0db0a8fc3a::t_3b0cc51f92deb6 205-206,208-215,217-221
+docs/development.md
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 16
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 68,80,84
+  s_68cd0db0a8fc3a::t_4aa203ddc6de22 55
+src/code_reviewer/tracing/recorder.py
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 1-194,197-204,206-209,212-213,215,219-275
+  s_68cd0db0a8fc3a::t_b48b06da6be5e8 195-196,205,210-211,214,216-218
+.gitignore
+  s_68cd0db0a8fc3a::t_b98e04b1edee17 5
+src/code_reviewer/engine.py
+  s_68cd0db0a8fc3a::t_9d18126745f55a 12,25,29
+src/code_reviewer/backends/openai.py
+  s_68cd0db0a8fc3a::t_6b21cf16f43ea1 3,272-281,343-348
+  s_68cd0db0a8fc3a::t_9946f14b3d6811 155-171,173-175
+  s_68cd0db0a8fc3a::t_f0647a87a226bd 172,193-200
+AGENTS.md
+  s_68cd0db0a8fc3a::t_dbd4746e872b47 55
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 42
+  s_68cd0db0a8fc3a::t_adc2ff4e33a253 27
+  s_68cd0db0a8fc3a::t_41c2debf1d60fb 28
+review.example.toml
+  s_68cd0db0a8fc3a::t_cb059a23a86553 102-105
+deploy/langfuse/compose.yaml
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 1-121
+src/code_reviewer/tracing/langfuse.py
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 1-132
+src/code_reviewer/flows/agent_personas/flow.py
+  s_68cd0db0a8fc3a::t_0d0483d44f97db 24,50
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 9,181,239,284
+src/code_reviewer/flows/single_agent/passes.py
+  s_68cd0db0a8fc3a::t_d66318394e0ed7 13,22
+src/code_reviewer/review_flow.py
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 15
+  s_68cd0db0a8fc3a::t_9d18126745f55a 30
+src/code_reviewer/tracing/__init__.py
+  s_68cd0db0a8fc3a::t_452eae60ec4e1f 1-12
+sandbox/README.md
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 28
+docs/prompts.md
+  s_68cd0db0a8fc3a::t_a67a03ec78ced0 1-4,6-8,10,12,14-93
+  s_68cd0db0a8fc3a::t_0b3ce3204b81e2 5,9,11,13
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_82ca8bc85bae12 11,16
+  s_68cd0db0a8fc3a::t_4aa203ddc6de22 102,128
+  s_68cd0db0a8fc3a::t_adc2ff4e33a253 17-18,70
+deploy/langfuse/setup.py
+  s_68cd0db0a8fc3a::t_dd10a4a7634a2e 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a79af20d99c8f4850cbe045f95b14fc54acec134",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
