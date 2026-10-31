@@ -1,0 +1,195 @@
+src/code_reviewer/cli.py
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 110-114
+  s_68cd0db0a8fc3a::t_5593396974fcc0 47,61-71,106-109,115,126-128
+src/code_reviewer/flows/agent_personas/report.py
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 43-45,114
+src/code_reviewer/flows/single_agent/flow.py
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 183
+docs/sandbox-check.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 14,54,116
+  s_68cd0db0a8fc3a::t_7932563e1db454 96
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 3,49
+  s_68cd0db0a8fc3a::t_e282257d01892a 36,45
+  s_68cd0db0a8fc3a::t_8066fa54a49cbb 38
+docs/sandbox-alternatives.md
+  s_68cd0db0a8fc3a::t_e282257d01892a 16
+  s_68cd0db0a8fc3a::t_79b2375f002841 3,18
+prompts/README.md
+  s_68cd0db0a8fc3a::t_e282257d01892a 93
+  s_68cd0db0a8fc3a::t_79b2375f002841 3,27,85,87,89,91
+src/code_reviewer/backends/chatgpt/login.py
+  s_68cd0db0a8fc3a::t_774005537dc0e5 1-34,36-173,180-190
+  s_68cd0db0a8fc3a::t_5593396974fcc0 35,174-179
+docs/persona-criteria.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 3,37
+tests/test_sandbox_preparation.py
+  s_68cd0db0a8fc3a::t_7932563e1db454 69-106
+tests/test_claude_cli_and_templates.py
+  s_68cd0db0a8fc3a::t_e282257d01892a 1-2
+  s_68cd0db0a8fc3a::t_c2bc07ec8e9135 61-72
+tests/test_engine.py
+  s_68cd0db0a8fc3a::t_e282257d01892a 1-2
+  s_68cd0db0a8fc3a::t_5f12b03655cc1d 223-231
+src/code_reviewer/flows/agent_personas/caller.py
+  s_68cd0db0a8fc3a::t_d8733e2cbe7746 30-33
+src/code_reviewer/progress.py
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 51
+src/code_reviewer/backends/chatgpt/store.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 36-37,138-158,160
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 80-83,87-95
+  s_68cd0db0a8fc3a::t_23489b2e481966 1-35,39-56,58-79,84-86,96-137,159,161-260
+  s_68cd0db0a8fc3a::t_04fa34035934f6 38,57
+docs/sandbox-architecture.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 59,78
+  s_68cd0db0a8fc3a::t_e282257d01892a 72
+  s_68cd0db0a8fc3a::t_241fa2729d9e1e 7,80
+README.md
+  s_68cd0db0a8fc3a::t_e282257d01892a 5
+  s_68cd0db0a8fc3a::t_e4ccb2d488891a 21
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 32-42,95,114,121,126-127
+src/code_reviewer/sandbox/connected.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 141
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 144
+src/code_reviewer/flows/single_agent/summary.py
+  s_68cd0db0a8fc3a::t_d8733e2cbe7746 120
+review.example.toml
+  s_68cd0db0a8fc3a::t_1af7f1f3c333f4 98-101
+  s_68cd0db0a8fc3a::t_e282257d01892a 2
+  s_68cd0db0a8fc3a::t_c8b26e71d88e67 5,8-9,25
+src/code_reviewer/flows/agent_personas/budget.py
+  s_68cd0db0a8fc3a::t_d8733e2cbe7746 21-23,29-32,44,51-53,59-60,62-73
+  s_68cd0db0a8fc3a::t_cd8c4b3ccc2d9f 61
+src/code_reviewer/flows/single_agent/report.py
+  s_68cd0db0a8fc3a::t_d8733e2cbe7746 126,206,210,225-230
+src/code_reviewer/sandbox/prepare.py
+  s_68cd0db0a8fc3a::t_c87006253fcb17 9-10,63-73,76-95,114,120-125,149-150
+  s_68cd0db0a8fc3a::t_7932563e1db454 74-75
+tests/test_llm_interface.py
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 80-82,85
+docs/usage.md
+  s_68cd0db0a8fc3a::t_79b2375f002841 117
+  s_68cd0db0a8fc3a::t_1af7f1f3c333f4 20,26,36-37,55,213,236,251,256,258,285-287
+  s_68cd0db0a8fc3a::t_e282257d01892a 167,175-176,190,198,274-275,289
+  s_68cd0db0a8fc3a::t_89f8490a873225 18,216
+  s_68cd0db0a8fc3a::t_5133a7631936bc 134,150-153,165,199,262
+tests/test_chatgpt.py
+  s_68cd0db0a8fc3a::t_01d911c78fba51 1-296,298-325,327-340,378,396-397,438-440,490-491,551,558-559,587,630,640,656,674,677,689,716
+  s_68cd0db0a8fc3a::t_9dc3b4a905105f 297
+  s_68cd0db0a8fc3a::t_0400ca81fc4bdb 326,341-377,379-395,398-437,441-489,492-550,552-557,560-586,588-629,631-639,641-655,657-673,675-676,678-688,690-715,717-726
+src/code_reviewer/backends/openai_stream.py
+  s_68cd0db0a8fc3a::t_4cf4940e96ef52 14-23,25-29,32-39,41-42,45-48,99-100
+  s_68cd0db0a8fc3a::t_210c170aabcc8d 24,30-31,40,43-44,49-66,140
+  s_68cd0db0a8fc3a::t_7db2b477ce9776 1-4,6-13,67-72,74-98,101-103,109-139,147,149
+  s_68cd0db0a8fc3a::t_5593396974fcc0 5,148
+  s_68cd0db0a8fc3a::t_3edeff96a53342 73,104-108,141-146
+docs/sandbox-todo.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 5,13,17,20,22,32,34,36,38
+  s_68cd0db0a8fc3a::t_e282257d01892a 24-25,40
+src/code_reviewer/backends/chatgpt/models.py
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 1-46,48-52
+  s_68cd0db0a8fc3a::t_8066fa54a49cbb 47
+src/code_reviewer/sandbox/review.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 73,136,141-143
+src/code_reviewer/shared/stats.py
+  s_68cd0db0a8fc3a::t_79b2375f002841 25,44,79-82,91
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 26,45,84
+src/code_reviewer/backends/contract.py
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 33-34,49
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_e282257d01892a 15-16,19,67,73,83,97-98
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 11,14,51,55,57,59,61
+  s_68cd0db0a8fc3a::t_e9dedeed25a298 129
+src/code_reviewer/backends/openai.py
+  s_68cd0db0a8fc3a::t_210c170aabcc8d 18,106-109
+  s_68cd0db0a8fc3a::t_2959f9f6526923 33-36,297,302,305,340,343,365-366,369,375
+  s_68cd0db0a8fc3a::t_4cf4940e96ef52 91-92,96,104,110
+  s_68cd0db0a8fc3a::t_3edeff96a53342 199,244,246,276-282,293-296,298-301,303-304,306,310,316-323,327-329,331-334,336-339,341,370-374
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 15,193,270,352-354
+  s_68cd0db0a8fc3a::t_7db2b477ce9776 76,97-103,105,111,135,140-142,145-146,164-173,192,197-198,223-227,232-242,262-263,272,291,355-357,378,382
+  s_68cd0db0a8fc3a::t_79b2375f002841 377
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_e282257d01892a 56,62,64,66,68,72
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 106
+  s_68cd0db0a8fc3a::t_c32e3887c295c0 26,52,96,212-215
+src/code_reviewer/backends/chatgpt/__init__.py
+  s_68cd0db0a8fc3a::t_c33e7afcfc4bc6 1-2
+src/code_reviewer/backends/http_errors.py
+  s_68cd0db0a8fc3a::t_7db2b477ce9776 14-21
+  s_68cd0db0a8fc3a::t_e282257d01892a 88-90
+src/code_reviewer/backends/chatgpt/oidc.py
+  s_68cd0db0a8fc3a::t_c33e7afcfc4bc6 1-186
+docs/history.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 2,4-13
+  s_68cd0db0a8fc3a::t_79b2375f002841 1,3
+src/code_reviewer/sandbox/review_worker.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 28
+src/code_reviewer/shared/llm.py
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 60,63,65
+  s_68cd0db0a8fc3a::t_bf7ef0e76fda2f 66
+docs/llm.md
+  s_68cd0db0a8fc3a::t_b92d4d718fe599 76,79-91,93
+  s_68cd0db0a8fc3a::t_1af7f1f3c333f4 3,5,9-11,14,20-25,27,31-37,39,43,48,50,52,54,56,58-75,78,95,99,101,103,105,107
+  s_68cd0db0a8fc3a::t_e282257d01892a 12,97
+  s_68cd0db0a8fc3a::t_c9d7d1e23f12fb 77
+src/code_reviewer/backends/factory.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 48-53,58-59,64,68-73,83
+  s_68cd0db0a8fc3a::t_58b65ce65f6577 91
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_b92d4d718fe599 197
+  s_68cd0db0a8fc3a::t_bc59366097ae03 5-62,64-91,95-125,128-176
+  s_68cd0db0a8fc3a::t_e282257d01892a 276
+  s_68cd0db0a8fc3a::t_9ede2a7839f371 63
+  s_68cd0db0a8fc3a::t_1af7f1f3c333f4 177-196,198-201,220,272
+src/code_reviewer/sandbox/guest.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 106
+  s_68cd0db0a8fc3a::t_d6e6b7bd90d3ee 12,129
+src/code_reviewer/backends/claude.py
+  s_68cd0db0a8fc3a::t_b9589893e2adb9 131,149-150,177,179,196,204-208
+  s_68cd0db0a8fc3a::t_1372d636d7d7af 5,31,40-41,52,65-66,82-92,101-102
+AGENTS.md
+  s_68cd0db0a8fc3a::t_e31fabfb13a0bf 11,19,25
+  s_68cd0db0a8fc3a::t_e282257d01892a 9,23,37,58,67
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 127-128,132,136-140,167
+src/code_reviewer/sandbox/settings.py
+  s_68cd0db0a8fc3a::t_5593396974fcc0 13
+  s_68cd0db0a8fc3a::t_8066fa54a49cbb 9
+docs/development.md
+  s_68cd0db0a8fc3a::t_2470aaab1c2d20 22,107,113,121,129,131-133
+sandbox/README.md
+  s_68cd0db0a8fc3a::t_2269617e95b8fe 5,28
+src/code_reviewer/post.py
+  s_68cd0db0a8fc3a::t_fca3367a5bd4d6 1
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_c59694158ca457 99
+src/code_reviewer/shared/git_ops.py
+  s_68cd0db0a8fc3a::t_374a9e24b65f89 155-157
+tests/test_connected_sandbox.py
+  s_68cd0db0a8fc3a::t_b1b2d4afcce67c 181,202
+tests/test_openai_http_errors.py
+  s_68cd0db0a8fc3a::t_55ee616c0476e0 37-41
+tests/test_vm_review.py
+  s_68cd0db0a8fc3a::t_1f5ddcf7ca4f52 17,111,113-114,122-123,133,139,303,312,322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e75ae14588957eb21a09f6656736edde5f79aa2e",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
