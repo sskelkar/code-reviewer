@@ -24,7 +24,7 @@ Normal VM dispatch transports allowlisted settings, selected-adapter credentials
 
 Review quality is judged manually. `doctor` and preflight share an offline configuration report. Deployment checks exercise the real backend; recorded-envelope parser regressions remain part of the tests.
 
-Optional local Langfuse tracing uses the standard-library recorder in both execution locations and a host-only SDK subprocess. Tracing is off by default; preflight/dry-run do not read tracing keys or export. Guest metadata fits existing stats/result limits and receives host schema validation; no guest egress or Langfuse keys are added. Local synthetic ingestion is audited for both flows/provider paths; actual VM/authenticated tracing qualification remains open; see [tracing](docs/tracing.md).
+Optional local Langfuse tracing uses the standard-library recorder in both execution locations and a host-only SDK subprocess. Tracing is on by default; trusted operator config can set `tracing = false`. Invalid configuration, preflight and dry-run do not read tracing keys or export. Guest metadata fits existing stats/result limits and receives host schema validation; no guest egress or Langfuse keys are added. Local synthetic ingestion is audited for both flows/provider paths; actual VM/authenticated tracing qualification remains open; see [tracing](docs/tracing.md).
 
 ## Where to read
 

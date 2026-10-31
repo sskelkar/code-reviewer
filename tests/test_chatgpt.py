@@ -30,7 +30,7 @@ from tests.helpers import make_repo
 
 
 def config(**kwargs):
-    values = dict(provider='openai', auth_mode='subscription', sandbox=False,
+    values = dict(tracing=False, provider='openai', auth_mode='subscription', sandbox=False,
                   model_reviewer='test-model', model_comparator='test-model',
                   model_resolver='test-model', model_verifier='test-model',
                   min_passes=1, max_passes=1, persona_passes=1, criteria_mode='defaults_only')

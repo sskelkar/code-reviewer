@@ -25,7 +25,7 @@ class HostExecutionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.cfg = Config(runs_dir=str(self.root/'runs'), criteria_mode='defaults_only',
+        self.cfg = Config(tracing=False, runs_dir=str(self.root/'runs'), criteria_mode='defaults_only',
                           openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2)
 
     def invoke(self, cfg, *args):

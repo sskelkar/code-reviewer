@@ -283,7 +283,7 @@ This behavior follows the [provider's rate-limit guidance](https://developers.op
 
 ## Optional local tracing
 
-Set `tracing = true` in trusted operator configuration to record metadata in local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.11+ and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. See [setup, trace contents, caching and troubleshooting](tracing.md); no new review command or guest-network permission is required.
+Tracing is enabled by default; set `tracing = false` in trusted operator configuration to opt out. Metadata is exported to local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.11+ and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. After a review, open the printed `Trace:` link or `tracing.url` in its `stats.json`. See [viewing a review's trace](tracing.md#view-a-reviews-trace), [missing traces](tracing.md#missing-traces) and [setup/cache details](tracing.md); no new review command or guest-network permission is required.
 
 
 ## Subscription commands and limits

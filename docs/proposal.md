@@ -13,7 +13,7 @@ One reviewer supports runtime-selected providers through a common LLM interface.
 - [x] Explicit API-key versus subscription selection; Claude subscription token isolation with no automatic API-key fallback.
 - [x] Reviewer-owned ChatGPT consent, protected account storage/refresh, streaming transport and access-token-only VM handoff.
 - [x] Complete a ChatGPT-backed VM review (user-confirmed).
-- [x] Optional bounded metadata tracing in its own package, host-only Langfuse exporter and validated VM stats handoff; local persistence precedes export.
+- [x] Default-on metadata tracing with operator opt-out, host-only Langfuse exporter and validated VM stats handoff; local persistence precedes export.
 - [x] Local Langfuse on port 4000, synthetic review ingestion and stored-trace hierarchy/usage/privacy audit.
 - [ ] Qualify tracing through a real VM workload and authenticated provider usage; see [qualification status](langfuse-plan.md#qualification-status).
 - [ ] Qualify native Claude tools, live persona coverage, long-running refresh and additional failure paths.

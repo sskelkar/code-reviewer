@@ -126,7 +126,7 @@ class Config:
     auth_mode: str = "api-key"
     chatgpt_account: str = "default"
     call_budget_tokens: int = 200000
-    tracing: bool = False
+    tracing: bool = True
 
     def validate(self) -> None:
         for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',

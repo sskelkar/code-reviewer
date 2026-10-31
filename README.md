@@ -102,7 +102,20 @@ Use `~/.code-reviewer/review.toml` or `reviewer --config /absolute/path/review.t
 
 The VM enforces read-only admitted code, non-root/no-new-privileges, jailer/systemd limits, external egress policy and private transfers. It cannot prove model findings, prevent exposure of a copied runtime token, or enforce provider billing. See the [execution contract](docs/security-contract.md).
 
-Optional [local Langfuse tracing](docs/tracing.md) uses **localhost:4000**. Set `tracing = true` in operator configuration to record stage/model/tool timing, retries and cache/token usage without source, prompts or findings text. VM traces return through the existing result channel; only the host exports to Langfuse. Tracing failures do not fail reviews.
+## View review traces
+
+Local Langfuse tracing is **enabled by default**. Complete the [first-time setup](docs/tracing.md), including the Python 3.11+ tracing environment. From the project directory, in each terminal session:
+
+```bash
+source .venv-tracing/bin/activate
+. "$HOME/.code-reviewer/langfuse/local.env"
+export LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY
+reviewer review OWNER/REPO#123 --passes 1
+```
+
+When the review finishes, open its printed **`Trace:` link**, or browse [local review traces](http://localhost:4000/project/reviewer/traces). Sign in with the local account created during setup; [login details](docs/tracing.md#start-local-langfuse) are in the tracing guide. The same run's `stats.json`, beside `report.md`, stores the link in `tracing.url` and the opaque ID in `tracing.trace_id`.
+
+Traces show stage/model/tool timing, retries and token/cache usage without source, prompts or findings text. VM records arrive after cleanup; they do not stream live. Set `tracing = false` in operator configuration to opt out. Export failures do not fail reviews: metadata stays local, while `tracing.exported` is false. See [missing-trace troubleshooting](docs/tracing.md#missing-traces).
 
 ## Development and next work
 
@@ -121,6 +134,7 @@ Next: qualify VM tracing, native Claude tools, live persona coverage and long-ru
 |---|---|
 | [Usage](docs/usage.md) | Commands, settings, reports, limits and troubleshooting |
 | [LLM interface](docs/llm.md) | Contract, adapter/authentication matrix, credentials and qualification |
+| [Local tracing](docs/tracing.md) | Langfuse setup, viewing traces, cache usage and troubleshooting |
 | [Architecture](docs/architecture.md) | Ownership and review-flow diagrams |
 | [VM architecture](docs/sandbox-architecture.md) | Launcher, worker, guest, networking and cleanup |
 | [VM deployment](docs/sandbox-check.md) | Persistent setup, no-key checks and recovery |

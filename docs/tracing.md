@@ -31,7 +31,7 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
 
 `down` removes this stack's containers/network while preserving named volumes. `down --volumes` destroys its stored traces, accounts and project data; it is an explicit reset, not routine cleanup. Updating image versions/digests requires checking server/SDK compatibility and database migrations.
 
-## Enable tracing for reviews
+## Configure tracing for reviews
 
 The core reviewer and VM recorder support Python 3.9+. **Host Langfuse export requires Python 3.11+** and the optional dependency:
 
@@ -43,15 +43,39 @@ python -m pip install -e '.[tracing]'
 export LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY
 ```
 
-The generated file is trusted local operator configuration, not repository input. Only the two exported Langfuse project keys are needed by the reviewer; do not put them in `review.toml`. Add this setting to the existing operator file outside Git:
+The generated file is trusted local operator configuration, not repository input. Only the two exported Langfuse project keys are needed by the reviewer; do not put them in `review.toml`. Tracing is enabled by default. To opt out, add this setting to the existing operator file outside Git:
 
 ```toml
-tracing = true
+tracing = false
 ```
 
-Run the usual `reviewer review …` command with your selected provider/authentication/strategy. Tracing is off by default. No additional flags, model credentials or Langfuse settings go inside the repository being reviewed. Preflight and dry-run never contact Langfuse or read its keys, even when tracing is enabled.
+Run the usual `reviewer review …` command with your selected provider/authentication/strategy. Metadata recording is on by default; local export still needs the SDK and project-key environment variables above. No additional flags, model credentials or Langfuse settings go inside the repository being reviewed. Invalid configuration, preflight and dry-run never contact Langfuse or read its keys, even when tracing is enabled.
 
 After cleanup, trace metadata is saved atomically before export starts. A successful export prints a local trace link and saves it in `stats.json` under `tracing`. Bounded metadata remains under `trace`, including a dropped-observation count. If Langfuse, keys, the SDK or a compatible host Python are unavailable, the review still completes and prints a warning; metadata remains available with the stats. Failed reviews can have a separate private `trace-<opaque ID>/stats.json` directory. There is no automatic retry daemon. The export subprocess has a 20-second total deadline and receives no model credentials or ambient OTLP/proxy settings.
+
+## View a review's trace
+
+After running a review from the configured terminal, open the **`Trace:` URL** printed when export succeeds. Alternatively, open [the local reviewer project's traces](http://localhost:4000/project/reviewer/traces), sign in with the local setup account and select a review. The UI is on your Mac; no Langfuse Cloud login is needed. Leave the local services running while viewing or exporting traces.
+
+To find a particular saved review, open its `stats.json` beside `report.md`:
+
+- `tracing.url` is the direct browser link after a successful export.
+- `tracing.trace_id` identifies the review in Langfuse. Trace identifiers are opaque; repository names and PR identifiers are not recorded.
+- `tracing.exported` reports whether the exporter delivered the trace successfully.
+- `trace.records` contains the bounded local metadata; `trace.dropped` counts omitted observations.
+
+Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, retries and generation usage. VM traces appear after the review and cleanup; ingestion can take a short time to become visible. Refresh the page if a newly exported trace is not immediately listed.
+
+## Missing traces
+
+| What you see | Meaning and action |
+|---|---|
+| No `Trace:` link and no `tracing` or `trace` entry in stats | This run did not record tracing, for example because tracing was disabled or it used an older installation. Preflight, dry-run and configuration refusals intentionally skip tracing. Past traces cannot be reconstructed; ensure tracing is enabled for the next review. |
+| `trace` exists but `tracing.exported` is false | Local metadata was saved, but export failed. Check the terminal warning, Python 3.11+ tracing environment, installed extra, exported local project keys and running Langfuse services. Fix setup before the next review; saved traces are not automatically retried. |
+| `tracing.exported` is true but the list looks empty | Open `tracing.url` directly, sign into the local `reviewer` project and allow ingestion to finish before refreshing. |
+| A failed VM review has only host stages | A VM that cannot return results also cannot return its internal trace records. Available host failure metadata can be saved separately under `trace-<opaque ID>/stats.json` in the runs directory. |
+
+Tracing defaults to on. An explicit `tracing = false` in the selected operator file overrides that default; `--config` can select a different operator file. Loading project keys in one terminal does not export them into another terminal session.
 
 ## What appears in the UI
 

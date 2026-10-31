@@ -27,7 +27,6 @@ class ReviewOutcome:
     preflight: Optional[Any] = None
 
 
-@review_trace
 def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:
     """Select the operator's boundary before Git or credentials; VM requests never fall back."""
     from .security import readiness
@@ -44,10 +43,17 @@ def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: P
     if cfg.sandbox:
         if report['configuration_errors']:
             raise ReviewRefused('VM review unavailable: ' + '; '.join(report['configuration_errors']) + '; no host fallback')
+    elif report['configuration_errors']:
+        raise ConfigError('; '.join(report['configuration_errors']))
+    return _execute_review(cfg, runner, ref, options, local_path)
+
+
+@review_trace
+def _execute_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: Path) -> ReviewOutcome:
+    """Begin tracing only after configuration/preflight gates; never trace a dry-run."""
+    if cfg.sandbox:
         from .sandbox.review import run
         return ReviewOutcome(result=run(cfg, ref, options))
-    if report['configuration_errors']:
-        raise ConfigError('; '.join(report['configuration_errors']))
     dry_run = getattr(options, 'dry_run', False)
     if runner is None and not dry_run:
         runner = factory.create_runner(cfg)

@@ -13,11 +13,13 @@ flowchart TD
     START["reviewer review PR"] --> CLI["cli.main() → build_parser()"]
     CLI --> CONFIG["config.load_config()"]
     CONFIG --> OPTIONS["git_ops.parse_pr_ref()<br/>review_options.apply_run_options()"]
-    OPTIONS --> DISPATCH["tracing.review.review_trace() wrapper<br/>review_flow.run_review()"]
+    OPTIONS --> DISPATCH["review_flow.run_review()"]
     DISPATCH --> READY["security.readiness()"]
     READY --> PREFLIGHT{"--preflight?"}
     PREFLIGHT -->|yes| OFFLINE["Return configuration report<br/>cli.main() prints JSON; exit"]
-    PREFLIGHT -->|no| LOCATION{"cfg.sandbox?"}
+    PREFLIGHT -->|no| GATE["Validate effective execution/provider settings"]
+    GATE --> EXECUTE["tracing.review.review_trace() wrapper<br/>review_flow._execute_review()"]
+    EXECUTE --> LOCATION{"cfg.sandbox?"}
     LOCATION -->|yes: default| VM["sandbox.review.run()<br/>Expand in diagram 2"]
     LOCATION -->|no: explicit host| DRY{"--dry-run?"}
     DRY -->|no| ADAPTER["backends.factory.create_runner()"]
@@ -204,7 +206,7 @@ flowchart TD
 
 ### 6. Optional tracing across the VM boundary
 
-`tracing.review.review_trace()` creates a `tracing.Recorder` only for enabled real reviews. `tracing.observation()` and `traced()` record closed metadata, not method arguments. `ModelCaller.call()` creates role agents; OpenAI records individual turns/tools, while Claude records aggregate native generations. Persona executor submissions use `copy_context().run` to preserve parentage.
+`run_review()` validates configuration and handles preflight before calling the decorated `_execute_review()`. `tracing.review.review_trace()` creates a `tracing.Recorder` for real reviews by default; `tracing = false` opts out. `tracing.observation()` and `traced()` record closed metadata, not method arguments. `ModelCaller.call()` creates role agents; OpenAI records individual turns/tools, while Claude records aggregate native generations. Persona executor submissions use `copy_context().run` to preserve parentage.
 
 ```mermaid
 flowchart LR

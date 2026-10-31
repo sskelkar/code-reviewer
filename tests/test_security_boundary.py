@@ -27,6 +27,7 @@ class BoundaryTests(unittest.TestCase):
                     with self.subTest(provider=provider, mode=mode, flags=flags):
                         err = io.StringIO()
                         with patch.object(cli, 'load_config', return_value=Config()), \
+                                patch('code_reviewer.tracing.review.finish', side_effect=AssertionError('no tracing for invalid configuration')), \
                                 patch('subprocess.run', side_effect=AssertionError('must not spawn a command')), \
                                 patch('getpass.getpass', side_effect=AssertionError('must not read a key')), \
                                 patch.object(cli, 'post_comment', side_effect=AssertionError('must not post')), \

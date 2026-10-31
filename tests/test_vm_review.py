@@ -35,7 +35,7 @@ class VMReviewTests(unittest.TestCase):
         self.options = SimpleNamespace(dry_run=False, local_path=None, keep_checkout=False)
 
     def cfg(self, provider='openai', mode='single-agent'):
-        return Config(provider=provider, review_mode=mode, min_passes=1, max_passes=1, persona_passes=1,
+        return Config(tracing=False, provider=provider, review_mode=mode, min_passes=1, max_passes=1, persona_passes=1,
                       model_reviewer='synthetic-model', model_comparator='synthetic-model',
                       model_resolver='synthetic-model', model_verifier='synthetic-model',
                       openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,

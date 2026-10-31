@@ -133,8 +133,9 @@ class TracingTests(unittest.TestCase):
 
     def test_host_frontdoor_saves_trace_even_when_export_fails(self):
         ctx = make_repo(self.root)
-        cfg = Config(tracing=True, sandbox=False, criteria_mode='defaults_only', min_passes=1, max_passes=1,
+        cfg = Config(sandbox=False, criteria_mode='defaults_only', min_passes=1, max_passes=1,
                      runs_dir=str(self.root / 'runs'))
+        self.assertTrue(cfg.tracing)  # An ordinary review records traces by default.
         options = SimpleNamespace(preflight=False, dry_run=False)
         with patch.object(Engine, 'prepare', return_value=ctx), patch('code_reviewer.tracing.langfuse.export', side_effect=RuntimeError('SECRET_CANARY')), redirect_stderr(io.StringIO()) as err:
             from code_reviewer.shared.git_ops import PRRef
