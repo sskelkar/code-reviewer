@@ -1,0 +1,29 @@
+docs/llm.md
+  s_68cd0db0a8fc3a::t_aeabef91de48db 66
+tests/test_native_claude_login.py
+  s_68cd0db0a8fc3a::t_aeabef91de48db 38-40,62,97-108
+  s_68cd0db0a8fc3a::t_15fdf157c8da66 109
+src/code_reviewer/backends/factory.py
+  s_68cd0db0a8fc3a::t_aeabef91de48db 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "2a51f3616b16bc060a90cfd741f40e36249f1529",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
