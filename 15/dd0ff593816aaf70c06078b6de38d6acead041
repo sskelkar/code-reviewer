@@ -1,0 +1,52 @@
+AGENTS.md
+  s_68cd0db0a8fc3a::t_867b5ca8876b77 48
+docs/assets/banner.svg
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 1-44
+docs/history.md
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 1
+  s_68cd0db0a8fc3a::t_867b5ca8876b77 3
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_867b5ca8876b77 10,19,25,33,43,54
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 15,21
+docs/development.md
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 3,104,110
+  s_68cd0db0a8fc3a::t_3ed9f31e910d16 21
+README.md
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 1-4,7-27,31-33,40,44,46,48,50,52,59,61,63,66-73,76,156,158-163
+docs/usage.md
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 9
+review.example.toml
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 2
+CONTRIBUTING.md
+  s_68cd0db0a8fc3a::t_867b5ca8876b77 25
+  s_68cd0db0a8fc3a::t_885895cd007396 17
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 1-16,18-24
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_2b32e7d8a37752 3,248,260
+docs/prompts.md
+  s_68cd0db0a8fc3a::t_3ed9f31e910d16 33
+  s_68cd0db0a8fc3a::t_867b5ca8876b77 87
+docs/sandbox-alternatives.md
+  s_68cd0db0a8fc3a::t_3ed9f31e910d16 7,16,23-24,26,32,36,42,46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "15dd0ff593816aaf70c06078b6de38d6acead041",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
