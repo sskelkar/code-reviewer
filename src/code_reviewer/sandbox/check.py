@@ -94,7 +94,7 @@ class Worker:
         return json.loads(self.call('list', self.instance, '--json', timeout=15))
 
     @contextmanager
-    def session(self, *, recover=False):
+    def session(self, *, recover=False, quiet=False):
         # Separate invocations must not race to start/stop the same dedicated worker.
         lock_path = self.home / self.instance / '.reviewer-check.lock'
         fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
@@ -107,15 +107,18 @@ class Worker:
             validate_worker(state, self.instance, stopped=not recover)
             try:
                 if recover and state['status'] == 'Running':
-                    print('sandbox: stopping dedicated worker to discard abandoned workloads', file=sys.stderr)
+                    if not quiet:
+                        print('sandbox: stopping dedicated worker to discard abandoned workloads', file=sys.stderr)
                     self.call('stop', '--tty=false', self.instance, timeout=60)
                     if self.state().get('status') != 'Stopped':
                         raise RuntimeError('could not confirm worker shutdown before recovery')
-                print('sandbox: starting dedicated Lima worker', file=sys.stderr)
+                if not quiet:
+                    print('sandbox: starting dedicated Lima worker', file=sys.stderr)
                 self.call('start', '--tty=false', self.instance)
                 yield self
             finally:
-                print('sandbox: stopping dedicated Lima worker', file=sys.stderr)
+                if not quiet:
+                    print('sandbox: stopping dedicated Lima worker', file=sys.stderr)
                 self.call('stop', '--tty=false', self.instance, timeout=60)
                 if self.state().get('status') != 'Stopped':
                     raise RuntimeError('could not confirm worker shutdown')
@@ -167,14 +170,15 @@ def prepared_images(text, source_sha, builder_sha):
 
 
 @traced('vm.images')
-def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False):
+def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False, quiet=False):
     """Share trusted deployment preparation between checks and normal reviews."""
     filenames = ['firecracker', 'jailer', 'kernel', 'source.tar', 'build.sh']
     if native:
         filenames.append('claude')
     for filename in filenames:
         worker.call('copy', stage / filename, worker.instance + ':' + job + '/' + filename)
-    print('sandbox: preparing pinned reviewer images (reuse unchanged inputs)', file=sys.stderr)
+    if not quiet:
+        print('sandbox: preparing pinned reviewer images (reuse unchanged inputs)', file=sys.stderr)
     uid = int(worker.shell('id', '-u').strip())
     if not 1 <= uid < 2**31:
         raise ValueError('expected an unprivileged worker operator')
@@ -188,8 +192,9 @@ def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False)
         '--source-sha256', bundle_sha, '--builder', job+'/build.sh', '--builder-sha256', builder_sha,
         '--keep-job', job, *extra, timeout=600), bundle_sha, builder_sha)
     images = preparation['images']
-    print('sandbox: images '+', '.join(label+(' reused' if image['reused'] else ' built')
-                                      for label,image in images.items()), file=sys.stderr)
+    if not quiet:
+        print('sandbox: images '+', '.join(label+(' reused' if image['reused'] else ' built')
+                                          for label,image in images.items()), file=sys.stderr)
     return root_env, preparation
 
 

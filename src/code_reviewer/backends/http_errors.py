@@ -11,7 +11,7 @@ MAX_ERROR_BYTES = 8192
 CODES = frozenset(('rate_limit_exceeded', 'slow_down', 'insufficient_quota',
                   'credit_balance_exhausted', 'organization_spend_limit_exceeded',
                   'project_spend_limit_exceeded', 'organization_usage_limit_exceeded',
-                  'server_is_overloaded', 'invalid_api_key',
+                  'server_is_overloaded', 'invalid_api_key', 'invalid_json_schema',
                   'subscription_sharing_usage_limit_exceeded', 'subscription_sharing_usage_unavailable',
                   'subscription_sharing_unsupported_capability', 'subscription_sharing_route_not_supported',
                   'subscription_sharing_invalid_user', 'chatpass_v2_scope_not_authorized',

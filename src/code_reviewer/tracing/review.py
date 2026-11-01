@@ -50,6 +50,7 @@ def finish(recorder, cfg, result=None):
         _save_stats(directory, stats, recorder.trace_id)
         try:
             from .langfuse import export
+            print('tracing: exporting saved metadata to local Langfuse ...', file=sys.stderr, flush=True)
             export(value)
             url = 'http://localhost:4000/project/reviewer/traces/' + recorder.trace_id
             stats['tracing'].update(exported=True, url=url)

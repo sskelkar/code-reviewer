@@ -22,6 +22,8 @@ Operator configuration and credentials remain separate from repository criteria.
 
 Authentication is explicitly API-key or subscription; never infer or fall back between them. Claude subscription uses `CLAUDE_CODE_OAUTH_TOKEN`, not ambient API keys/cached login. ChatGPT uses reviewer-owned consent/private refresh storage and access-token-only VM handoff. OpenAI requires one explicit model for all roles and, for API-key access, three positive operator token rates; the key comes only from OPENAI_API_KEY.
 
+VM progress is advisory over existing private frames: validate closed schemas and size/count budgets on both hops, never treat progress as admission/credential/cleanup authority. Bounded unchecked titles/locations may appear as reviewers return, followed by provisional consolidated previews; never add them to Langfuse, prompts or automatic posting. Keep terminal text safe and join heartbeat/worker threads on exit.
+
 Tracing defaults on, with trusted `tracing = false` opt-out. Record bounded metadata in the core/guest; persist locally before optional host-only Langfuse export. Do not add guest egress, tracing keys in the VM/native model environment, full-content tracing or credential reads during preflight/dry-run. Qualification evidence belongs only in the roadmap.
 
 ## Setup and checks

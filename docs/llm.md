@@ -89,6 +89,8 @@ Official protocol references: [registration/sign-in](https://developers.openai.c
 | Completion | Require `response.completed`; failed, incomplete, truncated, duplicated or malformed item streams fail |
 | Tool continuation | Decode argument strings as JSON objects, validate the selected tool, execute bounded reads, then append all output/reasoning items and `function_call_output` with its `call_id` to stateless history |
 | Final answer | Read message `output_text` and decode JSON; refusals, missing content and unsupported shapes have explicit safe errors |
+| Output schema | Close objects and require all declared fields. Omit unsupported array `uniqueItems` from the OpenAI request only; Python role validators still check distinct assignments, categories and conflict references |
+| Investigation limits | At most 32 read-tool calls and 33 response turns, allowing one tool call per turn plus a final structured answer; token/cost allowances, request sizes and deadlines may stop work earlier |
 | Retry | Completed invalid JSON can use the existing bounded output retry. Stream/protocol failures do not restart the conversation. Temporary HTTP retries remain separately bounded |
 | Diagnostics | Retain closed processing phases, counts and error types; omit raw text, arguments, reasoning and response bodies |
 

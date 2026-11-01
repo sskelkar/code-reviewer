@@ -10,6 +10,7 @@ from ...shared.models import PassRecord
 from .roles import Comparator, Reviewer
 from ...shared.run_store import RunStore
 from ...shared.stats import Stats
+from ...shared.events import reviewer_preview
 from ...tracing import traced
 
 
@@ -34,6 +35,7 @@ class PassRunner:
         self.emit("reviewer_started", pass_no=pass_no, model=self.cfg.model_reviewer)
         result = self.reviewer.review(pass_no, pass_dir / "reviewer.raw.json")
         parsed = result.parsed or {}
+        self.emit('reviewer_returned', pass_no=pass_no, **reviewer_preview(parsed))
         prepared = self.preparer.prepare(parsed.get("findings"), pass_no)
         self.store.dump("%s/findings.json" % pass_dir.name, {"notes": parsed.get("notes", ""), "findings": prepared.all_records()})
         self.emit(

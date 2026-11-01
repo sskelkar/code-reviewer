@@ -61,9 +61,11 @@ def configuration_errors(cfg, ref=None, options=None):
     return result
 
 
-def converse(channel, cfg, source, key_reader):
+def converse(channel, cfg, source, key_reader, progress=None):
+    from .progress import Stream
+    stream = Stream(progress)
     send_json(channel, {'settings': settings.job_settings(cfg), 'source': source})
-    value = receive_json(channel, RESULT_LIMIT)
+    value = stream.receive(channel, RESULT_LIMIT, reader=receive_json)
     from .acquire import source_failure
     failure = source_failure(value)
     if failure:
@@ -72,7 +74,8 @@ def converse(channel, cfg, source, key_reader):
         raise ValueError('worker did not complete admission and boundary checks; no credential released')
     key = key_reader(cfg.provider, settings.job_settings(cfg)['auth'])
     send(channel, key.encode('ascii'), 16384)
-    value = receive_json(channel, RESULT_LIMIT)
+    stream.secret, stream.allow_preview = key, True
+    value = stream.receive(channel, RESULT_LIMIT, reader=receive_json)
     if not isinstance(value, dict) or set(value) != {'kind', 'result', 'files', 'cleanup'} or value['kind'] != 'finished' or value['cleanup'] is not True:
         raise ValueError('VM review or cleanup failed')
     metadata = value['result']
@@ -99,7 +102,7 @@ def converse(channel, cfg, source, key_reader):
 
 
 @traced('vm.execute')
-def execute(worker, arguments, cfg, source, key_reader):
+def execute(worker, arguments, cfg, source, key_reader, progress=None):
     # Explicit no-TTY and a clean launcher environment. SSH carries framed private
     # stdin/stdout; stderr is deliberately discarded rather than echoing secrets.
     proc = subprocess.Popen(['limactl', '--tty=false', 'shell', worker.instance, '--', *arguments],
@@ -107,7 +110,7 @@ def execute(worker, arguments, cfg, source, key_reader):
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True, bufsize=0)
     try:
         value = converse(Channel(proc.stdout.fileno(), proc.stdin.fileno(), cfg.vm_timeout_s + 60),
-                         cfg, source, key_reader)
+                         cfg, source, key_reader, progress)
         proc.stdin.close()
         if proc.wait(timeout=30) != 0:
             raise ValueError('worker review process failed')
@@ -143,10 +146,17 @@ def run(cfg, ref, options, *, key_reader=None):
     if key_reader is None:
         def key_reader(provider, auth):
             return settings.credential(provider, auth, cfg=cfg, min_ttl=cfg.vm_timeout_s + 120)
+    from ..progress import LiveProgress
+    with LiveProgress() as progress:
+        return _run(cfg, ref, key_reader, progress)
+
+
+def _run(cfg, ref, key_reader, progress):
     worker = Worker(cfg.vm_lima_home, cfg.vm_instance)
     job = '/tmp/reviewer-check-' + uuid.uuid4().hex
     source = source_url(ref)
     phase = 'artifact staging'
+    progress.stage('staging')
     try:
         with tempfile.TemporaryDirectory(prefix='reviewer-stage-') as name:
             stage = Path(name)
@@ -159,25 +169,34 @@ def run(cfg, ref, options, *, key_reader=None):
             if native:
                 Artifact(Path(cfg.vm_claude_binary), native, 300000000).stage(stage/'claude')
             phase = 'dedicated worker startup'
-            with worker.session():
+            progress.stage('starting_worker')
+            with worker.session(quiet=True):
                 worker.shell('mkdir', '-m', '700', job)
                 try:
                     phase = 'runtime image preparation'
-                    env, preparation = prepare_worker(worker, stage, job, bundle['sha256'], hashlib.sha256(builder).hexdigest(), native=native)
+                    progress.stage('images')
+                    env, preparation = prepare_worker(worker, stage, job, bundle['sha256'], hashlib.sha256(builder).hexdigest(), native=native, quiet=True)
+                    progress.note('images ' + ', '.join(label + (' reused' if image['reused'] else ' built')
+                                                       for label, image in preparation['images'].items()))
                     image = preparation['images']['connected']
                     arguments = (*env, 'PYTHONPATH='+image['path']+'/root/opt/reviewer/src', 'python3',
                                  '-m', 'code_reviewer.sandbox.review_worker', '--root', job, '--image', image['path'],
                                  '--image-sha256', image['sha256'], '--timeout', str(cfg.vm_timeout_s))
-                    print('sandbox: reviewing pinned PR inside the VM; waiting for boundary checks', file=sys.stderr)
                     phase = 'VM admission, review or result validation'
-                    value, key = execute(worker, arguments, cfg, source, key_reader)
+                    progress.stage('booting')
+                    value, key = execute(worker, arguments, cfg, source, key_reader, progress=progress)
                 finally:
                     if sys.exc_info()[0] is None:
                         phase = 'remote scratch cleanup'
-                    worker.shell('sudo', '-n', 'rm', '-rf', '--', job, timeout=30)
+                    try:
+                        progress.stage('cleanup')
+                        worker.shell('sudo', '-n', 'rm', '-rf', '--', job, timeout=30)
+                    finally:
+                        progress.stage('stopping_worker')
                 phase = 'dedicated worker shutdown'
             # Worker shutdown is confirmed before any result is published locally.
             phase = 'local report export'
+            progress.stage('saving')
             runs = cfg.runs_path()
             runs.mkdir(mode=0o700, parents=True, exist_ok=True)
             output = runs / ('vm-' + uuid.uuid4().hex)

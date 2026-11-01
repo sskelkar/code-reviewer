@@ -93,6 +93,10 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
 
 def _run_job(sock, root, settings, *, probe_network, seal):
     from .settings import provider
+    from .progress import GuestProgress
+    progress = GuestProgress(sock, settings['config']['review_mode']) if sock is not None and 'config' in settings else None
+    if progress:
+        progress.stage('acquiring')
     selected = provider(settings)
     if sock is not None:
         sock.settimeout(settings.get('timeout_s', 900))
@@ -117,6 +121,8 @@ def _run_job(sock, root, settings, *, probe_network, seal):
     else:
         ctx = prepare_repository(data, root / 'repo')
     snapshot = None
+    if progress:
+        progress.stage('admitting')
     if seal is not None:
         with observation('vm.admit'):
             snapshot = seal(ctx, root, exported=True) if acquired else seal(ctx, root)
@@ -135,6 +141,8 @@ def _run_job(sock, root, settings, *, probe_network, seal):
         files = {'boundary-report.json': base64.b64encode(json.dumps(checks).encode()).decode()}
         return {'kind': 'result', 'stop_reason': 'probes_passed', 'files': files, 'checks': checks}
     key = secret
+    if progress:
+        progress.secret = key
     from .settings import config_from_job
     cfg = config_from_job(settings, root)
     env = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL',
@@ -144,13 +152,13 @@ def _run_job(sock, root, settings, *, probe_network, seal):
                 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'})
     runner = create_runner(cfg, selected_credential=key, env=env, proxy=PROXY)
     if snapshot is not None:
-        result = Engine(cfg, runner).review(ctx, prepared_checkout=snapshot)
+        result = Engine(cfg, runner, emit=progress).review(ctx, prepared_checkout=snapshot)
     else:
         # Unprivileged fixture seam: ordinary tests never mount or change UID.
         original = git_ops.export_tree
         git_ops.export_tree = bounded_export
         try:
-            result = Engine(cfg, runner).review(ctx)
+            result = Engine(cfg, runner, emit=progress).review(ctx)
         finally:
             git_ops.export_tree = original
     with result.report_path.open('a', encoding='utf-8') as report:

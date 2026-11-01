@@ -64,7 +64,7 @@ To find a particular saved review, open its `stats.json` beside `report.md`:
 - `tracing.exported` reports whether the exporter delivered the trace successfully.
 - `trace.records` contains the bounded local metadata; `trace.dropped` counts omitted observations.
 
-Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, retries and generation usage. VM traces appear after the review and cleanup; ingestion can take a short time to become visible. Refresh the page if a newly exported trace is not immediately listed.
+Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, retries and generation usage. VM traces appear after the review and cleanup; ingestion can take a short time to become visible. The CLI’s [live status and provisional findings](usage.md#live-progress-and-provisional-findings) use a separate bounded progress protocol, not live Langfuse export. Refresh the page if a newly exported trace is not immediately listed.
 
 ## Missing traces
 

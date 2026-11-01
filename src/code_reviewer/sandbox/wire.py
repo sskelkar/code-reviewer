@@ -33,10 +33,13 @@ def send(sock, value, limit):
     sock.sendall(struct.pack('!Q', len(value)) + value)
 
 
-def receive_json(sock, limit=META_LIMIT):
-    value = json.loads(receive(sock, limit))
+def receive_json(sock, limit=META_LIMIT, *, size_sink=None):
+    data = receive(sock, limit)
+    value = json.loads(data)
     if not isinstance(value, dict):
         raise ValueError('expected a private object frame')
+    if size_sink is not None:
+        size_sink(len(data))
     return value
 
 

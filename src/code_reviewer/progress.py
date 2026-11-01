@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import sys
 import time
+import threading
+import os
+import shutil
 from typing import Optional, TextIO
 
-from .shared.events import Event
+from .shared.events import Event, display_text
 
 
 def _fmt_money(value: float) -> str:
@@ -78,3 +81,121 @@ class ProgressPrinter:
             self._say("converged after %d passes" % d["passes"])
         elif kind == "report_ready":
             self._say("done (%s)" % d["stop_reason"])
+        elif kind in ('persona_review_finished', 'reviewer_returned'):
+            persona, number = d.get('persona', 'single-agent'), d.get('round_no', d.get('pass_no'))
+            if d.get('ok', True):
+                self.reviewer_glimpse(persona, number, d)
+            else:
+                self._say('%s: review %d failed' % (persona, number))
+        elif kind == 'round_preview':
+            label = 'Round' if d['mode'] == 'agent-personas' else 'Pass'
+            self._say('%s %d provisional: %d completed, %d incomplete; candidates: %d new, %d total. '
+                      'UNCONFIRMED — not independently verified; see the final report.' % (
+                          label, d['round'], d['completed'], d['failed'], d['new'], d['total']))
+            for row in d['findings']:
+                self._say('  [%s] %s %s:%d — %s' % (row['severity'], row['id'],
+                    display_text(row['file']), row['line'], display_text(row['title'])))
+            if d['new'] > len(d['findings']):
+                self._say('  %d additional new findings omitted from this preview' % (d['new'] - len(d['findings'])))
+
+    def reviewer_glimpse(self, persona, number, data):
+        self._say('%s: review %d returned — %d proposed, %d self-rejected' % (
+            persona, number, data['raised'], data['self_rejected']))
+        if data['findings']:
+            self._say('  Verification pending')
+            for row in data['findings']:
+                self._say('  [%s] %s:%d — %s' % (row['severity'], display_text(row['file']),
+                    row['line'], display_text(row['title'])))
+        omitted = data['raised'] - data['self_rejected'] - len(data['findings'])
+        if omitted:
+            self._say('  %d other proposed entries not shown in this glimpse' % omitted)
+
+
+class LiveProgress:
+    """Timestamped status, TTY-only activity and heartbeats for one VM request."""
+    def __init__(self, stream=None, interval=15):
+        self.printer = ProgressPrinter(stream=stream or sys.stderr)
+        self.interval = interval
+        self.lock, self.stop = threading.RLock(), threading.Event()
+        self.state = 'preparing review'
+        self.active = set()
+        self.updated = time.monotonic()
+        self.animated = bool(getattr(self.printer.stream, 'isatty', lambda: False)() and os.environ.get('TERM') != 'dumb')
+        self.visible, self.frame = False, 0
+        self.thread = threading.Thread(target=self._watch, name='reviewer-progress', daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop.set()
+        self.thread.join()
+        with self.lock:
+            self._clear()
+
+    def _clear(self):
+        if self.visible:
+            self.printer.stream.write('\r\x1b[2K')
+            self.printer.stream.flush()
+            self.visible = False
+
+    def _say(self, text):
+        self._clear()
+        self.updated = time.monotonic()
+        self.printer._say(text)
+
+    def note(self, text):
+        with self.lock:
+            self._say(text)
+
+    def stage(self, name):
+        from .sandbox.progress import STAGES
+        with self.lock:
+            if self.state == STAGES[name]:
+                return
+            self.state = STAGES[name]
+            self._say(self.state)
+
+    def __call__(self, frame):
+        with self.lock:
+            event, d = frame['event'], frame['data']
+            if event == 'stage':
+                self.stage(d['stage'])
+            elif event == 'review_started':
+                self.active.add(d['persona'])
+                self.state = 'waiting for reviewer results: ' + ', '.join(sorted(self.active))
+                self._say('%s: review %d scheduled' % (d['persona'], d['round']))
+            elif event == 'review_finished':
+                self.active.discard(d['persona'])
+                self.state = ('waiting for reviewers: ' + ', '.join(sorted(self.active))) if self.active else 'checking evidence and consolidating findings'
+                self._clear()
+                self.updated = time.monotonic()
+                if d['ok'] and 'raised' in d:
+                    self.printer.reviewer_glimpse(d['persona'], d['round'], d)
+                else:
+                    self._say('%s: review %d %s' % (d['persona'], d['round'], 'returned' if d['ok'] else 'failed'))
+            elif event == 'comparison_started':
+                self.state = 'consolidating %s findings from review %d' % (d['persona'], d['round'])
+                self._say(self.state)
+            elif event == 'round_preview':
+                self._clear()
+                self.updated = time.monotonic()
+                self.printer(Event(event, d))
+
+    def tick(self):
+        with self.lock:
+            if time.monotonic() - self.updated >= self.interval:
+                self._say('still waiting — ' + self.state)
+            if self.animated:
+                elapsed = int(time.time() - self.printer.started)
+                text = '[%02d:%02d] %s %s' % (elapsed // 60, elapsed % 60, '|/-\\'[self.frame % 4], self.state)
+                self.frame += 1
+                width = max(0, shutil.get_terminal_size(fallback=(80, 24)).columns - 1)
+                self.printer.stream.write('\r\x1b[2K' + text[:width])
+                self.printer.stream.flush()
+                self.visible = True
+
+    def _watch(self):
+        while not self.stop.wait(.2 if self.animated else min(1, self.interval)):
+            self.tick()

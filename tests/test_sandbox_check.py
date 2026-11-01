@@ -9,7 +9,7 @@ import os
 import tarfile
 import tempfile
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,6 +41,26 @@ def offline():
 
 
 class SandboxCheckTests(unittest.TestCase):
+    def test_normal_review_can_silence_legacy_logs_without_skipping_worker_cleanup(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            (root/'synthetic-worker').mkdir()
+            worker = check.Worker(root, 'synthetic-worker')
+            out = io.StringIO()
+            with patch.object(worker, 'state', return_value=profile()), patch.object(worker, 'call') as call, redirect_stderr(out):
+                with self.assertRaises(RuntimeError):
+                    with worker.session(quiet=True):
+                        raise RuntimeError('synthetic review failure')
+            self.assertEqual([c.args[0] for c in call.call_args_list], ['start', 'stop'])
+            self.assertEqual(out.getvalue(), '')
+            fake = Mock(instance='synthetic-worker')
+            fake.shell.side_effect = ['1000', '', 'synthetic preparation result']
+            prepared = {'images': {'offline': {'reused': True}, 'connected': {'reused': False}}}
+            with patch.object(check, 'prepared_images', return_value=prepared), redirect_stderr(out):
+                check.prepare_worker(fake, root, '/synthetic-job', 'a'*64, 'b'*64, quiet=True)
+            self.assertEqual(out.getvalue(), '')
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

@@ -108,13 +108,15 @@ def connect_bootstrap(path, proc):
     raise TimeoutError('private bootstrap deadline exceeded')
 
 
-def exchange(sock, settings, data, output, key_reader, *, network=None, source=None):
+def exchange(sock, settings, data, output, key_reader, *, network=None, source=None, progress=None):
+    from .progress import Stream
+    stream = Stream(progress)
     send_json(sock, settings)
     acquired = None
     if source is not None:
         from .acquire import pin, source_failure
         send_json(sock, {'kind': 'github-pr', 'url': source})
-        value = receive_json(sock)
+        value = stream.receive(sock, 65536, reader=receive_json)
         failure = source_failure(value)
         if failure:
             raise failure
@@ -125,7 +127,7 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
         send_json(sock, {'kind': 'source-access-revoked'})
     else:
         send(sock, data, MAX_CAPSULE)
-    readiness = ready(receive_json(sock))
+    readiness = ready(stream.receive(sock, 65536, reader=receive_json))
     if acquired and readiness['checks'].get('source_access_revoked') is not True:
         raise ValueError('source denial probes did not pass')
     if 'config' in settings:
@@ -140,7 +142,8 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
                                        or any(ord(c) < 33 or ord(c) > 126 for c in key)):
         raise ValueError('invalid runtime key')
     send(sock, key.encode(), 16384)
-    value = receive_json(sock, RESULT_LIMIT)
+    stream.secret, stream.allow_preview = key, not settings['probe_only']
+    value = stream.receive(sock, RESULT_LIMIT, reader=receive_json)
     if acquired and (not isinstance(value.get('checks'), dict) or value['checks'].get('source_access_revoked') is not True):
         raise ValueError('result does not confirm source revocation')
     result = export_result(value, output, key, settings['probe_only'])
@@ -150,7 +153,7 @@ def exchange(sock, settings, data, output, key_reader, *, network=None, source=N
     return result
 
 
-def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None, jailer=None, source=None):
+def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_reader=None, jailer=None, source=None, progress=None):
     validate_settings(settings)
     from .settings import provider
     selected = provider(settings)
@@ -192,7 +195,7 @@ def run(binary, kernel, initrd, capsule, output, settings, *, timeout=900, key_r
                             sock.settimeout(timeout)
                             confinement = vm.confinement()
                             result = exchange(sock, settings, data, output, key_reader,
-                                              network=network, source=source)
+                                              network=network, source=source, progress=progress)
                             result['vm_checks'] = confinement
                             assign_output(result, output, owner)
                             return result

@@ -85,3 +85,5 @@ Persona pool ratios and exhaustion/accounting behavior are specified in the [usa
 ## Runtime boundaries
 
 Adapters transport these contracts; they do not select criteria, strategy or infrastructure. See [the LLM contract](llm.md), [execution contract](security-contract.md) and [VM architecture](sandbox-architecture.md). Canonical asset changes require authorized comparison evidence under [review-quality comparison policy](proposal.md#review-quality-experiments).
+
+OpenAI receives a converted copy of each schema: object properties are required and closed, and unsupported array `uniqueItems` constraints are omitted. Canonical schemas remain unchanged; Python validators enforce distinct persona assignments, categories and conflict references before accepting model proposals.

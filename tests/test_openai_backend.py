@@ -12,7 +12,8 @@ from unittest.mock import patch
 
 from code_reviewer.backends import openai
 from code_reviewer.backends.read_tools import ReadOnlyTools
-from code_reviewer.sandbox import openai_smoke
+from code_reviewer.config import Config
+from code_reviewer.sandbox import openai_smoke, smoke
 
 
 def response(output, **changes):
@@ -47,6 +48,40 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertEqual(schema, before)
         self.assertFalse(converted['properties']['nested']['additionalProperties'])
         self.assertEqual(converted['properties']['nested']['required'], ['x'])
+
+    def assert_supported_arrays(self, schema):
+        if isinstance(schema, dict):
+            if schema.get('type') == 'array':
+                self.assertNotIn('uniqueItems', schema)
+            for child in schema.values():
+                self.assert_supported_arrays(child)
+        elif isinstance(schema, list):
+            for child in schema:
+                self.assert_supported_arrays(child)
+
+    def test_actual_role_schemas_are_compatible_in_both_authentication_modes(self):
+        root = Path(__file__).resolve().parents[1] / 'src/code_reviewer/flows'
+        for path in root.glob('*/prompts/schemas/*.json'):
+            schema = json.loads(path.read_text())
+            before = copy.deepcopy(schema)
+            for auth in ('api-key', 'subscription'):
+                with self.subTest(flow=path.parents[2].name, role=path.stem, auth=auth):
+                    def transport(payload, key, timeout):
+                        self.assert_supported_arrays(payload['text']['format']['schema'])
+                        return response(final({}))
+                    runner = openai.OpenAIRunner('synthetic-secret', model='synthetic-model',
+                        prices=self.prices, transport=transport, billing_mode=auth)
+                    result = runner.run(**dict(self.kwargs, schema=schema))
+                    self.assertTrue(result.ok, result.error)
+            self.assertEqual(schema, before)
+
+    def test_schema_conversion_preserves_array_bounds_and_property_names(self):
+        schema = {'type': 'object', 'properties': {'uniqueItems': {'type': 'array',
+            'items': {'type': 'string'}, 'uniqueItems': True, 'minItems': 2}}}
+        converted = openai.strict_schema(schema)['properties']['uniqueItems']
+        self.assertNotIn('uniqueItems', converted)
+        self.assertEqual(converted['minItems'], 2)
+        self.assertTrue(schema['properties']['uniqueItems']['uniqueItems'])
 
     def test_response_preserves_reasoning_and_executes_only_allowed_read(self):
         calls = []
@@ -108,6 +143,37 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertEqual(result.num_turns, 2)
         self.assertIn('turn limit', result.error)
 
+    def test_full_tool_allowance_leaves_a_turn_for_the_final_answer(self):
+        for auth in ('api-key', 'subscription'):
+            with self.subTest(auth=auth):
+                calls = []
+                def transport(payload, key, timeout):
+                    calls.append(payload)
+                    if len(calls) > openai.MAX_TOOL_CALLS:
+                        return response(final({'findings': []}))
+                    item = {'type': 'function_call', 'name': 'Read', 'call_id': str(len(calls)),
+                            'arguments': '{"path":"app.py","offset":1,"limit":1}'}
+                    if auth == 'subscription':
+                        item['namespace'] = 'reviewer'
+                    return response([item])
+                runner = openai.OpenAIRunner('synthetic-secret', model='synthetic-model',
+                    prices=self.prices, transport=transport, billing_mode=auth)
+                result = runner.run(**dict(self.kwargs, tools='Read'))
+                self.assertTrue(result.ok, result.error)
+                self.assertEqual(result.num_turns, openai.MAX_TOOL_CALLS + 1)
+                self.assertEqual(result.total_tokens, 110 * result.num_turns)
+
+    def test_tool_limit_still_refuses_additional_reads(self):
+        def transport(*args):
+            return response([{'type': 'function_call', 'name': 'Read', 'call_id': 'synthetic',
+                              'arguments': '{"path":"app.py","offset":1,"limit":1}'}])
+        with patch.object(openai, 'MAX_TOOL_CALLS', 2), \
+                patch.object(ReadOnlyTools, 'execute', return_value='{"text":"synthetic"}') as read:
+            result = self.runner(transport).run(**dict(self.kwargs, tools='Read'))
+        self.assertFalse(result.ok)
+        self.assertIn('tool-call limit', result.error)
+        self.assertEqual(read.call_count, 2)
+
     def test_cancel_before_dispatch_and_after_response(self):
         stop = threading.Event()
         stop.set()
@@ -151,13 +217,36 @@ class OpenAIBackendTests(unittest.TestCase):
                 openai.request_response({'synthetic': 'payload'}, 'synthetic', 5)
 
     def test_both_flows_complete_via_offline_responses_and_real_read_dispatch(self):
-        result = openai_smoke.run_offline()
+        original = openai_smoke.offline_response
+        def transport(payload, key, timeout):
+            self.assert_supported_arrays(payload['text']['format']['schema'])
+            return original(payload, key, timeout)
+        with patch.object(openai_smoke, 'offline_response', transport):
+            result = openai_smoke.run_offline()
         self.assertEqual(result['flows']['single-agent']['completed'], 2)
         self.assertEqual(result['flows']['agent-personas']['completed'], 4)
         framed = openai_smoke.RESULT_PREFIX + json.dumps(result)
         self.assertEqual(openai_smoke.parse_result(framed), result)
         with self.assertRaises(ValueError):
             openai_smoke.parse_result(framed + '\n' + framed)
+
+    def test_subscription_completes_both_flows_with_persona_comparison(self):
+        def transport(payload, key, timeout):
+            self.assertTrue(payload['stream'])
+            self.assert_supported_arrays(payload['text']['format']['schema'])
+            result = openai_smoke.offline_response(payload, key, timeout)
+            for item in result['output']:
+                if item['type'] == 'function_call':
+                    item['namespace'] = 'reviewer'
+            return result
+        runner = openai.OpenAIRunner('synthetic-secret', model='synthetic-model',
+            billing_mode='subscription', transport=transport)
+        with patch.object(smoke, 'Config', side_effect=lambda **kw: Config(**dict(kw, auth_mode='subscription'))):
+            result = smoke.run_smoke(runner, model=runner.model, provider='openai')
+        self.assertEqual(result['flows']['single-agent']['completed'], 2)
+        self.assertEqual(result['flows']['agent-personas']['completed'], 4)
+        self.assertEqual(result['flows']['agent-personas']['findings'], 1)
+        self.assertEqual(result['flows']['agent-personas']['calls'], 8)
 
 
 @unittest.skipUnless(os.name == 'posix', 'descriptor-relative POSIX file tools')

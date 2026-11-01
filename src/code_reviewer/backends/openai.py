@@ -20,8 +20,9 @@ from .openai_stream import read_stream, read_untyped_stream, unexpected_stream, 
 
 MAX_REQUEST = 2 * 1024 * 1024
 MAX_RESPONSE = 4 * 1024 * 1024
-MAX_TURNS = 8
 MAX_TOOL_CALLS = 32
+# One request per permitted tool call, plus the final structured answer.
+MAX_TURNS = MAX_TOOL_CALLS + 1
 MAX_OUTPUT_TOKENS = 2048
 MAX_HTTP_ATTEMPTS = 3
 MAX_RETRY_DELAY = 60.0
@@ -58,10 +59,14 @@ class TokenPrices:
 
 
 def strict_schema(schema):
-    """Require every declared field without mutating the shared prompt schema."""
+    """Adapt the shared schema to OpenAI's subset; semantic checks remain in Python."""
     result = copy.deepcopy(schema)
     def visit(value):
         if isinstance(value, dict):
+            if value.get('type') == 'array':
+                # Unsupported by Structured Outputs. Role validators enforce
+                # distinct assignments/categories/conflict references locally.
+                value.pop('uniqueItems', None)
             if value.get('type') == 'object':
                 value['additionalProperties'] = False
                 value['required'] = list(value.get('properties', {}))

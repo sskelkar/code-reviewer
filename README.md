@@ -119,6 +119,8 @@ Allocation pools scale with the total cap: criteria 10%, Comparator 10%, Verifie
 
 ## Results and configuration
 
+VM reviews show timestamped stage changes and a “still waiting” update every 15 seconds of silence. Interactive terminals also show a small rotating activity indicator; redirected output stays plain. Each returning reviewer gives a glimpse of up to three candidate titles/locations labelled **Verification pending** before grounding or merging. After each consolidated round/pass, up to ten new findings appear as **UNCONFIRMED**. These previews are private, provisional and never posted to GitHub. See [live progress](docs/usage.md#live-progress-and-provisional-findings).
+
 The CLI prints a shareable summary and report path. `summary.md`, `report.md` and `stats.json` contain findings, criteria, agreement, omissions, usage and safe HTTP diagnostics. VM runs export only these three bounded private files; host runs also retain inputs and per-call artifacts. Nothing is posted unless `--post` is supplied.
 
 Use `~/.code-reviewer/review.toml` or `reviewer --config /absolute/path/review.toml …`. Configuration must be outside Git working trees and pass ownership/permission/type/size checks; current-directory `review.toml` is ignored. See [example settings](review.example.toml), [usage](docs/usage.md) and [LLM selection](docs/llm.md).

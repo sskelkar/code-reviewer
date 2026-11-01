@@ -51,7 +51,7 @@ sequenceDiagram
     participant VM as Firecracker: guest
     participant Core as Selected flow + adapter (inside Firecracker)
     CLI->>CLI: run() → configuration_errors() → runtime_inputs()
-    CLI->>CLI: stage_inputs() → build_bundle()
+    CLI->>CLI: LiveProgress context → _run(): stage_inputs() → build_bundle()
     CLI->>Worker: Worker.session() starts dedicated worker
     CLI->>Worker: prepare_worker() stages verified runtime / selects cached image
     CLI->>Worker: execute() launches review_worker.main() over private SSH pipes
@@ -75,6 +75,12 @@ sequenceDiagram
     Worker->>VM: Forward credential through vsock
     VM->>Core: factory.create_runner() → Engine(...).review(ctx, prepared_checkout=snapshot)
     Note over Core: Diagram 3, then diagram 4 for each model call
+    loop Stage changes, unchecked reviewer glimpses and consolidated round previews
+        Core-->>VM: Event sink → GuestProgress projection
+        VM-->>Worker: Bounded advisory progress frame over vsock
+        Worker-->>CLI: Stream validates → private SSH relay → Stream validates
+        CLI->>CLI: LiveProgress renders provisional output and inactivity heartbeats
+    end
     Core-->>VM: RunResult with report, summary and stats
     VM->>VM: _run_job(): collect_artifacts() bounds / validates export
     VM->>VM: run_job(): close Recorder, attach bounded metadata if enabled
@@ -86,6 +92,8 @@ sequenceDiagram
     CLI->>Worker: Worker.session() shuts dedicated worker down
     CLI->>CLI: export_result() → ExportedReview
 ```
+
+`sandbox.progress.Stream.receive()` consumes progress frames while waiting for the next acquisition/readiness/result envelope. `review.converse()` keeps credential requests separate and still requires the exact finished/cleanup envelope. `LiveProgress` owns a joined host heartbeat thread around VM execution; it never reads credentials or reviewed files. `shared.events.reviewer_preview()` projects at most three raw candidate titles/locations as each reviewer returns, before grounding and the persona barrier. `shared.events.round_preview()` selects only new actionable master entries after consolidation. The TTY-only activity line clears before output and on exit; non-interactive output stays plain. Previews are advisory and do not enter prompts or Langfuse.
 
 The guest receives an already pinned `PRContext` from acquisition and calls `Engine.review()` directly: it does **not** call host `Engine.prepare()` again. Code acquisition uses temporary source-network access; model work uses the inference-only policy. The guest adapter shares the same flow implementations as the host adapter. See [sandbox architecture](sandbox-architecture.md) for enforcement details and failure/cleanup boundaries.
 

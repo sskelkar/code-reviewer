@@ -17,7 +17,7 @@ from ...shared import git_ops
 from ...config import DEFAULT_CRITERIA_DIR, PROMPTS_DIR, Config
 from ...shared.diffview import DiffIndex
 from .dry_run import DryRun, reviewer_command
-from ...shared.events import Event, EventSink, null_sink
+from ...shared.events import Event, EventSink, null_sink, round_preview
 from ...shared.findings import FileCache, FindingsPreparer
 from ...shared.llm import ModelCaller
 from .master import MasterList
@@ -102,6 +102,7 @@ class SingleAgentFlow:
                 ctx=ctx, cfg=cfg, run_dir=store.root, master=master, stats=stats, stop_reason=stop_reason, passes=passes,
                 passes_completed=completed, criteria=criteria, report_path=store.report_path, diff_summary=diff_summary,
             )
+            self.emit('report_started')
             store.save_outputs(master.to_dict(), {**stats.to_dict(), "passes": [p.to_dict() for p in passes], "stop_reason": stop_reason})
             store.report_path.write_text(render_report(result) + omission_section(ctx), encoding="utf-8")
             store.summary_path.write_text(render_summary(result, cfg.post_tiers, []), encoding="utf-8")
@@ -158,6 +159,7 @@ class SingleAgentFlow:
                 if reason:
                     break
                 self.emit("pass_started", pass_no=pass_no, max_passes=cfg.max_passes)
+                previous = pass_runner.master.scored_ids()
                 try:
                     record = pass_runner.run(pass_no)
                 except PassFailed as exc:
@@ -172,6 +174,8 @@ class SingleAgentFlow:
                         ungrounded=record.ungrounded, cost=stats.total_cost(),
                         quiet_streak=policy.quiet_streak, quiet_k=cfg.quiet_k,
                     )
+                self.emit('round_preview', **round_preview('single-agent', pass_no, pass_runner.master,
+                    previous, int(passes[-1].ok), int(not passes[-1].ok)))
                 if reason:
                     break
         except KeyboardInterrupt:

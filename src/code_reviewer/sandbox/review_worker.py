@@ -18,21 +18,29 @@ from .wire import RESULT_LIMIT, receive, receive_json, send_json
 
 
 def dispatch(channel, root, image, image_sha, timeout):
+    from .progress import MAX_FRAME
+    def progress(frame):
+        send_json(channel, frame, MAX_FRAME)
+    def stage(name):
+        progress(dict(kind='progress', event='stage', data=dict(stage=name)))
     request = receive_json(channel)
     if set(request) != {'settings', 'source'}:
         raise ValueError('invalid worker review request')
     settings = request['settings']
     cfg = config_from_job(settings, Path('/work'))
     def read_key(prompt):
+        stage('credentials')
         send_json(channel, {'kind': 'credential', 'provider': cfg.provider, 'auth': settings['auth']})
         return receive(channel, 16384).decode('ascii')
     output = root / 'result'
+    stage('booting')
     result = run(Artifact(root/'firecracker', FIRECRACKER_SHA, MAX_KERNEL_BYTES),
                  Artifact(root/'kernel', KERNEL_SHA, MAX_KERNEL_BYTES),
                  Artifact(image/'initrd.cpio.gz', image_sha, MAX_INITRD_BYTES),
                  None, output, settings, timeout=timeout, key_reader=read_key,
-                 jailer=Artifact(root/'jailer', JAILER_SHA, MAX_KERNEL_BYTES), source=request['source'])
+                 jailer=Artifact(root/'jailer', JAILER_SHA, MAX_KERNEL_BYTES), source=request['source'], progress=progress)
     # This executes after run's VM/network context managers have exited.
+    stage('cleanup')
     verify_idle()
     files = collect_artifacts({name: output/name for name in result['files']}, '')
     # Export the envelope already checked by connected, without rereading target objects.

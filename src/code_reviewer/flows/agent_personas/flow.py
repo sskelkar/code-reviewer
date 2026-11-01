@@ -15,7 +15,7 @@ from ...config import ConfigError, REPO_ROOT
 from ...shared import git_ops
 from ...backends.contract import RunnerError
 from ...shared.diffview import DiffIndex
-from ...shared.events import Event, null_sink
+from ...shared.events import Event, null_sink, round_preview, reviewer_preview
 from ...shared.findings import FileCache, FindingsPreparer
 from ...shared.models import PassFailed
 from ...shared.pr_source import load_pr_context
@@ -131,6 +131,7 @@ class AgentPersonasFlow:
             result.warnings.append(str(exc))
         finally:
             try:
+                self.emit('report_started')
                 for group in result.master.conflicts.values():
                     if group['status'] == 'pending':
                         group['error'] = 'verification not completed: %s' % result.stop_reason
@@ -170,6 +171,7 @@ class AgentPersonasFlow:
         try:
             for start in range(0, len(result.passes), len(PERSONAS)):
                 wave = result.passes[start:start + len(PERSONAS)]
+                previous = {item['id'] for item in result.master.scored()}
                 pending = {}
                 for slot in wave:
                     if slot.persona in disabled:
@@ -187,6 +189,9 @@ class AgentPersonasFlow:
                     if isinstance(payload, (KeyboardInterrupt, RunnerError)):
                         raise payload
                     payloads[numbers[future]] = payload
+                    slot = next(s for s in wave if s.pass_no == numbers[future])
+                    self.emit('persona_review_finished', persona=slot.persona, round_no=slot.round_no,
+                              ok=not isinstance(payload, BaseException), **reviewer_preview(payload))
                 for slot in wave:
                     if slot.pass_no not in payloads:
                         continue
@@ -209,6 +214,8 @@ class AgentPersonasFlow:
                         self.emit('pass_failed', pass_no=slot.pass_no, error=str(exc))
                         if failures[slot.persona] >= self.cfg.max_consecutive_failures:
                             disabled[slot.persona] = 'persona failure limit reached'
+                self.emit('round_preview', **round_preview('agent-personas', wave[0].round_no,
+                    result.master, previous, sum(s.ok for s in wave), sum(not s.ok for s in wave)))
                 if len(disabled) == len(PERSONAS):
                     break
         finally:
@@ -256,7 +263,8 @@ class AgentPersonasFlow:
                       rejected=slot.rejected_by_self_check, rule_fixed=slot.rule_repaired + slot.rule_unknown,
                       out_of_scope=slot.out_of_scope)
             if prepared.ok:
-                self.emit('comparator_started', new=len(prepared.ok), candidates=len(result.master.items))
+                self.emit('comparator_started', new=len(prepared.ok), candidates=len(result.master.items),
+                          persona=slot.persona, round_no=slot.round_no)
             proposal = roles.compare(slot, prepared.ok, result.master, directory / 'comparator.raw.json') if prepared.ok else {'decisions': [], 'conflicts': []}
             # Keep partial consolidation out of agreement and subsequent passes if interrupted.
             staged_master = copy.deepcopy(previous_master)

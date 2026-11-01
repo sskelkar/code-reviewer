@@ -108,6 +108,7 @@ class VMReviewTests(unittest.TestCase):
                 self.assertIn('VM review:',out.getvalue())
 
     def test_private_channel_releases_only_selected_credential_after_exact_request(self):
+        from .test_live_progress import frame, preview
         for provider, auth in (('claude','api-key'), ('openai','api-key'), ('openai','subscription')):
             cfg = self.cfg(provider)
             cfg.auth_mode = auth
@@ -115,12 +116,15 @@ class VMReviewTests(unittest.TestCase):
             a,b = socket.socketpair()
             errors = []
             observed = []
+            updates = []
             def remote():
                 try:
                     request = wire.receive_json(b)
                     observed.append(request)
+                    wire.send_json(b, frame(stage='acquiring'))
                     wire.send_json(b,{'kind':'credential','provider':provider,'auth':auth})
                     observed.append(wire.receive(b,16384))
+                    wire.send_json(b, preview())
                     wire.send_json(b,self.envelope(),wire.RESULT_LIMIT)
                 except BaseException as exc:
                     errors.append(exc)
@@ -130,7 +134,7 @@ class VMReviewTests(unittest.TestCase):
             thread.start()
             try:
                 value,key = review.converse(Channel(a.fileno(),a.fileno(),5),cfg,review.source_url(self.ref),
-                                            lambda p,auth:secret)
+                                            lambda p,auth:secret, progress=updates.append)
             finally:
                 a.close()
                 thread.join(5)
@@ -139,15 +143,20 @@ class VMReviewTests(unittest.TestCase):
             self.assertEqual(observed[1],secret.encode())
             self.assertNotIn('fake-selected-key',str(observed[0]))
             self.assertEqual(value['stop_reason'],'completed')
+            self.assertEqual([f['event'] for f in updates], ['stage', 'round_preview'])
 
     def test_worker_bridge_uses_private_frames_and_validated_files(self):
         from code_reviewer.sandbox import review_worker
+        from .test_live_progress import frame, preview
         a,b=socket.socketpair()
         observed=[]
+        updates=[]
         result=self.envelope()['result']
         def run(*args,**kwargs):
+            kwargs['progress'](frame(stage='acquiring'))
             key=kwargs['key_reader']('credential')
             observed.append(key)
+            kwargs['progress'](preview())
             raw=dict(kind='result',stop_reason='completed',checks=self.checks(),files=self.envelope()['files'])
             exported=connected.export_result(raw,args[4],key,False)
             return dict(result, **exported)
@@ -165,14 +174,33 @@ class VMReviewTests(unittest.TestCase):
             thread.start()
             try:
                 value,key=review.converse(Channel(a.fileno(),a.fileno(),5),self.cfg(),review.source_url(self.ref),
-                                          lambda *args:'fake-selected-key')
+                                          lambda *args:'fake-selected-key', progress=updates.append)
             finally:
                 a.close();thread.join(5)
         self.assertFalse(thread.is_alive())
         self.assertFalse(failures,failures)
         self.assertEqual(observed,['fake-selected-key'])
+        self.assertIn('round_preview', [f['event'] for f in updates])
         self.assertEqual(value['stop_reason'],'completed')
         self.assertEqual((self.root/'result').stat().st_mode & 0o777,0o700)
+
+    def test_progress_does_not_authorize_credentials_or_replace_cleanup_confirmation(self):
+        from .test_live_progress import frame, preview
+        request = dict(kind='credential', provider='openai', auth='api-key')
+        for values in ([preview()], [frame(stage='credentials'), dict(kind='failed')],
+                       [dict(kind='progress', event='credential', data={})]):
+            with patch.object(review, 'send_json'), patch.object(review, 'receive_json', side_effect=values):
+                with self.assertRaises(ValueError):
+                    review.converse(None, self.cfg(), review.source_url(self.ref), lambda *a:self.fail('no key'))
+        envelope = self.envelope()
+        envelope['cleanup'] = False
+        updates=[]
+        with patch.object(review, 'send_json'), patch.object(review, 'send'), \
+                patch.object(review, 'receive_json', side_effect=[request, preview(), envelope]):
+            with self.assertRaisesRegex(ValueError, 'cleanup failed'):
+                review.converse(None, self.cfg(), review.source_url(self.ref), lambda *a:'fake-selected-key', updates.append)
+        self.assertEqual(len(updates), 1)
+        self.assertFalse((self.root/'result').exists())
 
     def test_public_metadata_failure_reaches_operator_before_key_access(self):
         from code_reviewer.sandbox.acquire import MetadataUnavailable
@@ -192,7 +220,7 @@ class VMReviewTests(unittest.TestCase):
         class Worker:
             def __init__(self,*args): pass
             @contextlib.contextmanager
-            def session(self):
+            def session(self, **kwargs):
                 events.append('start')
                 yield
                 events.append('stop')
@@ -207,7 +235,7 @@ class VMReviewTests(unittest.TestCase):
         value = dict(kind='result',stop_reason='completed',checks=self.checks(),files=self.envelope()['files'])
         with patch.object(settings.sys,'platform','darwin'), patch.object(review,'Worker',Worker), \
              patch.object(review,'stage_inputs'),patch.object(review,'build_bundle',return_value={'sha256':'a'*64}), \
-             patch.object(review,'prepare_worker',return_value=((),{'images':{'connected':{'path':'/image','sha256':'b'*64}}})), \
+             patch.object(review,'prepare_worker',return_value=((),{'images':{'connected':{'path':'/image','sha256':'b'*64,'reused':False}}})), \
              patch.object(review,'execute',return_value=(value,'fake-key')):
             with self.assertRaises(ReviewRefused):
                 review.run(cfg,self.ref,self.options)

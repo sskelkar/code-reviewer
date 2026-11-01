@@ -25,6 +25,10 @@ One disposable VM contains acquisition, Python orchestration and all model sessi
 
 A compromised guest can corrupt its findings/accounting and expose a credential available to it. Keep credential lifetime/exposure explicit; no custom credential broker or guest-wide syscall allow-list is mandated by this plan. Preserve tested isolation controls rather than describing a VM as absolute protection.
 
+## Advisory progress
+
+VM status and explicitly provisional finding titles/locations travel over the existing private channel. Closed schemas, per-frame/stream limits, terminal sanitization and credential checks constrain this output. Progress is untrusted diagnostic presentation: it cannot authorize credential release, change infrastructure, publish a final result or bypass cleanup checks. Final reports/posting remain gated on the validated completed job. Unlike metadata-only traces, local terminal previews can identify private files and findings; protect console logs accordingly. See [progress limits and semantics](usage.md#live-progress-and-provisional-findings).
+
 ## Optional tracing
 
 Optional Langfuse tracing returns only a closed, bounded metadata schema through the existing VM stats artifact. The host validates one connected guest subtree, rejects span IDs colliding with host observations, and checks timing, model names and fields before exporting to the fixed local endpoint. Local metadata is persisted atomically before export starts. Source, prompts, findings text, raw errors and authentication material are excluded. Langfuse keys remain on the host and are not passed to native model processes. No new guest egress is granted. SDK export runs in a deadline-bounded subprocess without ambient exporters/proxies or redirects; failures do not change review outcomes or cleanup. See [tracing](tracing.md) for storage and limitations.

@@ -73,6 +73,18 @@ class HTTPErrorTests(unittest.TestCase):
             self.assertIsNone(parsed['type'])
             self.assertNotIn('private',json.dumps(parsed))
 
+    def test_schema_error_code_is_retained_without_provider_message_or_parameter(self):
+        reply = Mock(status=400)
+        reply.read.return_value = json.dumps({'error': {'code': 'invalid_json_schema',
+            'type': 'invalid_request_error', 'param': 'synthetic-private-param',
+            'message': 'synthetic-private-source'}}).encode()
+        reply.getheader.return_value = None
+        parsed = http_errors.diagnostics(reply)
+        self.assertEqual(parsed['code'], 'invalid_json_schema')
+        self.assertIn('invalid_json_schema', http_errors.error_message(parsed))
+        self.assertNotIn('private', json.dumps(parsed))
+        self.assertFalse(http_errors.temporary(parsed))
+
     def test_retry_after_parses_seconds_and_http_dates_and_rejects_invalid_values(self):
         self.assertEqual(http_errors.retry_after('1.250'),1.25)
         future=format_datetime(datetime.now(timezone.utc)+timedelta(seconds=30),usegmt=True)

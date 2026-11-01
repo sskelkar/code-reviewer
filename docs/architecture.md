@@ -100,7 +100,8 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `shared/run_store.py`, `stats.py`, `events.py`, `models.py`, `redact.py` | Storage/checkout lifecycle, usage, events, common data and email redaction |
 | `cli.py`, `review_flow.py`, `presentation.py`, `review_options.py` | Active command entry point, execution boundary, output, options and help |
 | `parked/repl.py`, `parked/repl_help.py` | Parked interactive frontend; code and tests retained, no CLI launch route |
-| `progress.py`, `post.py`, `parked/replay.py` | Progress, explicit posting and parked comparator helpers; doctor/preflight share `security.readiness` |
+| `progress.py`, `shared/events.py`, `sandbox/progress.py` | CLI status/TTY activity/heartbeats, raw reviewer glimpses, consolidated previews and bounded private progress projection/validation |
+| `post.py`, `parked/replay.py` | Explicit final-summary posting and inactive comparator helpers; doctor/preflight share `security.readiness` |
 | `backends/factory.py`, `openai.py`, `openai_stream.py`, `chatgpt/`, `read_tools.py` | Runtime adapter selection, protected OAuth consent/refresh, bounded streaming/API transport and read tools |
 | `sandbox/review.py`, `review_worker.py`, `settings.py`, `channel.py` | Normal VM dispatch, allowlisted settings, private SSH pipe protocol and local exported result |
 | `sandbox/connected.py`, `guest.py`, `wire.py` | Linux supervisor, guest review entry point and bounded private bootstrap/result protocol |

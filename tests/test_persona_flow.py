@@ -76,6 +76,34 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
             setattr(self.cfg, key, value)
         return Engine(self.cfg, runner).review(self.ctx)
 
+    def test_reviewer_glimpse_arrives_while_another_reviewer_is_still_running(self):
+        import threading
+        started, release, finished = threading.Event(), threading.Event(), threading.Event()
+        lock, count = threading.Lock(), [0]
+        observed = []
+        def review(kw):
+            with lock:
+                count[0] += 1
+                number = count[0]
+            if number == 4:
+                started.set()
+                if not release.wait(2):
+                    raise AssertionError('reviewer output was withheld until the round barrier')
+                finished.set()
+            return {'findings': [finding()]}
+        def emit(event):
+            if event.type == 'persona_review_finished' and not observed:
+                self.assertTrue(started.wait(2))
+                observed.append(not finished.is_set())
+                self.assertEqual(event.data['raised'], 1)
+                self.assertTrue(event.data['findings'])
+                release.set()
+        self.cfg.persona_passes, self.cfg.persona_parallel = 1, 4
+        result = Engine(self.cfg, PersonaRunner(reviewer=[review]), emit=emit).review(self.ctx)
+        self.assertEqual(observed, [True])
+        self.assertTrue(finished.is_set())
+        self.assertEqual(result.passes_completed, 4)
+
     def test_quiet_reviews_still_run_all_twelve_fresh_slots(self):
         runner = PersonaRunner()
         result = self.run_flow(runner)
@@ -472,6 +500,28 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         ]}
         self.assertEqual(routes(payload, ['P:a']), {})
         self.assertTrue(validate_routes(payload, ['P:a']))
+
+    def test_uniqueness_is_enforced_locally_without_provider_schema_constraints(self):
+        from code_reviewer.flows.agent_personas.criteria import validate_routes
+        assignment = {'assignments': [{'rule_id': 'P:a', 'personas': ['correctness', 'correctness'],
+                                       'reason': 'Synthetic duplicate assignment'}]}
+        self.assertTrue(validate_routes(assignment, ['P:a']))
+        findings = [dict(finding(), local_id='p1-f1', verdict='confirmed'),
+                    dict(finding(), local_id='p1-f2', verdict='confirmed')]
+        payload = {'decisions': [{'local_id': f['local_id'], 'match': 'new', 'same_as': None,
+                                 'categories': ['correctness']} for f in findings],
+                   'conflicts': [{'findings': ['p1-f1', 'p1-f2'], 'reason': 'Synthetic conflict'}]}
+        self.assertEqual(validate_comparison(payload, findings, MasterList()), [])
+        payload['conflicts'][0]['findings'].append('p1-f1')
+        self.assertTrue(validate_comparison(payload, findings, MasterList()))
+        payload['conflicts'] = []
+        payload['decisions'][0]['categories'].append('correctness')
+        self.assertTrue(validate_comparison(payload, findings, MasterList()))
+        annotation = self.annotation()
+        cache = FileCache(self.ctx.git_dir)
+        self.assertEqual(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, cache), [])
+        annotation['claims'][0]['categories'].append('production-safety')
+        self.assertTrue(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, cache))
 
     def test_malformed_model_file_paths_fail_grounding_without_crashing_the_run(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding(file='bad\x00path', rule_id='none')]}])

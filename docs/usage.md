@@ -52,6 +52,28 @@ Options override the settings file for that run only. Everything else (budgets, 
 
 `--post` writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
 
+## Live progress and provisional findings
+
+VM reviews stream bounded status messages through the existing private SSH/vsock channel. The CLI shows input acquisition/admission, criteria discovery/classification, scheduled reviewer calls and their completion, consolidation, conflict verification, report transfer and cleanup. During a stage without messages, a host-side heartbeat prints every 15 seconds. “Still waiting” identifies the last reported stage; it is not proof that a guest is making progress, an estimated completion time or permission to skip a failed check. Persona calls can be queued when `--parallel` is below four. Normal reviews use timestamped progress instead of duplicate `sandbox:` lifecycle lines, including image build/reuse summaries. Interactive terminals show a rotating ASCII activity indicator on one temporary line. It clears before logs/previews and on normal exit, cancellation or failure; it does not change cursor visibility. Redirected output and `TERM=dumb` terminals receive plain logs and heartbeats without animation.
+
+As soon as a reviewer returns, a glimpse shows proposed/self-rejected counts and up to three candidate titles, severities and locations, labelled **Verification pending**. Persona glimpses arrive before the round barrier, so other reviewers can still be running. They are raw model proposals: locations and claims have not been checked against the repository and duplicates have not been merged. Clearly self-rejected entries are withheld, malformed preview fields are omitted and further proposed entries are counted as not shown. The single-agent flow exposes the same glimpse before grounding.
+
+After a consolidated persona round or single-agent pass, a provisional summary shows completed/incomplete slots, new findings and the cumulative distinct total. It lists up to ten newly actionable master findings with ID, severity, title and file/line. Further entries are counted as omitted. Duplicate sightings and self-rejected/ungrounded findings are not presented as new defects. Explicit host reviews use the same per-round/pass preview events.
+
+```text
+[01:10] correctness: review 1 returned — 1 proposed, 0 self-rejected
+[01:10]   Verification pending
+[01:10]   [medium] app.py:42 — Zero batch size prevents loop progress
+[01:25] still waiting — waiting for reviewers: production-safety
+[01:40] checking evidence and consolidating findings
+[01:50] Round 1 provisional: 4 completed, 0 incomplete; candidates: 1 new, 1 total. UNCONFIRMED — not independently verified; see the final report.
+[01:50]   [medium] F-001 app.py:42 — Zero batch size prevents loop progress
+```
+
+Previews are advisory, not final review results. They do not change findings, agreement, severity, stopping rules or posting. Independent verification runs only for flagged conflicts; not every finding receives it. A later failure can prevent a final report even after previews have appeared. Final artifacts still require validated results, VM/network cleanup and confirmed worker shutdown; `--post` uses only the final summary.
+
+Both kinds of preview titles and locations can contain private repository information: treat terminal output as private review material. Raw prompts, replies, source quotes and suggestions are not streamed. Terminal controls are sanitized and exact selected-credential matches are redacted/refused. Progress is bounded to 512 frames / 512 KiB per channel, with 32 KiB per frame; normal guest emission reserves space for worker lifecycle messages and stops at its advisory cap. Invalid/excessive remote frames fail closed. The transport deadline and existing final-result limits remain unchanged. Langfuse receives metadata only and exports after cleanup; it does not receive these textual previews or a live VM trace stream.
+
 ## Reading the report
 
 The review summary printed at the end is also saved as `summary.md` in the run directory. It is meant to be shared and can be lengthy when there are many findings. `report.md` is the long version for digging in: what the agent was given, what it ignored, cost, and the details of every pass. The single-agent report contains:
@@ -190,6 +212,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 - Diffs above `max_diff_lines` are refused rather than reviewed badly. Lockfiles, vendored and generated files do not count.
 - The tool does not run tests, linters or builds. Your pipeline still owns those.
 - `claude -p` in the installed CLI has no turn limit flag, so calls are bounded by the per-call spend cap and timeout instead.
+- OpenAI calls permit at most 32 read-tool calls and 33 response turns, including the final answer. Reaching a tool, token/cost or time limit fails that call; a failed persona slot is reported rather than counted as a completed review.
 
 ## Privacy and safety
 
