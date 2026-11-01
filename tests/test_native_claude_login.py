@@ -35,7 +35,9 @@ with (home/'native-calls.jsonl').open('a') as out:
   credential_names=[key for key in ('ANTHROPIC_API_KEY','ANTHROPIC_AUTH_TOKEN','OPENAI_API_KEY',
    'CLAUDE_CODE_OAUTH_TOKEN','CLAUDE_CODE_USE_BEDROCK','NODE_OPTIONS') if key in os.environ]))+'\\n')
 if kind=='status':
- print((home/'native-status.json').read_text())
+ # Model the native keychain lookup: a missing USER hides the saved login.
+ print((home/'native-status.json').read_text() if os.environ.get('USER') else
+  json.dumps(dict(loggedIn=False,authMethod='none')))
 else:
  sys.stdin.read()
  print(json.dumps(dict(type='result',subtype='success',is_error=False,structured_output=dict(findings=[]),
@@ -57,7 +59,7 @@ class NativeLoginTests(unittest.TestCase):
             criteria_mode='defaults_only', min_passes=1, max_passes=1, persona_passes=1,
             runs_dir=str(self.root/'runs'))
         self.set_status(dict(loggedIn=True,authMethod='claude.ai',email='PRIVATE_IDENTITY_CANARY'))
-        environment=patch.dict(os.environ,dict(HOME=str(self.home),PATH='/usr/bin:/bin',
+        environment=patch.dict(os.environ,dict(HOME=str(self.home),USER='synthetic-native-user',PATH='/usr/bin:/bin',
             CLAUDE_CONFIG_DIR=str(self.home/'work-claude'),ANTHROPIC_API_KEY='unselected-synthetic-api',
             ANTHROPIC_AUTH_TOKEN='unselected-synthetic-gateway',OPENAI_API_KEY='unselected-synthetic-openai',
             CLAUDE_CODE_USE_BEDROCK='1',NODE_OPTIONS='unselected-synthetic-loader'),clear=True)
@@ -91,6 +93,19 @@ class NativeLoginTests(unittest.TestCase):
             self.assertIn('--restricted',row['argv'])
         self.assertNotIn('--max-budget-usd',rows[-1]['argv'])
         self.assertNotIn('PRIVATE_IDENTITY_CANARY',json.dumps(result.raw))
+
+    def test_native_login_preserves_os_user_for_keychain_lookup(self):
+        runner = factory.create_runner(self.cfg)
+        self.assertEqual(runner.env['USER'], 'synthetic-native-user')
+        self.assertNotIn('ANTHROPIC_API_KEY', runner.env)
+        self.assertNotIn('ANTHROPIC_AUTH_TOKEN', runner.env)
+        self.assertNotIn('OPENAI_API_KEY', runner.env)
+        with patch.dict(os.environ, {}, clear=True):
+            # A native status command without USER cannot locate this saved login.
+            from code_reviewer.backends.claude import require_subscription_login
+            with self.assertRaises(ConfigError):
+                require_subscription_login(str(self.binary), {'HOME': str(self.home)}, [])
+        self.assertTrue(all(row['kind'] == 'status' for row in self.calls()))
 
     def test_missing_non_subscription_or_malformed_login_fails_without_model_calls(self):
         cases=[dict(loggedIn=False,authMethod='none'),dict(loggedIn=1,authMethod='claude.ai'),[],

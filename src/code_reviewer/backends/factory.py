@@ -8,7 +8,8 @@ from .claude import ClaudeRunner, build_command, require_subscription_login
 from .contract import Runner
 from .openai import OpenAIRunner, TokenPrices
 
-ENVIRONMENT = ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'SSL_CERT_FILE',
+# Native macOS Claude uses USER when locating its saved login in the keychain.
+ENVIRONMENT = ('PATH', 'HOME', 'USER', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'SSL_CERT_FILE',
                'SSL_CERT_DIR', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'CLAUDE_CONFIG_DIR',
                'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'PYTHONDONTWRITEBYTECODE',
                'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'DISABLE_AUTOUPDATER')
