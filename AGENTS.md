@@ -45,5 +45,5 @@ Support Python **3.9+**. Run the whole suite on the oldest and newest Python ava
 - Do not commit/push unless explicitly requested. Leave changes reviewable in the working tree.
 - Keep relevant code, prompts, README, proposal and explainers consistent. No automatic handover maintenance.
 - Never copy private source, saved-run contents, company/PR identifiers, PII or credentials into this repository. Use synthetic fixtures. Do not inspect previously restricted private material merely to develop the reviewer.
-- Canonical prompt changes require authorized before/after comparison evidence and honest results in proposal section 9. Paid comparator replay is parked; do not present its CLI as working. Infrastructure changes do not justify paid prompt calls.
+- Canonical prompt changes require authorized before/after comparison evidence and honest results under the [review-quality comparison policy](docs/proposal.md#review-quality-experiments). Paid comparator replay is parked; do not present its CLI as working. Infrastructure changes do not justify paid prompt calls.
 - Preserve no-target-IO/credential-free preflight and concrete VM admission checks; host execution requires the explicit operator selection. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.

@@ -1,5 +1,5 @@
 # Copy outside Git working trees to ~/.code-reviewer/review.toml (chmod 600).
-# Project-directory review.toml is not loaded. VM-default and explicit host reviews are wired; ChatGPT-backed VM review is user-confirmed; broader provider/mode qualification remains open.
+# Project-directory review.toml is not loaded. VM is the default; --no-sandbox explicitly selects host execution.
 # Every key is optional; the values below are the defaults.
 provider = "claude"  # runtime adapter: claude or openai
 auth_mode = "api-key" # subscription selects CLAUDE_CODE_OAUTH_TOKEN for Claude; OpenAI subscription uses reviewer auth login

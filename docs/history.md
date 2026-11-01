@@ -1,6 +1,6 @@
-# Prompt experiment evidence
+# Review-quality observations
 
-Archived observations retained for the [prompt-comparison policy](proposal.md#9-review-quality-experiments). Saved criteria and prompts define each experiment; these observations do not establish current review quality.
+Small-sample experiments inform the [review-quality comparison policy](proposal.md#review-quality-experiments). Interpret each result using the prompts and criteria saved with that experiment; the results do not establish current accuracy.
 
 | Experiment | Observation | Limitation |
 |---|---|---|

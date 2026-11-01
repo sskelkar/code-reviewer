@@ -1,14 +1,12 @@
 # Usage reference
 
-For an already prepared Mac/Lima worker, `reviewer sandbox check --artifacts DIR --lima-home DIR --instance NAME` builds the current code, runs both flows with simulated replies and no-key boundary probes, saves a private report and stops the worker. See the [deployment command](sandbox-check.md) for prerequisites. It accepts no key; optional `--pr` tests in-VM public acquisition and does not enable live reviews.
-
 Start with the [README quick start](../README.md#quick-start). The REPL is parked and bare `reviewer` shows help. This guide covers one-shot commands, interpreting results, project criteria, configuration, storage and troubleshooting.
 
 [Commands](#reviewing-a-pull-request) · [Results](#reading-the-report) · [Project criteria](#preparing-your-project-optional-recommended) · [Configuration](#configuration) · [Storage](#where-things-are-stored-and-cleaning-up) · [Troubleshooting](#troubleshooting)
 
 ## Reviewing a pull request
 
-### Current supported preflight
+### Check configuration
 
 ```bash
 reviewer review OWNER/REPO#123 --preflight

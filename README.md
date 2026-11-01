@@ -1,54 +1,79 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="code-reviewer — independent AI reviews grounded in your code" width="1200">
+</p>
+
 # code-reviewer
 
-A one-shot Python CLI for independent, repeated pull-request reviews. Python validates evidence and model replies, merges duplicate findings and produces private reports. Claude and OpenAI adapters use the same review algorithms.
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square)](pyproject.toml)
+[![Claude and OpenAI](https://img.shields.io/badge/Models-Claude%20%2B%20OpenAI-5267C5?style=flat-square)](docs/llm.md)
+[![Firecracker sandbox](https://img.shields.io/badge/Sandbox-Firecracker-E8793E?style=flat-square)](docs/sandbox-architecture.md)
+[![Local Langfuse tracing](https://img.shields.io/badge/Tracing-local%20Langfuse-22A98A?style=flat-square)](docs/tracing.md)
+
+**Review a pull request from multiple perspectives, with evidence you can inspect.**
+
+code-reviewer is a Python CLI that runs independent AI review passes, checks their evidence against the repository and merges duplicate findings into a private report. Choose Claude or OpenAI, use one general reviewer or four specialist personas, and inspect the review timeline in local Langfuse.
+
+[Quick start](#quick-start) · [Review flows](#review-flows) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/proposal.md#checklist)
+
+## What it does
+
+| Capability | How it works |
+|---|---|
+| Independent review passes | Each Reviewer starts fresh, without earlier findings. |
+| Repository-specific criteria | Discover project rules from the pinned base commit and combine them with built-in defaults. |
+| Evidence checks | Validate structured findings, file references and quoted code or changed-line anchors. Semantic correctness still needs human judgment. |
+| VM isolation by default | Run the whole review inside one jailed Firecracker VM, with bounded read tools and restricted network access. |
+| Private reports | Save findings, agreement, omissions and usage locally. Post a PR summary only with `--post`. |
+| Local observability | Trace stages, model calls, available tool activity and token/cache usage without capturing source or prompts. |
 
 ## Quick start
 
-Use Python 3.11+ for Langfuse export (3.13 shown), Git/GitHub CLI for host acquisition, and an editable installation:
+### 1. Install
+
+Use **Python 3.11+ for Langfuse export** (3.13 shown). The core reviewer supports Python 3.9+. Host acquisition also requires Git and the GitHub CLI; ChatGPT sign-in requires `/usr/bin/openssl`.
 
 ```bash
 git clone https://github.com/sskelkar/code-reviewer.git
 cd code-reviewer
 python3.13 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e '.[tracing]'
+python -m pip install -e '.[tracing]'
 reviewer --help
 ```
 
-Keep the checkout: prompts and criteria load from it. Core runtime dependencies are the standard library and `tomli` below Python 3.11. Optional local tracing uses the `tracing` extra on Python 3.11+. ChatGPT sign-in also requires `/usr/bin/openssl` for identity-signature verification.
+Keep the checkout: prompts and criteria load from it. Installation is from source; the core uses the standard library plus `tomli` below Python 3.11. The tracing extra adds the optional host Langfuse SDK.
 
-Provider, authentication, strategy and execution location are independent:
+### 2. Configure execution and model access
 
-```bash
-reviewer review OWNER/REPO#123 --provider claude --auth subscription --preflight
-reviewer review OWNER/REPO#123 --provider claude --auth subscription --passes 1
-reviewer review OWNER/REPO#123 --provider claude --auth subscription --mode agent-personas --passes 1
-reviewer review OWNER/REPO#123 --provider openai --auth api-key --model MODEL_ID --passes 1
-```
+The default VM backend requires a **compatible Apple Silicon Mac**, a dedicated Lima Linux worker with nested virtualization, and pinned Firecracker artifacts. Follow [VM setup](docs/sandbox-check.md#persistent-first-time-setup) and [operator configuration](docs/usage.md#vm-review-configuration) before running a review. VM source acquisition supports public github.com pull requests; private in-VM source authentication is unsupported.
 
-Configure [credentials and adapter support](docs/llm.md) and the [persistent VM installation](docs/sandbox-check.md#persistent-first-time-setup) first. API keys use separate API billing; a ChatGPT subscription does not fund an API key. Claude subscription access uses a dedicated `CLAUDE_CODE_OAUTH_TOKEN` created through the supported enterprise/native flow. API/native tokens belong in the invoking environment, never TOML, arguments or Git. ChatGPT sign-in uses the reviewer's private credential store.
+For trusted direct-host execution, append `--no-sandbox`. Host mode uses your Git/GitHub access and a separate exported checkout, without VM isolation. A failed VM review never falls back to the host.
 
-To use an eligible ChatGPT subscription, sign in for the chosen execution location and select a model from its catalog:
+Choose [Claude or OpenAI and its authentication mode](docs/llm.md). API keys use separate API billing. An eligible ChatGPT subscription uses the reviewer's sign-in flow:
 
 ```bash
 reviewer auth login
 reviewer auth models
-reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
 ```
 
-Append `--no-sandbox` to both authentication and review commands for direct-host execution. Host and VM identities have separate registrations. See [ChatGPT sign-in](docs/llm.md#chatgpt-sign-in).
+Use the model catalog to choose `MODEL_ID`. For host execution, also add `--no-sandbox` to authentication commands. API/native tokens belong in the invoking environment; ChatGPT sign-in uses a private credential store. Credentials never belong in Git or TOML.
 
-**VM is the default.** One jailed Firecracker VM fetches a public github.com PR, pins commits, runs the selected strategy and returns bounded reports after cleanup. A mountless Lima worker supplies Linux/KVM on compatible Apple Silicon Macs. Private in-VM source authentication is unsupported. Failures never fall back to the host.
+### 3. Review a pull request
 
-For trusted direct-host execution:
+These examples use ChatGPT subscription access; [the usage guide](docs/usage.md#reviewing-a-pull-request) covers other providers and authentication modes.
 
 ```bash
-reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --passes 1
-reviewer review OWNER/REPO#123 --no-sandbox --dry-run
+# Check configuration without fetching the PR or reading credentials.
+reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --preflight
+
+# Run one single-agent pass.
+reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
+
+# Run one round across all four personas.
+reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --mode agent-personas --passes 1
 ```
 
-Host mode uses the operator's Git/GitHub access and a separate exported checkout, without VM startup or VM isolation. Preflight and `doctor` inspect configuration only: no target, credentials, artifact or worker activity. Bare `reviewer` prints help.
+Preflight checks configuration only; it does not verify runtime files, deployment or authentication. The CLI prints a summary and the full report path when the review completes. Deployment and adapter qualification are listed in [the roadmap](docs/proposal.md#qualification-evidence).
 
 ## Review flows
 
@@ -115,17 +140,6 @@ When the review finishes, open its printed **`Trace:` link**, or browse [local r
 
 Traces show stage/model/tool timing, retries and token/cache usage without source, prompts or findings text. VM records arrive after cleanup; they do not stream live. Set `tracing = false` in operator configuration to opt out. Export failures do not fail reviews: metadata stays local, while `tracing.exported` is false. See [missing-trace troubleshooting](docs/tracing.md#missing-traces).
 
-## Development and next work
-
-```bash
-python3 -m unittest discover -s tests -t .
-PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
-```
-
-Tests use synthetic Git repositories, fake executables and simulated providers; no real credentials, networking or VM boots. Check actual deployment separately with `reviewer sandbox check`; it performs no inference. Run the oldest and newest available supported Python before finishing changes.
-
-Outstanding qualification and optional extensions are tracked in [the roadmap](docs/proposal.md#checklist).
-
 ## Documentation
 
 | Guide | Purpose |
@@ -139,5 +153,11 @@ Outstanding qualification and optional extensions are tracked in [the roadmap](d
 | [Execution contract](docs/security-contract.md) | Scope and actual guarantees |
 | [Plan](docs/proposal.md) | Checklist and optional later work |
 | [Development](docs/development.md) | Tests and debugging |
-| [Python walkthrough](docs/project-explainer.md) | Reading this code as a Java developer |
+| [Python walkthrough](docs/project-explainer.md) | Method-level call chains and Python implementation walkthrough |
 | [Prompt contracts](docs/prompts.md) | Canonical assets and harness validation |
+
+## Contributing
+
+Bug reports, documentation improvements and focused pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) for development checks, safe reproduction examples and review-contract requirements.
+
+See [the roadmap](docs/proposal.md#checklist) for outstanding qualification and planned work. The supported interface is the one-shot CLI; inactive frontend/replay modules under `parked/` are outside the public command interface.

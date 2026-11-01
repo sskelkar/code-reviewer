@@ -1,6 +1,6 @@
 # Reading the reviewer code
 
-A walkthrough for a Java developer learning this Python project. The runnable product is a one-shot CLI; the parked REPL is not the entry point. Start with the [architecture](architecture.md) for boundaries and [LLM guide](llm.md) for provider/authentication support.
+A source-code walkthrough for contributors. It follows a pull request from the one-shot CLI through execution, model calls, validation and reporting. Start with the [architecture](architecture.md) for boundaries and [LLM guide](llm.md) for provider/authentication support.
 
 ## Complete review call chain
 
@@ -245,7 +245,7 @@ Tests and callers import the module that owns the implementation. `Engine` remai
 
 ### Dataclasses are ordinary data objects
 
-`PRContext`, `CallSpec` and `LLMResult` use `@dataclass`. Like a Java record or a small POJO, their fields describe data. Python generates the constructor and useful representations. `field(default_factory=list)` gives each instance its own list; a shared mutable default would leak state between runs.
+`PRContext`, `CallSpec` and `LLMResult` use `@dataclass`. Their fields describe the data passed between components. Python generates the constructor and useful representations. `field(default_factory=list)` gives each instance its own list; a shared mutable default would leak state between runs.
 
 `dataclasses.replace(cfg, ...)` creates an option-adjusted copy. It prevents one review's CLI overrides from mutating configuration reused elsewhere. Paths use `pathlib.Path` rather than scattered string concatenation.
 
@@ -257,7 +257,7 @@ The interface carries system/user text, schema, model, allowed tools, cwd, estim
 
 ### Functions and callbacks connect the pieces
 
-The harness passes event sinks, validators, transport functions and fixture runners as ordinary function values. This resembles injecting Java functional interfaces. `emit(Event(...))` is progress output, not the review state. The master list, pass records and validators determine the result.
+The harness passes event sinks, validators, transport functions and fixture runners as ordinary function values. `emit(Event(...))` is progress output, not the review state. The master list, pass records and validators determine the result.
 
 Dependency injection keeps tests offline: a fixture can supply scripted provider responses without reading credentials, networking or starting a VM. Boundary tests exercise the real dispatcher with controlled infrastructure fakes rather than bypassing the boundary through a presentation seam.
 

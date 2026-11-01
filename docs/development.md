@@ -1,6 +1,6 @@
 # Development guide
 
-Read [AGENTS.md](../AGENTS.md) for repository rules and [architecture.md](architecture.md) for module ownership. For a Java-to-Python walkthrough, see [project-explainer.md](project-explainer.md).
+Read [AGENTS.md](../AGENTS.md) for repository rules and [architecture.md](architecture.md) for module ownership. For method-level call chains and Python implementation details, see [project-explainer.md](project-explainer.md).
 
 ## Development setup
 
@@ -18,7 +18,7 @@ The REPL/replay are parked under `src/code_reviewer/parked/`: their modules and 
 
 `tests/test_security_boundary.py` exercises the actual public frontdoors, operator configuration and artifact staging. It must not patch away backend admission checks. Presentation tests use `tests.helpers.synthetic_frontend` to supply fake-runner results without claiming release readiness; direct `Engine` tests still exercise both algorithms, their prompt bytes and agreement/accounting behavior. Core flow APIs are shared building blocks for the implemented explicit-host and default-VM execution paths.
 
-Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.toml`, recommend 0600). The loader no longer considers cwd and rejects linked/non-regular/oversized/foreign-writable files. Canonical prompt prose is unchanged by this milestone, so no paid prompt replay is warranted.
+Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.toml`, recommend 0600). The loader ignores current-directory configuration and rejects linked, non-regular, oversized or foreign-writable files.
 
 ## Tests
 
@@ -65,7 +65,6 @@ Things to know when writing tests:
 | Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration) |
 | Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
 | Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ModelCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
-| Resume the parked REPL (only if requested) | In `parked/repl.py`: write the `cmd_*` method, register it in `Session.COMMANDS`, and add it to `COMMAND_GROUPS` (the welcome banner) and `HELP`. A test fails if a command is missing from the banner |
 | Change the stop rules | `flows/single_agent/stop_policy.py` and `tests/test_stop_policy.py` |
 
 ## Code conventions
@@ -102,13 +101,13 @@ The offline tests cannot prove how Claude Code behaves. Use the implemented norm
 
 ## VM deployment checks
 
-The [sandbox runbook](../sandbox/README.md) separates ordinary offline unit tests from explicit Linux/KVM deployment checks. No VM boots, infrastructure changes or paid calls are part of `unittest discover`. The [architecture](sandbox-architecture.md) records the agreed one-VM-per-review boundaries and remaining security gates.
+The [sandbox runbook](../sandbox/README.md) separates ordinary offline unit tests from explicit Linux/KVM deployment checks. No VM boots, infrastructure changes or paid calls are part of `unittest discover`. The [architecture](sandbox-architecture.md) describes the one-VM-per-review boundary and enforced controls.
 
 The [VM architecture](sandbox-architecture.md) separates actual reviews from synthetic automated tests/canaries. Actual review input needs no authored sample project. Keep target code, identifiers, keys and findings out of fixtures. Routine documentation checks do not boot a VM or authorize a live call; deployment evidence is recorded in the [VM checklist](proposal.md#qualification-evidence).
 
 The [connected runbook](sandbox-architecture.md) separates root Linux infrastructure checks from the standard test suite. Tests never install tools, alter host networking, boot a VM, read a real key or call a model. Deployment checks have exercised actual proxy/firewall/VM startup, no-key denial probes, cancellation before key release and short-deadline cleanup.
 
-Use the repository-owned [sandbox check command](sandbox-check.md) for repeatable Mac deployment checks instead of external temporary drivers. Its unit regressions are `tests/test_sandbox_check.py`; ordinary unittest discovery never starts Lima. Real deployment checks build the current source, run offline flow and connected no-key workloads sequentially, and stop the dedicated worker even on handled failure. The tool does not provision a missing worker or download runtime artifacts.
+Use the repository-owned [sandbox check command](sandbox-check.md) for repeatable Mac deployment checks . Its unit regressions are `tests/test_sandbox_check.py`; ordinary unittest discovery never starts Lima. Real deployment checks build the current source, run offline flow and connected no-key workloads sequentially, and stop the dedicated worker even on handled failure. The tool does not provision a missing worker or download runtime artifacts.
 
 `tests/test_vm_confinement.py` covers the shared jailer/systemd command, partial-launch cleanup, interruption, refusal of unconfirmed shutdown, host observation of confinement, snapshot setup and both flows reusing an externally managed checkout without a second export/deletion. Unit tests mock mounts/UID changes/systemd; actual native/host observations belong to the separately authorized no-key VM check. A guest probe result alone is not host containment evidence.
 
