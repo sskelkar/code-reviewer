@@ -20,6 +20,6 @@ Keep API keys, OAuth tokens, private source, personal data and confidential PR i
 
 Keep changes scoped and update the guide that owns the behavior. Link to existing explanations rather than copying them into multiple documents. Documentation should explain the supported product to a new reader, without depending on conversations or development history.
 
-Run the standard-library test suite on the oldest and newest available supported Python, as described in the development guide. Unit tests use synthetic repositories and fake providers; they must not use real credentials, network access, model calls or VM boots. Deployment checks are separate, explicit operations.
+Run the standard-library test suite on Python 3.13, as described in the development guide. Unit tests use synthetic repositories and fake providers; they must not use real credentials, network access, model calls or VM boots. Deployment checks are separate, explicit operations.
 
 Changes to prompts, criteria or schemas require separately authorized before/after review comparisons and honest evidence under [the comparison policy](docs/proposal.md#review-quality-experiments). Passing offline tests alone does not establish review quality.

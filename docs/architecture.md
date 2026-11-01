@@ -92,7 +92,7 @@ Start with [flows/single_agent/flow.py](../src/code_reviewer/flows/single_agent/
 | `flows/single_agent/roles.py`, `prompt_contract.py`, `prompts/` | Reviewer/Comparator contracts, role-specific loading, templates and schemas |
 | `flows/single_agent/master.py`, `models.py` | Merged sightings, comparator validation, agreement and flow result |
 | `flows/single_agent/report.py`, `summary.py`, `dry_run.py` | Detailed report, shareable summary and dry-run presentation |
-| `flows/single_agent/criteria/` | Existing ten defaults, unchanged |
+| `flows/single_agent/criteria/` | Ten single-agent default criteria |
 | `flows/agent_personas/` | Parallel review rounds, ordered serial consolidation, proportional budget pools, rule distribution, own role contracts/master/result/report, per-call budget guard and conflict-only advisory verification |
 | `shared/review_inputs.py`, `criteria.py`, `resolver.py` | PR redaction/diff inputs, criteria parsing/discovery and shared Resolver role |
 | `backends/contract.py`, `backends/claude.py`, `shared/llm.py`, `shared/templates.py` | Neutral result/runner contract, native subprocess adapter, validated model calls and generic templates |
@@ -147,14 +147,18 @@ flowchart TD
 
     subgraph LOOP["Pass loop: SingleAgentFlow._run_passes"]
         direction TB
-        SP1["<b>StopPolicy.before_pass</b><br/>budget, max passes, failures?"]
+        SP1["<b>SingleAgentFlow._run_passes</b><br/>remaining scheduled attempt?<br/>StopPolicy.before_pass checks run budget"]
         PASS["<b>PassRunner.run</b><br/>one pass, see next diagram"]
         SP2["<b>StopPolicy.after_success</b><br/>stop after K quiet passes<br/>(defaults: min 3 completions,<br/>max 6 scheduled attempts)"]
-        SP1 -->|continue| PASS --> SP2 -->|more passes| SP1
+        SP1 -->|continue| PASS
+        PASS -->|success| SP2 -->|not converged| SP1
+        PASS -->|PassFailed| FAILURE["<b>StopPolicy.after_failure</b><br/>consecutive failure limit?"]
+        FAILURE -->|below limit| SP1
     end
 
     SP1 -->|stop| OUT
-    SP2 -->|converged or limit| OUT
+    SP2 -->|converged| OUT
+    FAILURE -->|limit reached| OUT
     OUT["<b>report.render_report + summary.render_summary</b><br/>confidence = share of passes that found each finding<br/>RunStore writes report.md, summary.md, master.json, stats.json"]
     OUT --> RESULT["Return RunResult to host caller or guest exporter<br/>CLI renders direct or privately exported summary"]
 
@@ -169,15 +173,15 @@ flowchart TD
     A["<b>Reviewer</b> (model, fresh session)<br/>tools: Read, Grep, Glob in the checkout only<br/>input: PR text, diff, criteria. Returns findings as JSON<br/>(each marked confirmed or rejected by its own self-check)"]
     B["<b>FindingsPreparer</b> (findings.py)<br/>shape check; normalized quote substrings must match code<br/>(or anchor over a changed hunk); fix rule ID;<br/>bad findings are counted, not scored"]
     C["<b>MasterList.candidates</b><br/>earlier findings that might be the same issue"]
-    D{"Anything to compare<br/>with?"}
+    D{"Comparator.is_trivial()?<br/>No findings, or one finding<br/>and no existing candidates"}
     E["<b>Comparator</b> (model, no tools)<br/>for each new finding: same as F-nnn, or new"]
     F["All findings are new<br/>(no model call)"]
     G["<b>Validate decisions</b> (roles.py)<br/>unknown IDs or missing answers are rejected"]
     H["<b>MasterList.apply</b> (master.py)<br/>merge sightings, record which passes saw each finding;<br/>self-rejected sightings are kept apart and not scored"]
     I["<b>PassRecord</b> + saved pass files<br/>findings.json, mapping.json, raw model replies"]
     A --> B --> C --> D
-    D -->|yes| E --> G --> H
-    D -->|no| F --> H
+    D -->|no| E --> G --> H
+    D -->|yes| F --> H
     H --> I
 
     classDef model fill:#dbeafe,stroke:#2563eb,color:#111827

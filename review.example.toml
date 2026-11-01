@@ -67,7 +67,7 @@ grounding_line_window = 30     # count corrections exceeding this distance; quot
 call_budget_usd = 0.50         # --max-budget-usd for every claude call
 call_timeout_s = 600
 run_budget_usd = 3.00         # personas: 10% criteria, 10% Comparator, 13 1/3% Verifier, remainder split equally
-run_budget_tokens = 2000000    # counts input, output and cache-write tokens; cache reads are not counted
+run_budget_tokens = 2000000    # API: excludes cache reads; subscription: includes cache reads and charges unknown usage conservatively
 
 # Claude Code binary (name on PATH or full path)
 claude_bin = "claude"
