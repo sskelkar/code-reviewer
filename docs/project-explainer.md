@@ -6,6 +6,8 @@ A source-code walkthrough for contributors. It follows a pull request from the o
 
 Start with `reviewer review <PR URL>`. The installed `reviewer` entry point in [pyproject.toml](../pyproject.toml) calls `code_reviewer.cli.main()`. The diagrams below expand that path in layers: dispatch, the VM boundary, the selected review algorithm and each model invocation. Labels name actual functions or methods; arrows show execution order, including returns where marked. They omit standard-library internals and small parsing/formatting helpers.
 
+Orange **LLM call** nodes mark role invocations; orange **I/O** nodes mark the subprocess or network operation that performs them. Other nodes run locally without asking a model. The same call chain runs on the host or inside Firecracker, according to the selected execution location.
+
 ### 1. CLI, execution selection and final output
 
 ```mermaid
@@ -32,7 +34,7 @@ flowchart TD
     PREPARE --> HOSTINPUT["gh_pr_view() → _object_store()<br/>fetch_pr_refs() → merge_base()<br/>commit_messages() → PRContext"]
     HOSTINPUT --> KIND{"--dry-run?"}
     KIND -->|yes| PREVIEW["Engine.dry_run() → selected flow.dry_run()<br/>presentation.render_dry_run(); exit"]
-    KIND -->|no| REVIEW["Engine.review() → selected flow.review()<br/>Expand in diagram 3"]
+    KIND -->|no| REVIEW["Engine.review() → selected flow.review()<br/>LLM role calls in diagram 3<br/>Actual provider I/O in diagram 4"]
     REVIEW --> OUTCOME["Return ReviewOutcome.result"]
     VM --> OUTCOME
     OUTCOME --> TRACE["If tracing: tracing.review.finish()<br/>validate guest metadata, save stats,<br/>bounded host export to localhost:4000"]
@@ -53,6 +55,7 @@ sequenceDiagram
     participant Worker as Lima Linux: review_worker / connected
     participant VM as Firecracker: guest
     participant Core as Selected flow + adapter (inside Firecracker)
+    participant Provider as Remote LLM provider
     CLI->>CLI: run() → configuration_errors() → runtime_inputs()
     CLI->>CLI: LiveProgress context → _run(): stage_inputs() → build_bundle()
     CLI->>Worker: Worker.session() starts dedicated worker
@@ -77,7 +80,11 @@ sequenceDiagram
     CLI->>Worker: Send selected credential through private SSH pipe
     Worker->>VM: Forward credential through vsock
     VM->>Core: factory.create_runner() → Engine(...).review(ctx, prepared_checkout=snapshot)
-    Note over Core: Diagram 3, then diagram 4 for each model call
+    loop Each role invocation and any tool-continuation turns
+        Core->>Provider: LLM request through inference-only network policy
+        Note over Core,Provider: Claude native process or OpenAI HTTPS POST, expanded in diagram 4
+        Provider-->>Core: Model output, tool requests and usage
+    end
     loop Stage changes, unchecked reviewer glimpses and consolidated round previews
         Core-->>VM: Event sink → GuestProgress projection
         VM-->>Worker: Bounded advisory progress frame over vsock
@@ -113,12 +120,14 @@ flowchart TD
     MODE --> PERSONAS["AgentPersonasFlow.review()"]
 
     subgraph Single["single-agent"]
-        SINGLE --> SI["InputBuilder + RunStore preparation<br/>resolve_criteria() → review_input()"]
-        SI --> SP["_run_passes() → StopPolicy.before_pass()"]
+        SINGLE --> SI["InputBuilder + RunStore preparation"]
+        SI --> SRES["LLM call when needed: CriteriaResolver.__call__()<br/>via InputBuilder.resolve_criteria()"]
+        SRES --> SINPUT["InputBuilder.review_input()<br/>Save criteria, inputs and rendered prompts"]
+        SINPUT --> SP["_run_passes() → StopPolicy.before_pass()"]
         SP --> PASS["PassRunner.run()"]
-        PASS --> SR["_review() → Reviewer.review()<br/>ModelCaller.call(): diagram 4"]
+        PASS --> SR["LLM call: _review() → Reviewer.review()<br/>ModelCaller.call() → diagram 4"]
         SR --> SG["FindingsPreparer.prepare()<br/>normalize, scope, self-check, ground evidence"]
-        SG --> SC["_compare() → MasterList.candidates()<br/>Comparator.is_trivial()? all_new() : compare()"]
+        SG --> SC["_compare() → MasterList.candidates()<br/>Trivial: all_new() with no LLM<br/>Otherwise LLM call: Comparator.compare()"]
         SC --> SM["single_agent.MasterList.apply() → PassRunner._record()"]
         SM --> SS{"StopPolicy.after_success() / after_failure()<br/>More passes allowed?"}
         SS -->|yes| SP
@@ -127,50 +136,72 @@ flowchart TD
     end
 
     subgraph Personas["agent-personas"]
-        PERSONAS --> PI["InputBuilder + RunStore preparation<br/>Budget, ParallelRunner, PersonaCaller, Roles<br/>resolve_criteria()"]
-        PI --> ROUTE["Roles.classify() → Catalog.allocate()<br/>_freeze() → freeze() + save_frozen()"]
-        ROUTE --> ROUNDS["_passes(): ThreadPoolExecutor.submit()<br/>Roles.review() once per eligible persona this round"]
+        PERSONAS --> PI["InputBuilder + RunStore preparation<br/>Budget, ParallelRunner, PersonaCaller, Roles"]
+        PI --> PRES["LLM call when needed: CriteriaResolver.__call__()<br/>via InputBuilder.resolve_criteria()"]
+        PRES --> CLASSIFY["LLM call for project rules: Roles.classify()<br/>→ Roles.call('classifier')"]
+        CLASSIFY --> ROUTE["Catalog.allocate()<br/>_freeze() → freeze() + save_frozen()"]
+        ROUTE --> ROUNDS["_passes(): ThreadPoolExecutor.submit()<br/>LLM call: Roles.review() → Roles.call('reviewer')<br/>once per eligible persona this round"]
         ROUNDS --> BARRIER["as_completed(): collect all results<br/>Barrier before consolidation"]
-        BARRIER --> MERGE["_consolidate() in fixed persona order<br/>FindingsPreparer.prepare() → Roles.compare()<br/>agent_personas.MasterList.apply() on staged copy"]
+        BARRIER --> MERGE["_consolidate() in fixed persona order<br/>FindingsPreparer.prepare()<br/>LLM call when usable findings exist:<br/>Roles.compare() → Roles.call('comparator')<br/>agent_personas.MasterList.apply() on staged copy"]
         MERGE --> NEXT{"More configured rounds?"}
         NEXT -->|yes| ROUNDS
         NEXT -->|no| JOIN["finally: cancel signal + executor.shutdown(wait=True)<br/>Join all workers"]
-        JOIN --> VERIFY["_verify() → Roles.verify() for flagged conflicts<br/>Advisory annotation; no vote/severity suppression"]
+        JOIN --> VERIFY["LLM call for flagged conflicts:<br/>_verify() → Roles.verify() → Roles.call('verifier')<br/>Advisory annotation; no vote/severity suppression"]
         VERIFY --> PO["finally: RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()<br/>save_binary_omissions()"]
         PO --> PF["finally: cleanup_checkout() unless explicitly kept<br/>Return RunResult"]
     end
+    classDef llm fill:#fff1d6,stroke:#b76b00,color:#171717
+    class SRES,SR,SC,PRES,CLASSIFY,ROUNDS,MERGE,VERIFY llm
 ```
 
 The persona loop disables a persona after its own budget/failure limit while other personas continue. Global stop/cancellation can terminate the loop early; workers are joined before checkout cleanup. Verification runs after a completed/incomplete loop, only for conflict groups. The single-agent loop can stop on convergence; persona mode uses the configured number of rounds. Exceptions follow each flow's `except`/`finally` blocks rather than every normal-path arrow above.
 
 ### 4. Every model call, tools and validation
 
+The actual adapter call is `self.runner.run(...)` in [ModelCaller._attempts()](../src/code_reviewer/shared/llm.py). In persona mode, that runner is a budget wrapper around a cancellation wrapper around the selected provider adapter. Creating a runner or checking Claude authentication does not itself request a review from an LLM.
+
 ```mermaid
 flowchart TD
-    ROLE["Reviewer.review() / Comparator.compare()<br/>CriteriaResolver.__call__() / persona Roles.call()"] --> SPEC["Build CallSpec + role-specific validator"]
+    ROLE["LLM role call from diagram 3<br/>Reviewer.review(), Comparator.compare(),<br/>CriteriaResolver.__call__() or Roles.call()"] --> SPEC["Build CallSpec + role-specific validator"]
     SPEC --> PC{"Persona flow?"}
     PC -->|yes| PERSONA["PersonaCaller.call()<br/>select pool, validate prompt bounds, log request"]
     PC -->|no| CALL["ModelCaller.call() → _attempts()"]
     PERSONA --> CALL
-    CALL --> GUARD{"Persona flow?"}
-    GUARD -->|yes| BUDGET["BudgetRunner.run()<br/>Budget.check() → reserve()<br/>ParallelRunner.run() forwards cancellation"]
-    GUARD -->|no| RUNNER{"Selected Runner"}
-    BUDGET --> RUNNER
-    RUNNER -->|Claude| CLAUDE["ClaudeRunner.run() → run_cancellable()<br/>build_command() → managed native process<br/>parse_envelope()"]
-    RUNNER -->|OpenAI| OPENAI["OpenAIRunner.run() → run_cancellable()<br/>_request() → request_response()"]
-    OPENAI --> TOOL{"Response contains permitted tool calls?"}
-    TOOL -->|yes| FILE["ReadOnlyTools.execute()<br/>bounded Read / Grep / Glob in checkout"]
-    FILE --> CONTINUE["Append tool output to history<br/>next bounded response turn"]
-    CONTINUE --> OPENAI
-    TOOL -->|no| RESULT["LLMResult"]
-    CLAUDE --> RESULT
+    CALL --> INVOKE["LLM INVOCATION<br/>ModelCaller._attempts(): self.runner.run(...)"]
+    INVOKE --> GUARD{"Persona flow?"}
+    GUARD -->|yes| BUDGET["BudgetRunner.run()<br/>Budget.check() → reserve()"]
+    BUDGET --> PARALLEL["ParallelRunner.run()<br/>forward cancellation to adapter.run_cancellable()"]
+    GUARD -->|no| DIRECT["Selected adapter.run()<br/>→ run_cancellable(None, ...)"]
+    PARALLEL --> RUNNER{"Selected provider adapter"}
+    DIRECT --> RUNNER
+    RUNNER -->|Claude| CLAUDE["ClaudeRunner.run_cancellable()<br/>build_command(), prepare user prompt on stdin"]
+    CLAUDE --> PROCESS["I/O: subprocess.Popen(cmd, stdin=prompt, ...)<br/>launch configured claude -p process<br/>inside the selected host or guest boundary"]
+    PROCESS --> NATIVE["Claude Code owns the model/tool loop<br/>and sends requests to its configured provider<br/>Only permitted Read / Grep / Glob tools"]
+    NATIVE --> CLAUDEOUT["Native JSON result on stdout<br/>ClaudeRunner waits → parse_envelope()"]
+    RUNNER -->|OpenAI| OPENAI["OpenAIRunner.run_cancellable()<br/>build Responses payload and conversation history"]
+    OPENAI --> REQUEST["OpenAIRunner._request()<br/>bounded HTTP retries within call deadline"]
+    REQUEST --> HTTP["I/O: openai.request_response()<br/>http.client.HTTPSConnection.request()<br/>POST https://api.openai.com/v1/responses<br/>VM: HTTPS tunnel through fixed egress proxy"]
+    HTTP --> RESPONSE["getresponse() → JSON or openai_stream.read_stream()<br/>Return provider response to run_cancellable()"]
+    RESPONSE --> TOOL{"Response contains permitted tool calls?"}
+    TOOL -->|yes| FILE["ReadOnlyTools.execute()<br/>bounded local Read / Grep / Glob in checkout"]
+    FILE --> CONTINUE["Append tool results to history<br/>next bounded model turn"]
+    CONTINUE --> REQUEST
+    TOOL -->|no: final output| RESULT["LLMResult"]
+    CLAUDEOUT --> RESULT
     RESULT --> SETTLE["Persona only: Budget.settle()<br/>ModelCaller: Stats.record() + raw log"]
     SETTLE --> VALIDATE["Run supplied output validator"]
-    VALIDATE --> RETRY{"Invalid and retry permitted?"}
-    RETRY -->|yes: at most one shared retry| CALL
+    VALIDATE --> RETRY{"Invalid and shared retry permitted?"}
+    RETRY -->|yes: next attempt with feedback, at most once| INVOKE
     RETRY -->|no: valid| RETURN["Return validated LLMResult to role"]
     RETRY -->|no: failure| FAIL["Raise PassFailed"]
+    classDef llm fill:#fff1d6,stroke:#b76b00,color:#171717
+    class INVOKE,PROCESS,NATIVE,HTTP llm
 ```
+
+The native Claude request implementation lives in Claude Code, outside this Python repository; `subprocess.Popen()` is our handoff to it. OpenAI inference is implemented here: `_request()` calls `request_response()`, which issues the HTTPS request. API-key and ChatGPT subscription access use that same inference path. An injected `_transport` replaces the HTTP operation in offline tests.
+
+One role invocation can involve several provider requests: OpenAI sends another request after executing tool calls, HTTP retries may repeat a request, and `ModelCaller` can retry a rejected role answer once. Claude manages its intermediate model/tool turns internally; Python receives its aggregate native result.
+
 
 Claude's native CLI implements its permitted read tools; `ReadOnlyTools` is the Python implementation used by the OpenAI adapter. Reviewers and the persona Verifier receive file tools; Resolver, Classifier and Comparator do not. Adapter transport/parsing checks precede the role-specific validator. Finding grounding and deterministic master-list updates happen after that validator, in diagram 3. HTTP request retries live inside `OpenAIRunner._request()` and do not add another review pass.
 
