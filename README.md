@@ -4,7 +4,7 @@
 
 # code-reviewer
 
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square)](pyproject.toml)
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square)](pyproject.toml)
 [![Claude and OpenAI](https://img.shields.io/badge/Models-Claude%20%2B%20OpenAI-5267C5?style=flat-square)](docs/llm.md)
 [![Firecracker sandbox](https://img.shields.io/badge/Sandbox-Firecracker-E8793E?style=flat-square)](docs/sandbox-architecture.md)
 [![Local Langfuse tracing](https://img.shields.io/badge/Tracing-local%20Langfuse-22A98A?style=flat-square)](docs/tracing.md)
@@ -30,7 +30,7 @@ code-reviewer is a Python CLI that runs independent AI review passes, checks the
 
 ### 1. Install
 
-Use **Python 3.11+ for Langfuse export** (3.13 shown). The core reviewer supports Python 3.9+. Host acquisition also requires Git and the GitHub CLI; ChatGPT sign-in requires `/usr/bin/openssl`.
+Use **Python 3.13** for the reviewer and optional Langfuse export. Host acquisition also requires Git and the GitHub CLI; ChatGPT sign-in requires `/usr/bin/openssl`.
 
 ```bash
 git clone https://github.com/sskelkar/code-reviewer.git
@@ -41,7 +41,7 @@ python -m pip install -e '.[tracing]'
 reviewer --help
 ```
 
-Keep the checkout: prompts and criteria load from it. Installation is from source; the core uses the standard library plus `tomli` below Python 3.11. The tracing extra adds the optional host Langfuse SDK.
+Keep the checkout: prompts and criteria load from it. Installation is from source; the core uses the standard library. The tracing extra adds the optional host Langfuse SDK.
 
 ### 2. Configure execution and model access
 
@@ -56,7 +56,7 @@ reviewer auth login
 reviewer auth models
 ```
 
-Use the model catalog to choose `MODEL_ID`. For host execution, also add `--no-sandbox` to authentication commands. API/native tokens belong in the invoking environment; ChatGPT sign-in uses a private credential store. Credentials never belong in Git or TOML.
+Use the model catalog to choose `MODEL_ID`. For host execution, also add `--no-sandbox` to authentication commands. API/native tokens belong in the invoking environment; ChatGPT sign-in uses a private credential store. Explicit host Claude subscription reviews can reuse your normal Claude Code SSO login without exporting a token. Credentials never belong in Git or TOML.
 
 ### 3. Review a pull request
 
@@ -74,6 +74,15 @@ reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MOD
 ```
 
 Preflight checks configuration only; it does not verify runtime files, deployment or authentication. The CLI prints a summary and the full report path when the review completes. Deployment and adapter qualification are listed in [the roadmap](docs/proposal.md#qualification-evidence).
+
+For a native Claude subscription/enterprise login on the trusted host:
+
+```bash
+claude  # complete your normal sign-in first
+reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
+```
+
+The reviewer checks Claude's reported subscription login before model calls; Claude Code retains ownership of its credentials. This does not make the Mac's login available inside a VM. See [Claude authentication](docs/llm.md#claude-subscription-sign-in).
 
 ## Review flows
 

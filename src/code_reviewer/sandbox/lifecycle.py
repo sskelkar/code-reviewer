@@ -71,7 +71,7 @@ def exercise(args):
         finally:
             if not vm.mounted:
                 shutil.rmtree(cancel_root)
-        child_args = ['python3', '-m', 'code_reviewer.sandbox.check_worker', '--abandon', '--root', str(args.root),
+        child_args = ['/usr/local/bin/python3.13', '-m', 'code_reviewer.sandbox.check_worker', '--abandon', '--root', str(args.root),
             '--firecracker-sha256', args.firecracker_sha256, '--kernel-sha256', args.kernel_sha256,
             '--jailer-sha256', args.jailer_sha256, '--image-dir', str(args.image_dir), '--initrd-sha256', args.initrd_sha256]
         child = subprocess.Popen(child_args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,

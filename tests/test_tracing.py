@@ -287,7 +287,7 @@ class TracingTests(unittest.TestCase):
 
     def test_exporter_subprocess_receives_only_local_trace_and_selected_keys(self):
         from code_reviewer.tracing.langfuse import export
-        with patch('code_reviewer.tracing.langfuse.sys.version_info', (3, 13)), patch.dict(os.environ,
+        with patch.dict(os.environ,
                 {'LANGFUSE_PUBLIC_KEY': 'pk-synthetic', 'LANGFUSE_SECRET_KEY': 'sk-synthetic',
                  'OTEL_EXPORTER_OTLP_ENDPOINT': 'http://CANARY', 'OPENAI_API_KEY': 'SECRET_CANARY'}), \
              patch('code_reviewer.tracing.langfuse.subprocess.run', return_value=SimpleNamespace(returncode=0)) as run:

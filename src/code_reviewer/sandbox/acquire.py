@@ -260,7 +260,7 @@ def in_guest(url, root):
                GIT_CONFIG_GLOBAL='/dev/null', GIT_ATTR_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0',
                GIT_EXEC_PATH='/usr/lib/git-core', SSL_CERT_FILE='/etc/ssl/certs/ca-certificates.crt')
     with tempfile.TemporaryFile() as out:
-        proc = subprocess.run(['/usr/bin/python3', '-m', 'code_reviewer.sandbox.acquire', str(root)],
+        proc = subprocess.run(['/usr/local/bin/python3.13', '-m', 'code_reviewer.sandbox.acquire', str(root)],
                               input=url.encode(), stdout=out, stderr=subprocess.DEVNULL, timeout=180,
                               env=env, preexec_fn=drop_privileges)
         if proc.returncode or out.tell() > 65536:

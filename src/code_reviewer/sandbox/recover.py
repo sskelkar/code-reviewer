@@ -71,7 +71,7 @@ def run_recovery(home, instance):
             if not 1 <= uid < 2**31:
                 raise ValueError('expected an unprivileged worker operator')
             text = worker.shell('sudo', '-n', 'env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin',
-                                'PYTHONDONTWRITEBYTECODE=1', 'SUDO_UID='+str(uid), 'python3', remote)
+                                'PYTHONDONTWRITEBYTECODE=1', 'SUDO_UID='+str(uid), '/usr/local/bin/python3.13', remote)
             result = json.loads(text)
             if set(result) != {'removed'} or type(result['removed']) is not int or result['removed'] < 0:
                 raise ValueError('invalid recovery result')

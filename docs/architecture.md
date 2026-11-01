@@ -46,7 +46,7 @@ flowchart TD
     RETURN -.-> TRACE["Optional host tracing<br/>validate guest records; persist metadata;<br/>export to local Langfuse :4000"]
 ```
 
-Host/guest dispatch use the same adapter factory and common result/error contract. ChatGPT uses reviewer-owned consent, private refresh storage, streaming and token-only budgets. Current routing is below.
+Host/guest dispatch use the same adapter factory and common result/error contract. Explicit host Claude subscription execution can reuse a native subscription login after `claude.require_subscription_login()` checks its reported method; VM execution still requires a privately supplied token. See [Claude sign-in](llm.md#claude-subscription-sign-in). ChatGPT uses reviewer-owned consent, private refresh storage, streaming and token-only budgets. Current routing is below.
 
 ## Public entry-point boundary
 

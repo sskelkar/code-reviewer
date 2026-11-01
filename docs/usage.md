@@ -230,7 +230,6 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 |---|---|
 | `reviewer: command not found` | The virtual environment is not active: `source .venv/bin/activate` in the code-reviewer directory |
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
-| `config error: ... needs Python 3.11+ or the 'tomli' package` | Run `pip install tomli`, or reinstall with `pip install -e .` |
 | Prompt asset not found | Check the active executable/virtual environment matches this checkout. Prompts live under `src/code_reviewer/flows/<flow>/prompts/`; keep the checkout when using an editable install |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Use a fresh one-shot invocation after updating. A new review fetches the latest branch tips; commits are pinned only within a run |
@@ -254,7 +253,7 @@ Normal VM reviews acquire public GitHub PRs inside the VM, select the configured
 
 ## Host adapter configuration
 
-Use the same provider/authentication settings and factory as the guest. `--no-sandbox` chooses host execution; it does not choose authentication. Set only the selected environment credential, as described in [the LLM support matrix](llm.md#selecting-access). OpenAI API-key access requires explicit model/token rates. Claude subscription selection requires `CLAUDE_CODE_OAUTH_TOKEN` even on the host; cached Console/browser credentials are not inferred as subscription access. ChatGPT subscription access uses `reviewer auth login` for the selected host/VM identity; see [sign-in](llm.md#chatgpt-sign-in).
+Use the same provider/authentication settings and factory as the guest. `--no-sandbox` chooses host execution; it does not choose authentication. Choose the credential source described in [the LLM support matrix](llm.md#selecting-access). OpenAI API-key access requires explicit model/token rates. Claude host subscription mode uses an explicit `CLAUDE_CODE_OAUTH_TOKEN` override when set; otherwise it checks and reuses the native Claude subscription/SSO login. Complete your normal `claude` login first. Cached Console/API-key logins are refused. See [Claude sign-in](llm.md#claude-subscription-sign-in) for selection and isolation details. ChatGPT subscription access uses `reviewer auth login` for the selected host/VM identity; see [sign-in](llm.md#chatgpt-sign-in).
 
 ## VM review configuration
 
@@ -304,7 +303,7 @@ This behavior follows the [provider's rate-limit guidance](https://developers.op
 
 ## Optional local tracing
 
-Tracing is enabled by default; set `tracing = false` in trusted operator configuration to opt out. Metadata is exported to local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.11+ and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. After a review, open the printed `Trace:` link or `tracing.url` in its `stats.json`. See [viewing a review's trace](tracing.md#view-a-reviews-trace), [missing traces](tracing.md#missing-traces) and [setup/cache details](tracing.md); no new review command or guest-network permission is required.
+Tracing is enabled by default; set `tracing = false` in trusted operator configuration to opt out. Metadata is exported to local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.13 and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. After a review, open the printed `Trace:` link or `tracing.url` in its `stats.json`. See [viewing a review's trace](tracing.md#view-a-reviews-trace), [missing traces](tracing.md#missing-traces) and [setup/cache details](tracing.md); no new review command or guest-network permission is required.
 
 
 ## Subscription commands and limits

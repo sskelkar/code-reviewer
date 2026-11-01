@@ -17,8 +17,8 @@ from .capsule import regular
 from .runtime import MAX_INITRD_BYTES, collect
 
 CACHE = Path('/var/lib/code-reviewer/images')
-RUNTIME_INPUTS = ('/bin/busybox', '/usr/bin/python3', '/usr/bin/git', '/usr/lib/aarch64-linux-gnu',
-                  '/usr/lib/python3.12', '/usr/lib/locale', '/usr/lib/ld-linux-aarch64.so.1',
+RUNTIME_INPUTS = ('/bin/busybox', '/usr/local/bin/python3.13', '/usr/bin/git', '/usr/lib/aarch64-linux-gnu',
+                  '/usr/local/lib/python3.13', '/usr/lib/locale', '/usr/lib/ld-linux-aarch64.so.1',
                   '/etc/ssl/certs/ca-certificates.crt', '/usr/lib/git-core/git-remote-http')
 WORKLOADS = {'offline': 'openai-private', 'connected': 'connected'}
 

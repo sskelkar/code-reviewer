@@ -16,8 +16,6 @@ EXPORT_TIMEOUT = 20
 def export(value):
     """No SDK import or credential access until an enabled review has finished."""
     validate(value)
-    if sys.version_info < (3, 11):
-        raise RuntimeError('tracing needs Python 3.11+ and the tracing extra')
     keys = {name: os.environ.get(name, '') for name in ('LANGFUSE_PUBLIC_KEY', 'LANGFUSE_SECRET_KEY')}
     if any(not v or len(v) > 256 or not v.isascii() or any(c.isspace() for c in v) for v in keys.values()):
         raise RuntimeError('set the local Langfuse project keys in the host environment')

@@ -37,6 +37,8 @@ Optional Langfuse tracing returns only a closed, bounded metadata schema through
 
 The operator deliberately selects the host boundary. Acquisition uses the existing host/local-clone path and the same review core. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.
 
+Host Claude subscription authentication may reuse Claude Code’s own cached login after the native CLI reports an active subscription method. The reviewer does not read/copy the credential cache or add a token store. Explicit environment tokens take precedence; API-key/unknown native methods cannot trigger automatic billing fallback. This host-only reuse grants no VM access to the Mac’s keychain or login files. Details are in [Claude authentication](llm.md#claude-subscription-sign-in).
+
 ## Supported limits and later work
 
 The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout`, `--dry-run` and the operator-file `criteria_manifest` override are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.

@@ -201,16 +201,8 @@ class Config:
 
 
 def _read_toml(path: Path) -> Dict[str, Any]:
-    try:
-        import tomllib as toml_lib  # type: ignore[import-not-found]
-    except ModuleNotFoundError:
-        try:
-            import tomli as toml_lib  # type: ignore[import-not-found,no-redef]
-        except ModuleNotFoundError as exc:
-            raise ConfigError(
-                "reading %s needs Python 3.11+ or the 'tomli' package (pip install tomli)" % path
-            ) from exc
-    return toml_lib.loads(_operator_bytes(path).decode("utf-8"))
+    import tomllib
+    return tomllib.loads(_operator_bytes(path).decode("utf-8"))
 
 
 def _operator_bytes(path: Path) -> bytes:

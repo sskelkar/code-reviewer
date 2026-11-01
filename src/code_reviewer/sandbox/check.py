@@ -188,7 +188,7 @@ def prepare_worker(worker, stage, job, bundle_sha, builder_sha, *, native=False,
     extra = ('--claude', job+'/claude', '--claude-sha256', native) if native else ()
     preparation = prepared_images(worker.shell(*root_env,
         'PYTHONPATH='+job+'/bootstrap/root/opt/reviewer/src',
-        'python3', '-m', 'code_reviewer.sandbox.prepare', '--source', job+'/source.tar',
+        '/usr/local/bin/python3.13', '-m', 'code_reviewer.sandbox.prepare', '--source', job+'/source.tar',
         '--source-sha256', bundle_sha, '--builder', job+'/build.sh', '--builder-sha256', builder_sha,
         '--keep-job', job, *extra, timeout=600), bundle_sha, builder_sha)
     images = preparation['images']
@@ -222,7 +222,7 @@ def run_check(artifacts, lima_home, instance, output=None, *, lifecycle=False, s
                 images = preparation['images']
                 print('sandbox: running both flows with simulated OpenAI replies (no network)', file=sys.stderr)
                 arguments = (*root_env, 'PYTHONPATH=' + images['connected']['path'] + '/root/opt/reviewer/src',
-                    'python3', '-m', 'code_reviewer.sandbox.check_worker', '--root', job,
+                    '/usr/local/bin/python3.13', '-m', 'code_reviewer.sandbox.check_worker', '--root', job,
                     '--firecracker-sha256', FIRECRACKER_SHA, '--jailer-sha256', JAILER_SHA, '--kernel-sha256', KERNEL_SHA)
                 offline = boundary_result(worker.shell(*arguments, '--offline', '--image-dir', images['offline']['path'],
                     '--initrd-sha256', images['offline']['sha256'], timeout=240), offline=True)

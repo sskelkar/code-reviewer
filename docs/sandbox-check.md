@@ -4,9 +4,26 @@
 
 ## Prerequisites
 
+The worker and guest use `/usr/local/bin/python3.13`; the guest also exposes `/usr/bin/python3` for native tool scripts. The Lima profile builds a checksum-pinned [CPython 3.13.18 source release](https://www.python.org/downloads/release/python-31318/) into `/usr/local`. Ubuntu's system Python is an OS dependency and is not used to run reviewer code or replaced. Guest images fingerprint the 3.13 executable, standard library and OS libraries, and copy runtime contents without CPython tests, bytecode caches, static build archives or interpreter debug symbols, so changing runtime inputs invalidates their cache.
+
+For an existing stopped worker, install the same runtime before the next review (this provisions tools and compiles Python; no provider credentials are needed):
+
+```bash
+export LIMA_HOME="$HOME/.code-reviewer/lima"
+limactl start reviewer-sandbox
+python3.13 - <<'PYTHON' | limactl shell reviewer-sandbox sudo sh
+from pathlib import Path
+profile = Path('sandbox/lima/reviewer.yaml').read_text()
+script = profile.split('    script: |\n', 1)[1]
+print('\n'.join(line[6:] for line in script.splitlines()))
+PYTHON
+limactl stop reviewer-sandbox
+```
+
+
 Use the editable installation from the [README](../README.md#quick-start). This command currently supports an Apple Silicon Mac with an **already prepared, stopped, dedicated** Lima VZ worker: ARM64 Ubuntu 24.04, nested virtualization, at least 6 GiB RAM, plain mode, no host mounts, forwarded SSH agent/X11/host keys, containerd or proxy-environment propagation. It refuses to take over a running worker. Other Lima instances and Colima are not selected or modified.
 
-The worker needs Python 3.12, Git, static BusyBox, GNU cpio/coreutils, systemd 255 with cgroup v2, iproute2, nftables, Squid 6 with its dedicated `proxy` user and noninteractive root sudo for setup. The system Squid service must not occupy the check proxy port. The command verifies the worker profile and lets missing tools/KVM/policy refuse execution; it does not install packages or relax the host firewall. Initial worker provisioning remains separate; see the [offline runbook](../sandbox/README.md) and [connected prerequisites](sandbox-check.md#prerequisites).
+The worker needs Python 3.13, Git, static BusyBox, GNU cpio/coreutils, systemd 255 with cgroup v2, iproute2, nftables, Squid 6 with its dedicated `proxy` user and noninteractive root sudo for setup. The system Squid service must not occupy the check proxy port. The command verifies the worker profile and lets missing tools/KVM/policy refuse execution; it does not install packages or relax the host firewall. Initial worker provisioning remains separate; see the [offline runbook](../sandbox/README.md) and [connected prerequisites](sandbox-check.md#prerequisites).
 
 Supply an operator-controlled artifact directory containing:
 

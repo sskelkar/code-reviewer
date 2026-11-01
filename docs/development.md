@@ -6,9 +6,11 @@ Read [AGENTS.md](../AGENTS.md) for repository rules and [architecture.md](archit
 
 Use the [README setup](../README.md#quick-start), then run `python -m unittest discover -s tests -t .`.
 
-Core runtime dependencies are limited to `tomli` on Python below 3.11. Optional host tracing uses `langfuse==5.1.0` on Python 3.11+ (`pip install -e '.[tracing]'`); there are no required test dependencies; the tests use the standard `unittest` module. The tests need no network, no model and no GitHub.
+The core runtime uses only the standard library. Optional host tracing uses `langfuse==5.1.0` on Python 3.13 (`pip install -e '.[tracing]'`); there are no required test dependencies; the tests use the standard `unittest` module. The tests need no network, no model and no GitHub.
 
-Supported Python is 3.9 and up. Before sending a change, run the tests on the oldest and newest Python you have (for example `python3.9 -m unittest discover -s tests -t .` and `python3.13 -m unittest discover -s tests -t .`). There is no CI yet.
+Python 3.13 is the application baseline on the host, worker and review VM. Before sending a change, run `python3.13 -m unittest discover -s tests -t .`. There is no CI yet.
+
+`tests/test_native_claude_login.py` uses a fake native executable to check subscription-status gating, environment filtering, both host review flows, error privacy and credential-free preflight/dry-run. It never reads the operator's real Claude login or calls a model.
 
 ## Configuration and execution checks
 
@@ -23,8 +25,8 @@ Operator TOML goes outside Git working trees (normally `~/.code-reviewer/review.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -t .                 # everything
-python3 -m unittest tests.test_stop_policy -v              # one module
+python -m unittest discover -s tests -t .                 # everything
+python -m unittest tests.test_stop_policy -v              # one module
 ```
 
 | Test module | Covers |
@@ -69,7 +71,7 @@ Things to know when writing tests:
 
 ## Code conventions
 
-- Core runtime uses the standard library plus `tomli` below 3.11; the optional host tracing extra requires Python 3.11+. Compatible core Python is 3.9+: start modules with `from __future__ import annotations`, no `match` statements, no `X | Y` unions outside annotations.
+- Core runtime uses the standard library; the optional host tracing extra requires Python 3.13. Use Python 3.13 syntax and standard-library APIs; start modules with `from __future__ import annotations`.
 - LLMs propose, code decides: validate every model output in code and never execute it. All files are written by the harness.
 - Modules do one job; keep functions short and named for what they do. Put new logic in the module that owns the concept and keep each flow's `flow.py` a readable list of steps. `engine.py` only selects and delegates.
 - Keep prompts language-agnostic. Project- or language-specific guidance belongs in criteria, not in prompts.

@@ -30,6 +30,18 @@ provision:
       set -eu
       export DEBIAN_FRONTEND=noninteractive
       apt-get update
-      apt-get install -y --no-install-recommends python3 git busybox-static cpio iproute2 nftables squid ca-certificates
+      apt-get install -y --no-install-recommends python3 git busybox-static cpio iproute2 nftables squid ca-certificates curl xz-utils build-essential libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev libsqlite3-dev libreadline-dev libncurses-dev
       systemctl disable --now squid
       test -c /dev/kvm
+      # Dedicated application interpreter; never replace Ubuntu's /usr/bin/python3.
+      build=$(mktemp -d)
+      trap 'rm -rf "$build"' EXIT
+      cd "$build"
+      curl --fail --location --proto '=https' --tlsv1.2 --output Python.tar.xz https://www.python.org/ftp/python/3.13.18/Python-3.13.18.tar.xz
+      echo 'abb0102e6d4ae027509bcb82327d9dd85515b44a3ba8ad538cfc5e9847029f68  Python.tar.xz' | sha256sum --check -
+      tar -xf Python.tar.xz
+      cd Python-3.13.18
+      ./configure --prefix=/usr/local --with-ensurepip=no
+      make -j4
+      make altinstall
+      /usr/local/bin/python3.13 -c 'import ssl, zlib, tomllib; import sys; assert sys.version_info[:2] == (3, 13)'

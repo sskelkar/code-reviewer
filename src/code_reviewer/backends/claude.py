@@ -13,6 +13,28 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .contract import LLMResult, RunnerError
+from ..config import ConfigError
+
+
+def require_subscription_login(binary, env, isolation_flags):
+    """Ask Claude about its own native login; never read or copy its credential cache."""
+    message = ('Claude subscription login unavailable; run claude to complete your SSO/subscription login, '
+               'then retry with --no-sandbox --provider claude --auth subscription')
+    try:
+        # No reviewed checkout is involved in authentication inspection.
+        with tempfile.TemporaryDirectory(prefix='reviewer-claude-auth-status-') as directory:
+            result = subprocess.run([binary, *isolation_flags, 'auth', 'status', '--json'],
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=15,
+                cwd=directory, env=env)
+        if result.returncode != 0 or len(result.stdout) > 65536:
+            raise ValueError
+        status = json.loads(result.stdout)
+        if (not isinstance(status, dict) or status.get('loggedIn') is not True
+                or status.get('authMethod') != 'claude.ai'):
+            raise ValueError
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, RecursionError):
+        # Native output can contain identity data; it never becomes an error/artifact.
+        raise ConfigError(message + '; no API-key or provider fallback') from None
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:

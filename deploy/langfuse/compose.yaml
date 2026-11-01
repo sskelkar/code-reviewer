@@ -1,5 +1,5 @@
 # Local-only tracing. Based on upstream Langfuse v4.72.0 Docker Compose.
-# Generate private environment first: python3 deploy/langfuse/setup.py
+# Generate private environment first: python3.13 deploy/langfuse/setup.py
 name: reviewer-langfuse
 x-service: &service
   restart: unless-stopped

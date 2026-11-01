@@ -2,7 +2,7 @@
 # Project-directory review.toml is not loaded. VM is the default; --no-sandbox explicitly selects host execution.
 # Every key is optional; the values below are the defaults.
 provider = "claude"  # runtime adapter: claude or openai
-auth_mode = "api-key" # subscription selects CLAUDE_CODE_OAUTH_TOKEN for Claude; OpenAI subscription uses reviewer auth login
+auth_mode = "api-key" # subscription: Claude native host login or env token (VM requires token); OpenAI uses reviewer auth login
 sandbox = true       # default VM request; false or --no-sandbox explicitly selects the host
 
 # OpenAI: set one explicit model ID for all model_* roles. API-key mode requires positive USD/million token rates
@@ -100,6 +100,6 @@ runs_dir = ""
 chatgpt_account = "default"
 call_budget_tokens = 200000
 
-# Local Langfuse (default on): docs/tracing.md. Host SDK needs Python 3.11+ and .[tracing].
+# Local Langfuse (default on): docs/tracing.md. Host SDK needs Python 3.13 and .[tracing].
 # Project keys come only from LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY, never this file.
 tracing = true  # Default; set false to disable local metadata tracing.

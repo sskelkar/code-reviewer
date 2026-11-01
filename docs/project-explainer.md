@@ -24,7 +24,10 @@ flowchart TD
     LOCATION -->|no: explicit host| DRY{"--dry-run?"}
     DRY -->|no| ADAPTER["backends.factory.create_runner()"]
     DRY -->|yes: no credential| ENGINE["Engine.__init__() → flows.create_flow()"]
-    ADAPTER --> ENGINE
+    ADAPTER --> NATIVE{"Claude host subscription<br/>without an exported token?"}
+    NATIVE -->|yes| STATUS["claude.require_subscription_login()<br/>native auth status, configured isolation,<br/>no reviewed checkout or credential copying"]
+    STATUS --> ENGINE
+    NATIVE -->|no| ENGINE
     ENGINE --> PREPARE["Engine.prepare() → selected flow.prepare()<br/>pr_source.load_pr_context()"]
     PREPARE --> HOSTINPUT["gh_pr_view() → _object_store()<br/>fetch_pr_refs() → merge_base()<br/>commit_messages() → PRContext"]
     HOSTINPUT --> KIND{"--dry-run?"}

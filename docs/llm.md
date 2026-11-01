@@ -7,7 +7,7 @@ Provider, authentication and execution location are independent operator choices
 | Provider | Authentication | Implementation |
 |---|---|---|
 | Claude | API key | Claude Code adapter, `ANTHROPIC_API_KEY` |
-| Claude | Subscription / enterprise | Claude Code adapter, explicit `CLAUDE_CODE_OAUTH_TOKEN` |
+| Claude | Subscription / enterprise | Native Claude login on the explicit host path, or `CLAUDE_CODE_OAUTH_TOKEN` for host/VM |
 | OpenAI | API key | Responses adapter, `OPENAI_API_KEY` |
 | OpenAI | ChatGPT subscription | Reviewer-owned OAuth consent, private storage/refresh, streaming Responses |
 
@@ -47,11 +47,27 @@ Set `provider = "claude" | "openai"` and `auth_mode = "api-key" | "subscription"
 | Selection | Credential source |
 |---|---|
 | Claude API key | `ANTHROPIC_API_KEY` |
-| Claude subscription | Dedicated `CLAUDE_CODE_OAUTH_TOKEN` |
+| Claude subscription, host | Explicit `CLAUDE_CODE_OAUTH_TOKEN` if set; otherwise Claude Code’s native subscription/SSO login |
+| Claude subscription, VM | Dedicated `CLAUDE_CODE_OAUTH_TOKEN` via private runtime handoff |
 | OpenAI API key | `OPENAI_API_KEY` |
 | OpenAI subscription | Selected account in `~/.code-reviewer/auth/chatgpt.json` |
 
-For Claude subscription access, run `claude setup-token` while signed into the intended organization. Its [authentication](https://code.claude.com/docs/en/authentication) and [headless](https://code.claude.com/docs/en/headless) documentation define native entitlement/setup. Only the selected native credential is forwarded; API keys cannot override subscription selection. Do not put credentials in TOML, argv, a checkout, cached VM image or chat.
+### Claude subscription sign-in
+
+For explicit **host execution**, complete your usual enterprise/subscription sign-in through Claude Code, then run the reviewer from the same environment:
+
+```bash
+claude
+reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
+```
+
+With no `CLAUDE_CODE_OAUTH_TOKEN` override, the factory runs the configured Claude executable's `auth status --json` with the configured isolation flags, in a temporary directory outside the reviewed checkout. It requires `loggedIn: true` and `authMethod: "claude.ai"` before starting model calls. Signed-out, Console/API-key, third-party and unrecognized methods fail with a sign-in instruction; they do not switch billing modes. This is a native status check, not an account entitlement or model-access test. Preflight and dry-run never perform it.
+
+Claude Code manages the cached login and its refresh. The reviewer adds no Claude credential store, token capture or browser-login wrapper. `HOME` and an operator-selected `CLAUDE_CONFIG_DIR` are preserved so the native CLI can use the intended work account. API keys, gateway/loader switches and unselected credentials are stripped from its environment; the configured read-tool/isolation flags remain in place. A configured `claude_bin` must be an executable, not a shell alias. An explicitly set environment token takes precedence; an empty/invalid override fails instead of falling back to cached login.
+
+For **VM execution**, the Mac's cached login is unavailable. Run `claude setup-token` while signed into the intended organization and provide the generated token as `CLAUDE_CODE_OAUTH_TOKEN` in the invoking environment. The existing private handoff supplies only that selected token to the guest after admission. Guest SSO/browser login and copying host login files/keychains into the VM are unsupported.
+
+Claude's [authentication](https://code.claude.com/docs/en/authentication) and [CLI reference](https://code.claude.com/docs/en/cli-reference) define native sign-in and isolation behavior. Account/organization selection belongs to that native login. Do not put credentials in TOML, argv, a checkout, cached VM image or chat.
 
 ## ChatGPT sign-in
 

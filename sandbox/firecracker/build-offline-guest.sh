@@ -21,7 +21,7 @@ mkdir -m 700 "$output"
 root="$output/root"
 mkdir -p "$root/opt/reviewer"
 # Never invoke tar extraction on an unchecked archive, even in this prototype.
-python3 - "$bundle" "$root/opt/reviewer" <<'PYBUILD'
+/usr/local/bin/python3.13 - "$bundle" "$root/opt/reviewer" <<'PYBUILD'
 import hashlib,json,sys,tarfile
 from pathlib import Path, PurePosixPath
 archive,root=Path(sys.argv[1]),Path(sys.argv[2])
@@ -59,12 +59,21 @@ mkdir -p "$root/usr/bin" "$root/usr/lib" "$root/bin" "$root/dev" "$root/proc" "$
 ln -s usr/lib "$root/lib"
 cp /bin/busybox "$root/bin/busybox"
 ln -s busybox "$root/bin/sh"
-cp /usr/bin/python3 "$root/usr/bin/python3"
+mkdir -p "$root/usr/local/bin" "$root/usr/local/lib"
+cp /usr/local/bin/python3.13 "$root/usr/local/bin/python3.13"
+ln -s ../local/bin/python3.13 "$root/usr/bin/python3"
 cp /usr/bin/git "$root/usr/bin/git"
 # Images derive from installed trusted OS files. The preparer hashes those inputs
 # before/after a build so security updates invalidate cached images.
 cp -a /usr/lib/aarch64-linux-gnu "$root/usr/lib/"
-cp -a /usr/lib/python3.12 "$root/usr/lib/"
+cp -a /usr/local/lib/python3.13 "$root/usr/local/lib/"
+# CPython's source install includes its own test suite and bytecode caches.
+# Neither is needed in the bounded, bytecode-disabled review guest.
+rm -rf "$root/usr/local/lib/python3.13/test"
+find "$root/usr/local/lib/python3.13" -type d -name __pycache__ -prune -exec rm -rf '{}' +
+# Development archives/debug symbols cannot be used by a read-only reviewer.
+find "$root/usr/lib/aarch64-linux-gnu" "$root/usr/local/lib/python3.13" -type f -name '*.a' -delete
+strip "$root/usr/local/bin/python3.13"
 cp -a /usr/lib/locale "$root/usr/lib/"
 cp -a /usr/lib/ld-linux-aarch64.so.1 "$root/usr/lib/"
 workload=smoke
@@ -81,7 +90,7 @@ if [ "$#" -eq 4 ] || [ "$#" -eq 5 ]; then
         native_sha="$5"
     fi
     # This is a trusted operator artifact, never a repository-selected executable.
-    PYTHONPATH="$root/opt/reviewer/src" python3 - "$native_path" "$native_sha" "$root/usr/bin/claude" <<'PYCLAUDE'
+    PYTHONPATH="$root/opt/reviewer/src" /usr/local/bin/python3.13 - "$native_path" "$native_sha" "$root/usr/bin/claude" <<'PYCLAUDE'
 import sys
 from pathlib import Path
 from code_reviewer.sandbox.artifacts import Artifact
@@ -101,7 +110,7 @@ cat > "$root/init" <<'INIT'
 /bin/busybox mkdir -p /tmp/home
 /bin/busybox env -i PATH=/usr/bin:/bin HOME=/tmp/home TMPDIR=/tmp LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PYTHONPATH=/opt/reviewer/src PYTHONDONTWRITEBYTECODE=1 GIT_CONFIG_NOSYSTEM=1 \
-    /usr/bin/python3 -m code_reviewer.sandbox.smoke
+    /usr/local/bin/python3.13 -m code_reviewer.sandbox.smoke
 status=$?
 echo "REVIEWER_SMOKE_GUEST_STATUS=$status"
 /bin/busybox poweroff -f
@@ -136,12 +145,12 @@ trap '/bin/busybox poweroff -f' EXIT
 /bin/busybox env -i PATH=/usr/bin:/bin HOME=/work/home TMPDIR=/work LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PYTHONPATH=/opt/reviewer/src PYTHONDONTWRITEBYTECODE=1 GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null GIT_ATTR_NOSYSTEM=1 SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-    /usr/bin/python3 -m code_reviewer.sandbox.guest
+    /usr/local/bin/python3.13 -m code_reviewer.sandbox.guest
 CONNECTED
 fi
 chmod 755 "$root/init"
-PYTHONPATH="$root/opt/reviewer/src" python3 -m code_reviewer.sandbox.image "$root" "$output/initrd.cpio.gz"
-python3 --version > "$output/runtime-versions.txt"
+PYTHONPATH="$root/opt/reviewer/src" /usr/local/bin/python3.13 -m code_reviewer.sandbox.image "$root" "$output/initrd.cpio.gz"
+/usr/local/bin/python3.13 --version > "$output/runtime-versions.txt"
 git --version >> "$output/runtime-versions.txt"
 uname -srmo >> "$output/runtime-versions.txt"
 sha256sum "$bundle" "$output/initrd.cpio.gz" > "$output/artifacts.sha256"

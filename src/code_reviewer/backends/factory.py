@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from ..config import ConfigError
-from .claude import ClaudeRunner, build_command
+from .claude import ClaudeRunner, build_command, require_subscription_login
 from .contract import Runner
 from .openai import OpenAIRunner, TokenPrices
 
@@ -72,14 +72,20 @@ def create_runner(cfg, *, selected_credential=None, env=None, transport=None, pr
         return OpenAIRunner(secret, model=cfg.model_reviewer, transport=transport, proxy=proxy,
                             billing_mode='subscription', token_source=token_source, token_limit=cfg.call_budget_tokens)
     name = credential_name(cfg.provider, cfg.auth_mode)
-    secret = credential(cfg.provider, cfg.auth_mode) if selected_credential is None else validate_credential(selected_credential, name)
     if cfg.provider == 'claude':
         source = os.environ if env is None else env
         # Never forward ambient keys, gateway switches, NODE_OPTIONS or loader
         # variables. In particular an API key must not override a subscription.
         native_env = {key: source[key] for key in ENVIRONMENT if key in source}
-        native_env[name] = secret
+        native_login = (not cfg.sandbox and cfg.auth_mode == 'subscription'
+                        and selected_credential is None and name not in os.environ)
+        if native_login:
+            require_subscription_login(cfg.claude_bin, native_env, cfg.isolation_flags)
+        else:
+            native_env[name] = (credential(cfg.provider, cfg.auth_mode) if selected_credential is None
+                                else validate_credential(selected_credential, name))
         return ClaudeRunner(cfg.claude_bin, cfg.isolation_flags, env=native_env, billing_mode=cfg.auth_mode)
+    secret = credential(cfg.provider, cfg.auth_mode) if selected_credential is None else validate_credential(selected_credential, name)
     return OpenAIRunner(secret, model=cfg.model_reviewer, prices=prices(cfg), transport=transport, proxy=proxy)
 
 

@@ -20,7 +20,7 @@ Read [architecture](docs/architecture.md) for ownership, [the roadmap](docs/prop
 
 Operator configuration and credentials remain separate from repository criteria. Preflight/doctor are offline configuration reports, not deployment certification: no target, credential, worker or artifact activity. Host dry-run reads no credentials. Real VM jobs enforce worker/artifact/admission/confinement checks before selected-credential handoff. Public in-VM acquisition revokes source access before inference; private in-VM source authentication is unsupported. Clean images contain no target inputs, findings or credentials. A VM cannot revoke copied credentials or enforce hard provider spending caps.
 
-Authentication is explicitly API-key or subscription; never infer or fall back between them. Claude subscription uses `CLAUDE_CODE_OAUTH_TOKEN`, not ambient API keys/cached login. ChatGPT uses reviewer-owned consent/private refresh storage and access-token-only VM handoff. OpenAI requires one explicit model for all roles and, for API-key access, three positive operator token rates; the key comes only from OPENAI_API_KEY.
+Authentication is explicitly API-key or subscription; never infer or fall back between them. Claude VM subscription uses explicit `CLAUDE_CODE_OAUTH_TOKEN`. Explicit host subscription mode prefers that environment token; if absent, check the native CLI reports `loggedIn: true` / `authMethod: claude.ai` and let Claude manage its login. Never infer subscription access from a Console/API-key or unknown native method; do not add a Claude credential store or copy login files. ChatGPT uses reviewer-owned consent/private refresh storage and access-token-only VM handoff. OpenAI requires one explicit model for all roles and, for API-key access, three positive operator token rates; the key comes only from OPENAI_API_KEY.
 
 VM progress is advisory over existing private frames: validate closed schemas and size/count budgets on both hops, never treat progress as admission/credential/cleanup authority. Bounded unchecked titles/locations may appear as reviewers return, followed by provisional consolidated previews; never add them to Langfuse, prompts or automatic posting. Keep terminal text safe and join heartbeat/worker threads on exit.
 
@@ -32,15 +32,14 @@ Tracing defaults on, with trusted `tracing = false` opt-out. Record bounded meta
 python3.13 -m venv .venv && source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e '.[tracing]'
-python3 -m unittest discover -s tests -t .
-PYTHONPATH=src /usr/bin/python3 -m unittest discover -s tests -t .
+python -m unittest discover -s tests -t .
 ```
 
-Support Python **3.9+**. Run the whole suite on the oldest and newest Python available before finishing a change. The core and VM recorder use the standard library plus `tomli` below Python 3.11. The approved optional host tracing extra uses Langfuse 5.1.0 on Python 3.11+; do not add other dependencies. Tests use FakeRunners, fake executables and throwaway repositories: no real models, credentials, networking or VM boots. Real inference requires the user's request. Check deployment separately from unit tests.
+Support Python **3.13**. Run the whole suite on Python 3.13 before finishing a change. The core and VM recorder use the standard library. The approved optional host tracing extra uses Langfuse 5.1.0 on Python 3.13; do not add other dependencies. Tests use FakeRunners, fake executables and throwaway repositories: no real models, credentials, networking or VM boots. Real inference requires the user's request. Check deployment separately from unit tests.
 
 ## Code and working rules
 
-- Every module starts with `from __future__ import annotations`; no `match` statements or runtime `X | Y` types.
+- Every module starts with `from __future__ import annotations`. Use Python 3.13 syntax and standard-library APIs.
 - Keep modules focused. `Engine` selects a flow; `flows/single_agent/flow.py` and `flows/agent_personas/flow.py` own their algorithms. Common mechanics live in `shared/`. Import implementations from their canonical owner. Retained REPL/replay code lives under `parked/`; do not restore forwarding wrappers.
 - Persona Reviewers run concurrently within each round, then consolidate serially in fixed order. Configured passes default to three per persona. Budgets remain independent: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder divided among personas; no borrowing. Verification annotates flagged conflicts without suppressing findings or changing votes/severity. Cancel/join workers before checkout cleanup.
 - Validate model output, count dropped data and report the counts. Operator settings remain separate from repository review criteria.

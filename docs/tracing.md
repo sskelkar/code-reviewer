@@ -9,7 +9,7 @@ Use a running Docker engine with Compose and sufficient memory. Allocate about *
 From the repository root:
 
 ```bash
-python3 deploy/langfuse/setup.py
+python3.13 deploy/langfuse/setup.py
 docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
   -f deploy/langfuse/compose.yaml up -d
 ```
@@ -33,7 +33,7 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
 
 ## Configure tracing for reviews
 
-The core reviewer and VM recorder support Python 3.9+. **Host Langfuse export requires Python 3.11+** and the optional dependency:
+Use Python 3.13 throughout. Host Langfuse export needs the optional dependency:
 
 ```bash
 python3.13 -m venv .venv
@@ -71,7 +71,7 @@ Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, 
 | What you see | Meaning and action |
 |---|---|
 | No `Trace:` link and no `tracing` or `trace` entry in stats | This run did not record tracing, for example because tracing was disabled or it used an older installation. Preflight, dry-run and configuration refusals intentionally skip tracing. Past traces cannot be reconstructed; ensure tracing is enabled for the next review. |
-| `trace` exists but `tracing.exported` is false | Local metadata was saved, but export failed. Check the terminal warning, Python 3.11+ tracing environment, installed extra, exported local project keys and running Langfuse services. Fix setup before the next review; saved traces are not automatically retried. |
+| `trace` exists but `tracing.exported` is false | Local metadata was saved, but export failed. Check the terminal warning, Python 3.13 tracing environment, installed extra, exported local project keys and running Langfuse services. Fix setup before the next review; saved traces are not automatically retried. |
 | `tracing.exported` is true but the list looks empty | Open `tracing.url` directly, sign into the local `reviewer` project and allow ingestion to finish before refreshing. |
 | A failed VM review has only host stages | A VM that cannot return results also cannot return its internal trace records. Available host failure metadata can be saved separately under `trace-<opaque ID>/stats.json` in the runs directory. |
 

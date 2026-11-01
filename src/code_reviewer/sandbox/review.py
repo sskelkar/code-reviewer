@@ -179,7 +179,7 @@ def _run(cfg, ref, key_reader, progress):
                     progress.note('images ' + ', '.join(label + (' reused' if image['reused'] else ' built')
                                                        for label, image in preparation['images'].items()))
                     image = preparation['images']['connected']
-                    arguments = (*env, 'PYTHONPATH='+image['path']+'/root/opt/reviewer/src', 'python3',
+                    arguments = (*env, 'PYTHONPATH='+image['path']+'/root/opt/reviewer/src', '/usr/local/bin/python3.13',
                                  '-m', 'code_reviewer.sandbox.review_worker', '--root', job, '--image', image['path'],
                                  '--image-sha256', image['sha256'], '--timeout', str(cfg.vm_timeout_s))
                     phase = 'VM admission, review or result validation'

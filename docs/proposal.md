@@ -4,7 +4,7 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Checklist
 
-- [ ] Qualify native Claude authentication and Read/Grep/Glob through the VM.
+- [ ] Qualify native Claude host SSO reuse with a real authenticated review, and authentication/Read/Grep/Glob through the VM.
 - [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
 - [ ] Improve finding-level verification qualifications and criterion attribution (see review-report follow-ups below).
