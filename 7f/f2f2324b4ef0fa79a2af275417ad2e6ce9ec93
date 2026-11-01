@@ -1,0 +1,93 @@
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 7
+sandbox/lima/reviewer.yaml
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 33,36-47
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 204-205
+sandbox/firecracker/build-offline-guest.sh
+  s_68cd0db0a8fc3a::t_d7c63875c906a5 70-73
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 24,62-64,69,93,113,148,152-153
+  s_68cd0db0a8fc3a::t_2295e4931ab57c 74-76
+README.md
+  s_68cd0db0a8fc3a::t_8ed195862316df 33
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 7,44
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 59,78-85
+  s_68cd0db0a8fc3a::t_4ca9bdd5f704d4 86
+src/code_reviewer/sandbox/review.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 182
+src/code_reviewer/sandbox/recover.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 74
+AGENTS.md
+  s_68cd0db0a8fc3a::t_8ed195862316df 35
+  s_68cd0db0a8fc3a::t_d5304acc8c1961 42
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 23
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 38
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 49
+src/code_reviewer/backends/claude.py
+  s_68cd0db0a8fc3a::t_b86cd2633b5be2 16-37
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_8ed195862316df 36
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 74
+  s_68cd0db0a8fc3a::t_577282480dbe6c 12
+docs/usage.md
+  s_68cd0db0a8fc3a::t_6504cd5ab04156 256
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 306
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 27-30
+src/code_reviewer/backends/factory.py
+  s_68cd0db0a8fc3a::t_b86cd2633b5be2 7,80-86,88
+pyproject.toml
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 10-11,14
+src/code_reviewer/sandbox/prepare.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 20-21
+src/code_reviewer/sandbox/lifecycle.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 74
+src/code_reviewer/sandbox/check.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 191,225
+review.example.toml
+  s_68cd0db0a8fc3a::t_577282480dbe6c 103
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 5
+docs/llm.md
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 10,50-51,55-70
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 40-41
+tests/test_tracing.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 290
+docs/development.md
+  s_68cd0db0a8fc3a::t_d5304acc8c1961 74
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 9,11
+  s_68cd0db0a8fc3a::t_06800ab0d292d5 13
+  s_68cd0db0a8fc3a::t_577282480dbe6c 28-29
+  s_68cd0db0a8fc3a::t_026ebe390dd664 12
+src/code_reviewer/sandbox/acquire.py
+  s_68cd0db0a8fc3a::t_d3ac0c7282f632 263
+deploy/langfuse/compose.yaml
+  s_68cd0db0a8fc3a::t_577282480dbe6c 2
+docs/sandbox-check.md
+  s_68cd0db0a8fc3a::t_21ec344ab8aba4 8-23,26
+  s_68cd0db0a8fc3a::t_4056cfaad9cc1f 7
+tests/test_native_claude_login.py
+  s_68cd0db0a8fc3a::t_aecbc2c5c60da2 1-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "7ff2f2324b4ef0fa79a2af275417ad2e6ce9ec93",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
