@@ -1,0 +1,48 @@
+src/code_reviewer/review/flow.py
+  s_68cd0db0a8fc3a::t_93df388a3c4310 14,38-39,74-75
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_93df388a3c4310 59
+src/code_reviewer/tracing/langfuse.py
+  s_68cd0db0a8fc3a::t_fb9831345c4edf 106
+tests/test_tracing.py
+  s_68cd0db0a8fc3a::t_ea07f5e8105ef3 356
+  s_68cd0db0a8fc3a::t_fb9831345c4edf 347-355,357-358
+src/code_reviewer/review/models.py
+  s_68cd0db0a8fc3a::t_93df388a3c4310 60
+tests/test_persona_flow.py
+  s_68cd0db0a8fc3a::t_bbbf58fdcb1458 269-279
+src/code_reviewer/review/report.py
+  s_68cd0db0a8fc3a::t_93df388a3c4310 153-154
+  s_68cd0db0a8fc3a::t_b7fe8e9b53f012 107-109
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_593cd6dbb0c6e7 94-95
+tests/test_isolation_and_dry_run.py
+  s_68cd0db0a8fc3a::t_b7fe8e9b53f012 157-168
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_b12d2ad1d8d59b 83-95
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_2724ad85ed1b36 8-9
+docs/usage.md
+  s_68cd0db0a8fc3a::t_799d86590533ba 94-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "01944a4bd42e3d483873676be25f6bb3f6d55312",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
