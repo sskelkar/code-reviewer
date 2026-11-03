@@ -91,6 +91,8 @@ Metadata contains role/persona/pass/model, fingerprints, counts, timings and clo
 
 ### Tokens and prompt caching
 
+Open the run's `tracing.url`, expand a `model.call` for the role/persona and pass you want to inspect, then select its `model.turn` (OpenAI) or `model.aggregate` (Claude) generation. Generation observations carry token usage and available USD cost. A role invocation can contain multiple generations; their sum gives that invocation's usage. Preparation, read tools, validation and cleanup have timings but no separate model token charge.
+
 Generation usage uses provider-reported fresh input, output, cache-read and cache-creation categories where available. Flags distinguish missing cache fields from reported zero. OpenAI cache-write counts, when present, are additional metadata because the existing billing adapter has no separate write-price configuration; they are not added again to input totals. Claude uses its aggregate reported categories. Parent agents may carry usage summaries as metadata, but only generations contribute usage to Langfuse totals.
 
 Compare cache-read tokens/share across roles and passes with observed latency. OpenAI API calls show the existing operator-rate cost estimate. `cache_savings_usd` is calculated only when writes are explicitly reported as zero, avoiding an unsupported net-savings claim when write charges are unknown. Claude's reported aggregate cost is retained without inventing an uncached comparison price. Tracing measures caching; it does not enable a cache policy or change prompts.

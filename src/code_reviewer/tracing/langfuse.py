@@ -103,7 +103,7 @@ def send(value, keys, *, exporter=None):
             observation = wrappers[row['kind']](**args)
             if row['parent'] is None:
                 span.set_attribute('langfuse.trace.name', 'review.run')
-                observation.update(input={k: attrs[k] for k in ('mode', 'provider', 'execution', 'passes') if k in attrs},
+                observation.update(input={k: attrs[k] for k in ('provider', 'execution', 'passes') if k in attrs},
                                    output={k: attrs[k] for k in ('outcome', 'stop_reason') if k in attrs})
                 span.set_attribute('langfuse.trace.metadata.dropped_observations', json.dumps(value['dropped']))
             pending.append((observation, row['end_ns']))

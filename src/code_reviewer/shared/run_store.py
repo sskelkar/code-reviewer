@@ -73,11 +73,6 @@ class RunStore:
             "base_ref": ctx.base_ref, "base_sha": ctx.base_sha, "head_sha": ctx.head_sha, "merge_base": ctx.merge_base,
         })
 
-    def save_prompts(self, system: str, user: str) -> None:
-        """The exact prompts the Reviewer receives. They are identical in every pass."""
-        (self.input_dir / "reviewer.system.md").write_text(system, encoding="utf-8")
-        (self.input_dir / "reviewer.user.md").write_text(user, encoding="utf-8")
-
     def save_inputs(self, review_input: ReviewInput, criteria: CriteriaSet) -> None:
         (self.input_dir / "diff.txt").write_text(review_input.diff_block + "\n", encoding="utf-8")
         (self.input_dir / "criteria_block.md").write_text(review_input.criteria_block + "\n", encoding="utf-8")

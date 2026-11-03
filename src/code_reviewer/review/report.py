@@ -104,7 +104,9 @@ def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
     lines = ['## AI-generated persona review: %s' % result.ctx.label, '', run_line(result),
              'Model: %s. Agreement measures repeated sightings, not correctness. Verification annotates without suppressing findings.' % result.cfg.model_reviewer,
              '', 'Completed passes: ' + ', '.join('%s %d/%d' % (CATEGORY_TITLES[p], result.completed_by_persona[p], result.cfg.persona_passes) for p in CATEGORY_TITLES),
-             '', '%d finding%s shown.' % (len(items), '' if len(items) == 1 else 's')]
+             '', ('**No review completed.** Findings could not be finalized; this does not mean the change is issue-free. '
+                  'Inspect the full report for failures and skipped work.' if result.passes_completed == 0 else
+                  '%d finding%s shown.' % (len(items), '' if len(items) == 1 else 's'))]
     for title, findings in _groups(items):
         lines += ['### %s (%d)' % (title, len(findings))]
         lines.extend(render_finding(result, item) for item in findings)
@@ -148,6 +150,7 @@ def render_dry_run(dry: Any) -> str:
         'Concurrent calls: %d; budget allocation: %s' % (dry.parallel, ', '.join(('%s %d tokens' % (p, v['allocated_tokens'])) if 'allocated_tokens' in v else ('%s $%.2f' % (p, v['allocated_usd'])) for p, v in dry.budget_pools.items())),
         'Model: %s; tools: Read,Grep,Glob in the temporary head checkout.' % dry.model,
         'WHAT THE REVIEWERS ARE GIVEN', dry.ctx.title, dry.ctx.body, dry.ctx.commit_messages,
-        'Email addresses replaced with [email]: %d replaced above.' % dry.redacted_emails if dry.redacted_emails else 'No email addresses replaced; email redaction is OFF or no addresses were present.',
+        ('Email redaction is ON; addresses replaced with [email]: %d replaced above.' % dry.redacted_emails
+         if dry.redact_emails else 'Warning: email redaction is OFF.'),
         'Diff: %s' % dry.diff_summary] + ['%s: %d default rules; prompts saved under input/personas/%s/' % (p, len(r), p)
         for p, r in dry.assignments.items()] + ['Saved in %s' % dry.run_dir])

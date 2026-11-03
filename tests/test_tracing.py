@@ -344,3 +344,15 @@ class TracingTests(unittest.TestCase):
         self.assertFalse(child.attributes.get('langfuse.internal.is_app_root', False))
         usage = json.loads(child.attributes['langfuse.observation.usage_details'])
         self.assertEqual(usage, dict(input=20, output=3, cache_read=10))
+        self.assertEqual(json.loads(child.attributes['langfuse.observation.cost_details']), {'total': 0.0})
+
+    @unittest.skipUnless(importlib.util.find_spec('langfuse'), 'optional tracing SDK not installed')
+    def test_sdk_exports_explicit_api_cost_without_model_price_inference(self):
+        from code_reviewer.tracing.langfuse import send
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+        exporter = InMemorySpanExporter()
+        value = self.record()
+        value['records'][1]['attributes']['cost_usd'] = 0.00125
+        send(value, {'LANGFUSE_PUBLIC_KEY': 'pk-synthetic-cost', 'LANGFUSE_SECRET_KEY': 'sk-synthetic-cost'}, exporter=exporter)
+        generation = next(span for span in exporter.get_finished_spans() if span.name == 'model.turn')
+        self.assertEqual(json.loads(generation.attributes['langfuse.observation.cost_details']), {'total': 0.00125})

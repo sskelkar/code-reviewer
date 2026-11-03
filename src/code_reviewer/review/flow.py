@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from ..config import ConfigError, REPO_ROOT
+from ..config import ConfigError, REVIEW_DIR, PROMPTS_DIR, DEFAULT_CRITERIA_DIR
 from ..shared import git_ops
 from ..backends.contract import RunnerError
 from ..shared.diffview import DiffIndex
@@ -31,15 +31,12 @@ from .models import DryRun, PersonaPass, RunResult
 from .prompt_contract import digest, load_prompts
 from .roles import Roles, freeze, save_frozen
 
-ROOT = REPO_ROOT / 'src/code_reviewer/review'
-
-
 class ReviewFlow:
     def __init__(self, cfg: Any, runner: Any, emit: Any = None, prompts_dir: Any = None, defaults_dir: Any = None):
         cfg.validate()
         self.cfg, self.runner, self.sink = cfg, runner, emit or null_sink
-        self.prompts_dir, self.defaults_dir = prompts_dir or ROOT / 'prompts', defaults_dir or ROOT / 'criteria'
-        self.catalog = Catalog(ROOT, self.defaults_dir)
+        self.prompts_dir, self.defaults_dir = prompts_dir or PROMPTS_DIR, defaults_dir or DEFAULT_CRITERIA_DIR
+        self.catalog = Catalog(REVIEW_DIR, self.defaults_dir)
         try:
             self.prompts = load_prompts(self.prompts_dir)
         except (OSError, ValueError) as exc:
@@ -74,7 +71,8 @@ class ReviewFlow:
         self._freeze(ctx, files, criteria, assigned, Path('<checkout>'), store)
         store.save_inputs(self.inputs.review_input(ctx, files, criteria, Path('<checkout>')), criteria)
         return DryRun(ctx, store.root, assigned, summary, self.cfg.model_reviewer, passes_per_persona=self.cfg.persona_passes,
-                      parallel=self.cfg.persona_parallel, redacted_emails=count, budget_pools=Budget(self.cfg).snapshot())
+                      parallel=self.cfg.persona_parallel, redacted_emails=count,
+                      redact_emails=self.cfg.redact_emails, budget_pools=Budget(self.cfg).snapshot())
 
     def review(self, ctx: Any, keep_checkout: bool = False, prepared_checkout: Any = None) -> RunResult:
         from .report import render_report, render_summary

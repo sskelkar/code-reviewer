@@ -80,16 +80,19 @@ sequenceDiagram
     CLI->>Worker: Send selected credential through private SSH pipe
     Worker->>VM: Forward credential through vsock
     VM->>Core: factory.create_runner() → Engine(...).review(ctx, prepared_checkout=snapshot)
-    loop Each role invocation and any tool-continuation turns
-        Core->>Provider: LLM request through inference-only network policy
-        Note over Core,Provider: Claude native process or OpenAI HTTPS POST, expanded in diagram 4
-        Provider-->>Core: Model output, tool requests and usage
-    end
-    loop Stage changes, unchecked reviewer glimpses and consolidated round previews
-        Core-->>VM: Event sink → GuestProgress projection
-        VM-->>Worker: Bounded advisory progress frame over vsock
-        Worker-->>CLI: Stream validates → private SSH relay → Stream validates
-        CLI->>CLI: LiveProgress renders provisional output and inactivity heartbeats
+    par Model execution
+        loop Each role invocation and any tool-continuation turns
+            Core->>Provider: LLM request through inference-only network policy
+            Note over Core,Provider: Claude native process or OpenAI HTTPS POST, expanded in diagram 4
+            Provider-->>Core: Model output, tool requests and usage
+        end
+    and Progress while the review runs
+        loop Stage changes, reviewer glimpses and consolidated round previews
+            Core-->>VM: Event sink → GuestProgress projection
+            VM-->>Worker: Bounded advisory progress frame over vsock
+            Worker-->>CLI: Stream validates → private SSH relay → Stream validates
+            CLI->>CLI: LiveProgress renders provisional output and inactivity heartbeats
+        end
     end
     Core-->>VM: RunResult with report, summary and stats
     VM->>VM: _run_job(): collect_artifacts() bounds / validates export

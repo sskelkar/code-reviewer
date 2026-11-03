@@ -57,4 +57,5 @@ class DryRun:
     passes_per_persona: int = 3
     parallel: int = 4
     redacted_emails: int = 0
+    redact_emails: bool = True
     budget_pools: Dict[str, Any] = field(default_factory=dict)

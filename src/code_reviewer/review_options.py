@@ -56,7 +56,7 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
         help="print extra progress detail while the review runs")
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="show exactly what the reviewer would be given (PR text, criteria, tools, command) and stop: "
+        help="preview PR text and save default-criteria prompts for all four reviewers, then stop: "
              "no model is called, nothing is posted and no checkout is made")
 
 

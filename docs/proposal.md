@@ -5,7 +5,8 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 ## Checklist
 
 - [x] Group persona findings by correctness, production safety, test quality and code quality, using descriptive titles.
-- [ ] Handle post-call token overruns without discarding otherwise valid completed output; distinguish failed/discarded reviews from zero findings.
+- [x] Distinguish a run with no completed review from a completed review with zero findings.
+- [ ] Handle post-call token overruns without discarding otherwise valid completed output.
 - [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
 - [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.

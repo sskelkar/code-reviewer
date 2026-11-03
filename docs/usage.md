@@ -91,6 +91,8 @@ The report groups findings under **Correctness → Production safety → Test qu
 
 The report shows each finding's agreement per discovering persona, all assigned criteria, all scheduled slots and their statuses (twelve at the default count), and any conflict annotations. Confidence is measured independently per discovering persona, never across different perspectives. Its Verifier annotates flagged conflicts without removing findings or changing votes/severity. See [how the modes differ](../README.md#review-flow).
 
+A run with no completed review says **No review completed**, rather than presenting zero findings as a successful review. Inspect its errors and skipped work in the full report. A completed review with no accepted findings can report zero findings; neither outcome proves the change is issue-free. Post-call token-overrun rejection remains tracked in [the roadmap](proposal.md#checklist).
+
 How to read the report:
 
 - A finding that every pass found has high agreement; repetition alone does not establish correctness. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.

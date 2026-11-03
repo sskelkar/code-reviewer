@@ -154,6 +154,18 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
         export.assert_not_called()
         self.assertTrue(dry.run_dir.name.endswith("_dry-run"))
 
+    def test_dry_run_distinguishes_enabled_redaction_with_no_addresses_from_disabled(self):
+        runner, engine = self.make()
+        dry = engine.dry_run(self.ctx)
+        self.assertEqual(dry.redacted_emails, 0)
+        self.assertTrue(dry.redact_emails)
+        self.assertIn('Email redaction is ON', render_dry_run(dry))
+        self.assertNotIn('redaction is OFF', render_dry_run(dry))
+        _, off = self.make(redact_emails=False)
+        self.assertFalse(off.dry_run(self.ctx).redact_emails)
+        self.assertIn('email redaction is OFF', render_dry_run(off.dry_run(self.ctx)))
+        self.assertEqual(runner.calls, [])
+
     def test_dry_run_prompts_equal_a_real_reviews_prompts(self):
         runner, engine = self.make(criteria_mode="defaults_only")
         dry = engine.dry_run(self.ctx)

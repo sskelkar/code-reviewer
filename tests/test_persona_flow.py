@@ -266,6 +266,17 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(result.master.items, {})
         self.assertEqual(result.passes[0].status, 'failed')
         self.assertTrue(all(s.status == 'skipped' for s in result.passes[1:]))
+        text = render_summary(result, self.cfg.post_tiers, [])
+        self.assertIn('**No review completed.**', text)
+        self.assertNotIn('0 findings shown.', text)
+
+    def test_completed_empty_review_is_distinct_from_a_failed_review(self):
+        result = self.run_flow(PersonaRunner(), persona_passes=1)
+        self.assertEqual(result.stop_reason, 'completed')
+        self.assertEqual(result.passes_completed, 4)
+        text = render_summary(result, self.cfg.post_tiers, [])
+        self.assertIn('0 findings shown.', text)
+        self.assertNotIn('No review completed', text)
 
     def test_failures_have_fixed_slots_and_do_not_supply_confidence_votes(self):
         failed = LLMResult(ok=False, error='scripted failure', raw={})

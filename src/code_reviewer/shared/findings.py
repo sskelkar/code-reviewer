@@ -314,22 +314,3 @@ class FindingsPreparer:
             finding["line"] = corrected
         finding.update(status="ok", reason=why)
         prepared.ok.append(finding)
-
-
-def compact(finding: Dict[str, Any], ident: str, id_key: str, max_description: int = 600) -> Dict[str, Any]:
-    """Compact finding view sent to the Comparator (`id_key` is `local_id` for new findings, `id` for candidates)."""
-    view: Dict[str, Any] = {
-        id_key: ident,
-        "title": finding["title"],
-        "description": finding["description"][:max_description],
-        "file": finding["file"],
-        "line": finding["line"],
-        "kind": finding["kind"],
-        "rule_id": finding["rule_id"],
-        "severity": finding["severity"],
-    }
-    if finding.get("quote"):
-        view["quote"] = finding["quote"][:300]
-    if finding.get("anchor"):
-        view["anchor"] = finding["anchor"]
-    return view
