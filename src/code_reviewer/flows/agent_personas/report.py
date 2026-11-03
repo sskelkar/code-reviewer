@@ -1,4 +1,4 @@
-"""Persona reports show agreement by source, and verification as separate annotations."""
+"""Category-grouped persona findings, agreement by source and conflict annotations."""
 from __future__ import annotations
 
 from ...shared.git_content import omission_notice
@@ -8,8 +8,31 @@ import re
 from typing import Any
 
 from ...shared.findings import SEVERITY_RANK
-from .criteria import PERSONAS
 from .master import agreement
+
+
+# Display order only: scheduling, budgets and finding authority are unchanged.
+CATEGORY_TITLES = {
+    'correctness': 'Correctness',
+    'production-safety': 'Production safety',
+    'test-quality': 'Test quality',
+    'code-quality': 'Code quality',
+}
+
+
+def _groups(items):
+    sections = {key: [] for key in CATEGORY_TITLES}
+    for item in items:
+        primary = next(key for key in CATEGORY_TITLES if key in item['categories'])
+        sections[primary].append(item)
+    for key, findings in sections.items():
+        if findings:
+            findings.sort(key=lambda item: (
+                -SEVERITY_RANK[item['canonical']['severity']],
+                item['canonical']['file'], item['canonical'].get('line') or 0,
+                item['canonical']['title'], item['id'],
+            ))
+            yield CATEGORY_TITLES[key], findings
 
 
 def fence(text: str) -> str:
@@ -21,11 +44,11 @@ def render_finding(result: Any, item: Any) -> str:
     c = item['canonical']
     rates = agreement(item, result.completed_by_persona, result.cfg)
     rule = result.criteria.index().get(c['rule_id'], {})
-    lines = ['### %s [%s] %s' % (item['id'], c['severity'], c['title']),
+    lines = ['#### [%s] %s' % (c['severity'], c['title']),
              '', '`%s:%s`' % (c['file'], c['line']),
-             'Categories: ' + ', '.join(item['categories']),
+             'Categories: ' + ', '.join(CATEGORY_TITLES[key] for key in CATEGORY_TITLES if key in item['categories']),
              'Criterion: %s (%s)' % (rule.get('heading', 'Unspecified'), rule.get('path', 'no cited rule')),
-             'Agreement: ' + ('; '.join('%s: %d/%d (%s)' % (p, a['seen'], a['completed'], a['tier'])
+             'Agreement: ' + ('; '.join('%s: %d/%d (%s)' % (CATEGORY_TITLES[p], a['seen'], a['completed'], a['tier'])
                                        for p, a in rates.items()) or 'self-check rejected only; not scored'),
              '', c['description']]
     if c.get('quote'):
@@ -45,17 +68,27 @@ def run_line(result: Any) -> str:
         'subscription (no API charge)' if result.cfg.auth_mode == 'subscription' else '$%.4f estimated' % result.stats.total_cost())
 
 
-def conflict_text(group: Any, visible: Any) -> str:
+def conflict_text(group: Any, visible: Any, items: Any) -> str:
     if not set(group['findings']) & visible:
         return ''
-    lines = ['### %s: %s (%s)' % (group['id'], ', '.join(group['findings']), group['status']), '', group['reason']]
+    def reference(ident):
+        finding = items[ident]['canonical']
+        return '%s (`%s:%s`)' % (finding['title'], finding['file'], finding['line'])
+
+    def explain(text):
+        return re.sub(r'\bF-\d+\b', lambda match: reference(match[0])
+                      if match[0] in group['findings'] else match[0], text)
+
+    lines = ['### Conflict review (%s)' % group['status'], '', explain(group['reason'])]
+    if set(group['findings']) <= visible:
+        lines += ['', 'Related findings: ' + ', '.join(reference(ident) for ident in group['findings'])]
     if not set(group['findings']) <= visible:
         return lines[0] + '\n\nSome claims are manually omitted or filtered; consult the full report for context.'
     annotation = group['annotation']
     if annotation:
-        lines += ['', 'Verification: %s. %s' % (annotation['outcome'], annotation['explanation'])]
+        lines += ['', 'Verification: %s. %s' % (annotation['outcome'], explain(annotation['explanation']))]
         for claim in annotation['claims']:
-            lines += ['- %s: %s — %s' % (claim['finding_id'], claim['status'], claim['explanation'])]
+            lines += ['- %s: %s — %s' % (reference(claim['finding_id']), claim['status'], explain(claim['explanation']))]
             for evidence in claim['evidence']:
                 lines += ['  Evidence `%s:%d`: %s' % (evidence['file'], evidence['line'], evidence['quote'])]
     elif group['error']:
@@ -67,25 +100,26 @@ def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
     items = [i for i in result.master.scored() if i['id'] not in dropped and any(
         a['tier'] in tiers or a['tier'] == 'Unrated'
         for a in agreement(i, result.completed_by_persona, result.cfg).values())]
-    items.sort(key=lambda i: (-SEVERITY_RANK[i['canonical']['severity']], i['id']))
     visible = {i['id'] for i in items}
     lines = ['## AI-generated persona review: %s' % result.ctx.label, '', run_line(result),
              'Model: %s. Agreement measures repeated sightings, not correctness. Verification annotates without suppressing findings.' % result.cfg.model_reviewer,
-             '', 'Completed passes: ' + ', '.join('%s %d/%d' % (p, result.completed_by_persona[p], result.cfg.persona_passes) for p in PERSONAS),
-             '', '%d findings shown.' % len(items)]
-    lines.extend(render_finding(result, item) for item in items)
-    lines.extend(text for text in (conflict_text(g, visible) for g in result.master.conflicts.values()) if text)
+             '', 'Completed passes: ' + ', '.join('%s %d/%d' % (CATEGORY_TITLES[p], result.completed_by_persona[p], result.cfg.persona_passes) for p in CATEGORY_TITLES),
+             '', '%d finding%s shown.' % (len(items), '' if len(items) == 1 else 's')]
+    for title, findings in _groups(items):
+        lines += ['### %s (%d)' % (title, len(findings))]
+        lines.extend(render_finding(result, item) for item in findings)
+    lines.extend(text for text in (conflict_text(g, visible, result.master.items) for g in result.master.conflicts.values()) if text)
     if result.warnings:
         lines += ['', 'Warnings:'] + ['- ' + w for w in result.warnings]
     if omission_notice(result.ctx):
         lines += [omission_notice(result.ctx)]
-    return '\n\n'.join(lines) + '\n'
+    return '\n\n'.join(line for line in lines if line) + '\n'
 
 
 def render_report(result: Any) -> str:
     lines = [render_summary(result, ('High', 'Medium', 'Low'), []), '## Criteria assigned to each persona']
-    for persona in PERSONAS:
-        lines += ['### ' + persona]
+    for persona in CATEGORY_TITLES:
+        lines += ['### ' + CATEGORY_TITLES[persona]]
         lines += ['- %s (%s: %s)' % (r.heading, r.source, r.path) for r in result.assignments.get(persona, [])]
         if persona not in result.assignments:
             lines += ['Assignment did not complete.']

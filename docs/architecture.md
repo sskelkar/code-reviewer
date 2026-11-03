@@ -201,6 +201,8 @@ What is checked, and by whom, today:
 
 ## Persona implementation
 
+`agent_personas/report.py` owns the display categories and orders them as correctness, production safety, test quality and code quality. Multi-category findings appear once under the first applicable section; all assigned categories remain visible. Rendering does not mutate the master, votes, criterion assignments or scheduling order. Single-agent presentation retains its confidence-based layout.
+
 Start at [agent_personas/flow.py](../src/code_reviewer/flows/agent_personas/flow.py). The [flow guide](../src/code_reviewer/flows/agent_personas/README.md) maps its modules and assets.
 
 Project discovery reuses the base-commit Resolver. A persona-only Classifier distributes all accepted project rules, with deterministic coverage checks and visible fallback. Defaults already have static assignments. The flow freezes four Reviewer prompts, then schedules N rounds, running correctness, code quality, test quality and production safety concurrently within each round (`persona_passes`, default 3; overridden by `--passes N`). There is no quiet-pass stop; incomplete slots remain visible.

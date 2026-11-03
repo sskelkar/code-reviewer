@@ -10,7 +10,7 @@ from code_reviewer.engine import Engine
 from code_reviewer.flows.agent_personas.contracts import validate_annotation, validate_comparison
 from code_reviewer.flows.agent_personas.criteria import PERSONAS
 from code_reviewer.flows.agent_personas.master import MasterList, agreement
-from code_reviewer.flows.agent_personas.report import render_summary
+from code_reviewer.flows.agent_personas.report import CATEGORY_TITLES, render_summary
 from code_reviewer.backends.contract import LLMResult
 from code_reviewer.shared.findings import FileCache
 from .helpers import TempDirTestMixin, finding, make_repo
@@ -144,7 +144,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 rates = agreement(result.master.items['F-001'], result.completed_by_persona, self.cfg)
                 for persona in PERSONAS:
                     self.assertEqual(rates[persona], {'seen': count, 'completed': count, 'tier': 'Unrated' if count == 1 else 'High'})
-                    self.assertIn('%s %d/%d' % (persona, count, count), report)
+                    self.assertIn('%s %d/%d' % (CATEGORY_TITLES[persona], count, count), report)
                 saved = json.loads((result.run_dir / 'config.json').read_text())
                 self.assertEqual(saved['config']['persona_passes'], count)
                 stats = json.loads((result.run_dir / 'stats.json').read_text())
@@ -167,8 +167,8 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(result.passes_completed, 1)
         summary = render_summary(result, ['High'], [])
         self.assertIn('agent-personas: 1/20 completed', summary)
-        self.assertIn('correctness 1/5', summary)
-        self.assertIn('correctness: 1/1 (Unrated)', summary)
+        self.assertIn('Correctness 1/5', summary)
+        self.assertIn('Correctness: 1/1 (Unrated)', summary)
 
     def test_categories_never_transfer_votes_and_filtering_is_per_persona(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}, {'findings': []}, {'findings': []}, {'findings': []}])
@@ -182,12 +182,50 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn('SQL built by concatenation', render_summary(result, ['Low'], []))
         self.assertNotIn('SQL built by concatenation', render_summary(result, ['Low'], ['F-001']))
 
+    def test_report_groups_by_category_with_severity_order_and_no_visible_internal_ids(self):
+        subjects = [
+            ('Code cleanup', 'high', ['code-quality']),
+            ('Test gap', 'high', ['test-quality']),
+            ('Safety issue', 'high', ['production-safety']),
+            ('Minor correctness issue', 'low', ['correctness']),
+            ('Major correctness issue', 'high', ['production-safety', 'correctness']),
+        ]
+        categories = {title: values for title, _, values in subjects}
+        def compare(kw):
+            incoming = block(kw['user_prompt'], 'new_findings')
+            return {'decisions': [{'local_id': item['local_id'], 'match': 'new', 'same_as': None,
+                'categories': categories[item['title']]} for item in incoming], 'conflicts': []}
+        runner = PersonaRunner(reviewer=[{'findings': [finding(title=title, severity=severity, rule_id='none')
+            for title, severity, _ in subjects]}, {'findings': []}], comparator=[compare])
+        result = self.run_flow(runner, persona_passes=1)
+        before = json.dumps(result.master.to_dict(), sort_keys=True)
+        calls = len(runner.calls)
+        text = render_summary(result, self.cfg.post_tiers, [])
+        headings = re.findall(r'^### (.+)$', text, re.M)
+        self.assertEqual(headings, ['Correctness (2)', 'Production safety (1)', 'Test quality (1)', 'Code quality (1)'])
+        titles = re.findall(r'^#### \[\w+\] (.+)$', text, re.M)
+        self.assertEqual(titles, ['Major correctness issue', 'Minor correctness issue',
+                                 'Safety issue', 'Test gap', 'Code cleanup'])
+        self.assertIn('Categories: Correctness, Production safety', text)
+        self.assertNotRegex(text, r'\b[FC]-\d{3}\b')
+        self.assertIn('Criterion:', text)
+        self.assertEqual(text, (result.run_dir / 'summary.md').read_text())
+        report = result.report_path.read_text()
+        self.assertEqual(report[:len(text)], text)
+        self.assertEqual(before, json.dumps(result.master.to_dict(), sort_keys=True))
+        self.assertEqual(calls, len(runner.calls))
+        hidden = [ident for ident, item in result.master.items.items()
+                  if 'correctness' in item['categories']]
+        filtered = render_summary(result, self.cfg.post_tiers, hidden)
+        self.assertNotIn('### Correctness', filtered)
+        self.assertNotIn('correctness issue', filtered)
+
     def test_all_personas_can_independently_discover_the_same_issue(self):
         result = self.run_flow(PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}]))
         item = result.master.items['F-001']
         self.assertEqual(len(result.master.items), 1)
         self.assertEqual({p: a['seen'] for p, a in agreement(item, result.completed_by_persona, self.cfg).items()}, dict.fromkeys(PERSONAS, 3))
-        self.assertIn('production-safety: 3/3 (High)', result.report_path.read_text())
+        self.assertIn('Production safety: 3/3 (High)', result.report_path.read_text())
         self.assertIn('Validate inputs and enforce finite bounds', result.report_path.read_text())
 
     def test_project_rules_are_routed_without_rewriting_and_full_prompts_saved(self):
@@ -330,6 +368,18 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         result.update(changes)
         return result
 
+    def test_conflict_annotations_use_titles_and_do_not_reveal_filtered_findings(self):
+        annotation = self.annotation(explanation='F-001 is supported; F-002 is refuted.')
+        result = self.run_flow(self.conflict_runner(annotation))
+        text = render_summary(result, self.cfg.post_tiers, [])
+        self.assertIn('SQL built by concatenation (`app.py:', text)
+        self.assertIn('Opposing claim (`app.py:', text)
+        self.assertIn('refuted', text)
+        self.assertNotRegex(text, r'\b[FC]-\d{3}\b')
+        filtered = render_summary(result, self.cfg.post_tiers, ['F-002'])
+        self.assertNotIn('Opposing claim', filtered)
+        self.assertIn('Some claims are manually omitted or filtered', filtered)
+
     def test_conflict_verification_annotates_without_hiding_or_changing_votes(self):
         runner = self.conflict_runner(self.annotation())
         result = self.run_flow(runner, model_verifier='sonnet')
@@ -397,7 +447,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
     def test_one_successful_completion_remains_unrated_under_filters(self):
         result = self.run_flow(PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}], cost=0.01), run_budget_tokens=75)
         self.assertEqual(result.passes_completed, 1)
-        self.assertIn('correctness: 1/1 (Unrated)', render_summary(result, ['High'], []))
+        self.assertIn('Correctness: 1/1 (Unrated)', render_summary(result, ['High'], []))
 
     def test_budget_exhaustion_after_reviews_leaves_conflict_pending(self):
         runner = self.conflict_runner(self.annotation())
@@ -454,7 +504,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         with patch.object(Engine, 'prepare', return_value=self.ctx), contextlib.redirect_stdout(io.StringIO()):
             session.dispatch('review ' + self.ctx.label + ' --mode agent-personas')
         session.dispatch('show F-001')
-        self.assertIn('correctness: 3/3', '\n'.join(lines))
+        self.assertIn('Correctness: 3/3', '\n'.join(lines))
         self.assertIn('SQL built by concatenation', format_comment(session.result, ['High'], []))
         session.dispatch('mark F-001 real')
         session.dispatch('drop F-001')

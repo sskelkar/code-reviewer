@@ -88,7 +88,9 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
 | Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified, and for rule citations that were repaired or unknown |
 
-The persona report instead shows each finding's agreement per discovering persona, all assigned criteria, all scheduled slots and their statuses (twelve at the default count), and any conflict annotations. It has no combined confidence tier. Its Verifier annotates flagged conflicts without removing findings or changing votes/severity. See [how the modes differ](../README.md#review-flows).
+The persona report groups findings under **Correctness → Production safety → Test quality → Code quality**, omitting empty sections. Within each section, findings appear by severity, then file/line/title for stable ordering. A finding assigned to several categories appears once under the first applicable section, with every category still listed. Descriptive titles replace internal IDs in finding headings; conflict annotations refer to titles and locations. Internal IDs remain in structured state and diagnostic artifacts. This display order does not change reviewer scheduling, category assignments, votes or confidence.
+
+The persona report shows each finding's agreement per discovering persona, all assigned criteria, all scheduled slots and their statuses (twelve at the default count), and any conflict annotations. It has no combined confidence tier. Its Verifier annotates flagged conflicts without removing findings or changing votes/severity. See [how the modes differ](../README.md#review-flows).
 
 How to read either report:
 

@@ -4,6 +4,7 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Checklist
 
+- [x] Group persona findings by correctness, production safety, test quality and code quality, using descriptive titles.
 - [ ] Handle post-call token overruns without discarding otherwise valid completed output; distinguish failed/discarded reviews from zero findings.
 - [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
 - [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
@@ -30,7 +31,11 @@ Compare single-pass versus repeated review, self-check on/off, models and strate
 |---|---|
 | Now | Fix post-call token-overrun handling and failure reporting; complete a Claude review, then show per-finding Verifier qualifications |
 | Next | Manually compare findings, improve criterion/context traceability, and qualify live persona coverage, usage/cache accounting and long-running refresh |
-| Later, if needed | Requalify parked frontends, private in-VM source authentication and scoped extensions below |
+| Later, if needed | Single-agent presentation grouping, parked frontends, private in-VM source authentication and scoped extensions below |
+
+### Possible future improvement: single-agent presentation
+
+Consider grouping single-agent findings by cited review criterion, with a general-concerns section for uncited findings. Do not force persona categories onto this flow. Decide the layout using representative reports; its current confidence-based layout remains supported.
 
 ### Possible future improvement: pluggable review skills
 

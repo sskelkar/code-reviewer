@@ -114,7 +114,7 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(result.completed_by_persona, dict(zip(PERSONAS, (1, 2, 2, 2))))
         self.assertEqual(result.passes[4].status, 'failed')
         self.assertIn('correctness budget exhausted', result.warnings + [result.passes[4].error])
-        self.assertIn('correctness: 1/1 (Unrated)', result.report_path.read_text())
+        self.assertIn('Correctness: 1/1 (Unrated)', result.report_path.read_text())
 
     def test_bad_parallel_values_and_single_agent_override_rejected(self):
         from code_reviewer.cli import build_parser
