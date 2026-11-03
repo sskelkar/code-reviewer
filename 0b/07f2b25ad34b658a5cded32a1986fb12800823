@@ -1,0 +1,39 @@
+tests/test_persona_flow.py
+  s_68cd0db0a8fc3a::t_ebf4772cb50e50 185-222
+  s_68cd0db0a8fc3a::t_790020d8fbc5f5 371-382
+src/code_reviewer/flows/agent_personas/report.py
+  s_68cd0db0a8fc3a::t_6e1a3b4ec19138 47,75-82,89,91,106
+  s_68cd0db0a8fc3a::t_6ffa9c46c00693 49,51,71,74,83-84,109-111,116,121-122
+  s_68cd0db0a8fc3a::t_1da8e6d0364402 1,14-37,107-108
+README.md
+  s_68cd0db0a8fc3a::t_d3c5ec6b823809 133-134
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_b593873c07fb4e 204-205
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_8a0d2db7edf33e 7,34-38
+docs/usage.md
+  s_68cd0db0a8fc3a::t_8309ecdc446e26 91-93
+tests/test_persona_parallel.py
+  s_68cd0db0a8fc3a::t_59a81d23b521c3 117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0b07f2b25ad34b658a5cded32a1986fb12800823",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
