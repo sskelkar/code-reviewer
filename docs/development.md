@@ -64,8 +64,8 @@ Things to know when writing tests:
 | Change output structure | Edit the flow's `prompts/schemas/`, `shared/findings.py` or the flow's `master.py`, and its report |
 | Tune single-agent duplicate grouping | Edit its Comparator prompt or model and compare authorized before/after reviews. Comparator replay is parked; its offline helpers/tests remain, but its CLI performs no IO or model calls. |
 | Add or change default rules | Edit the selected flow's `criteria/*.md` using ID-bearing headings (`GEN-*` for single-agent, persona-prefixed IDs for personas). Persona allocation also lives in `personas.json`; shared rules retain one canonical definition. Tests check identity and coverage |
-| Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration) |
-| Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py` |
+| Add a setting | Add a field with a default to `Config` in `config.py` (the type is inferred from the default), validate it if needed, document it in `review.example.toml` and the [configuration reference](usage.md#configuration). For algorithm settings used in VM jobs, explicitly add the field to `sandbox/settings.py:CORE` and test round-trip transport; keep host paths, executables and credentials out of that allowlist |
+| Add a progress message | Emit an event from the flow with `self.emit(...)`, handle it in `progress.py`. VM-visible events also need the closed projection/validation in `sandbox/progress.py` and protocol tests; raw event data must not be forwarded |
 | Add an LLM role | Add templates/schemas and a role contract inside the owning flow; use shared `CallSpec`/`ModelCaller` for validated calls and wire the role in that flow's `flow.py`. Keep shared criteria discovery in `shared/resolver.py` |
 | Change the stop rules | `flows/single_agent/stop_policy.py` and `tests/test_stop_policy.py` |
 
@@ -99,7 +99,7 @@ For an explicitly selected host review, re-run with `--no-sandbox --keep-checkou
 
 ## Verifying against the real Claude CLI
 
-The offline tests cannot prove how Claude Code behaves. Use the implemented normal VM path with explicit authorization after Claude Code upgrades, and check the points in [proposal.md](proposal.md) section 9: flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These consume API/subscription allowance; agents need the user's request before running them. If the envelope shape differs from what `backends.claude.parse_envelope` expects, fix the parser and add a test using the real shape.
+The offline tests cannot prove how Claude Code behaves. Use the implemented normal VM path with explicit authorization after Claude Code upgrades, and check the runtime behavior tracked by the [qualification checklist](proposal.md#checklist): flags accepted together, isolation canaries, JSON envelope fields, budget and timeout behavior. These consume API/subscription allowance; agents need the user's request before running them. If the envelope shape differs from what `backends.claude.parse_envelope` expects, fix the parser and add a test using the real shape.
 
 ## VM deployment checks
 

@@ -1,4 +1,4 @@
-"""The on-disk layout of one review run (see proposal section 7). Only this module knows file names."""
+"""Storage, reports and the temporary checkout lifecycle for one review run."""
 from __future__ import annotations
 from ..tracing import traced
 
@@ -45,7 +45,7 @@ class RunStore:
         return cls(path)
 
     def prepare_checkout(self) -> Path:
-        """Create the temporary directory for the Reviewer's read-only checkout (outside the run directory)."""
+        """Create a separate head snapshot directory for read-only model tools, outside the run directory."""
         if self._checkout_parent is None:
             self._checkout_parent = Path(tempfile.mkdtemp(prefix="code-reviewer-checkout-"))
         return self._checkout_parent / "checkout"

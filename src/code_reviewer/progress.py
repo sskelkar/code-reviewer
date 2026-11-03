@@ -41,7 +41,7 @@ class ProgressPrinter:
         elif kind == "diff_ready":
             self._say("diff: %d files, %d changed lines (%d excluded)" % (d["files"], d["changed_lines"], d["excluded"]))
         elif kind == "checkout_ready":
-            self._say("read-only checkout ready (%d files, %d symlinks skipped)%s" % (
+            self._say("checkout ready (%d files, %d symlinks skipped); model tools are read-only%s" % (
                 d["files"], d["skipped_links"], "; kept at %s" % d["path"] if d.get("kept") else ""))
         elif kind == "resolver_started":
             self._say("resolving project criteria from AGENTS.md (%d candidate files) ..." % d["candidates"])

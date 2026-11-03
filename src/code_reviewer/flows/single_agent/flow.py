@@ -1,6 +1,6 @@
 """The single-agent workflow. `SingleAgentFlow.review` is the composition root:
 
-    pin the PR -> diff -> read-only checkout -> resolve criteria -> loop of passes -> report
+    pin the PR -> diff -> separate head snapshot -> resolve criteria -> loop of passes -> report
 
 Every step lives in its own module; this file only wires them together and emits progress events.
 """

@@ -4,15 +4,17 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Checklist
 
-- [ ] Qualify native Claude host SSO reuse with a real authenticated review, and authentication/Read/Grep/Glob through the VM.
+- [ ] Handle post-call token overruns without discarding otherwise valid completed output; distinguish failed/discarded reviews from zero findings.
+- [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
 - [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
-- [ ] Improve finding-level verification qualifications and criterion attribution (see review-report follow-ups below).
+- [ ] Show existing Verifier qualifications beside each finding in reports and summaries (see review-report follow-ups below).
+- [ ] Improve criterion attribution and repository context after manually checking findings.
 - [ ] Compare strategies/models manually before changing review algorithms or canonical prompts.
 
 ## Qualification evidence
 
-Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover both simulated flows, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. End-to-end execution has been exercised with ChatGPT subscription access and local VM trace export. Native Claude tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
+Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover both simulated flows, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. End-to-end execution has been exercised with ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
 Local synthetic Langfuse ingestion covers both adapter paths/flows and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
 
@@ -26,8 +28,8 @@ Compare single-pass versus repeated review, self-check on/off, models and strate
 
 | Stage | Work |
 |---|---|
-| Now | Qualify native Claude tools, live persona coverage, authenticated usage/cache accounting and long-running token refresh |
-| Next | Manually compare findings and address demonstrated report/criteria issues |
+| Now | Fix post-call token-overrun handling and failure reporting; complete a Claude review, then show per-finding Verifier qualifications |
+| Next | Manually compare findings, improve criterion/context traceability, and qualify live persona coverage, usage/cache accounting and long-running refresh |
 | Later, if needed | Requalify parked frontends, private in-VM source authentication and scoped extensions below |
 
 ### Possible future improvement: pluggable review skills

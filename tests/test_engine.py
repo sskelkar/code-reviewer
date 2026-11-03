@@ -157,6 +157,21 @@ class EngineTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(len(runner.calls_for("reviewer")), 2)
         self.assertIn("rejected", runner.calls_for("reviewer")[1]["user_prompt"])
 
+    def test_malformed_comparator_reference_uses_validation_retry(self):
+        runner = FakeRunner(reviewer=[{'findings': [finding()]}], comparator=[
+            {'decisions': [{'local_id': 'p2-f1', 'match': [], 'same_as': None}]}, match('p2-f1')])
+        cfg = Config(runs_dir=str(self.tmp / 'runs'), criteria_mode='defaults_only',
+                     min_passes=2, max_passes=2)
+        result = self.engine(runner, cfg).review(self.ctx)
+        self.assertEqual(result.passes_completed, 2)
+        self.assertEqual(len(result.master.items), 1)
+        self.assertEqual(result.master.items['F-001']['seen_in_passes'], [1, 2])
+        calls = runner.calls_for('comparator')
+        self.assertEqual(len(calls), 2)
+        self.assertIn('previous answer was rejected', calls[1]['user_prompt'])
+        attempts = [call['attempt'] for call in result.stats.calls if call['role'] == 'comparator']
+        self.assertEqual(attempts, [1, 2])
+
     def test_budget_stops_the_run(self):
         runner = FakeRunner(reviewer=[{"findings": [finding(), finding(title="Second", quote="return db.run(query)")]}],
                             comparator=[{"decisions": [{"local_id": "p1-f1", "match": "new", "same_as": None},

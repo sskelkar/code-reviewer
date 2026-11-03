@@ -97,6 +97,20 @@ class ValidateDecisionsTests(unittest.TestCase):
         self.assertIsNone(decisions["a"]["same_as"])
         self.assertIsNone(decisions["b"]["same_as"])
 
+    def test_malformed_references_return_validation_errors_instead_of_crashing(self):
+        for field in ("local_id", "match"):
+            for value in ([], {}, True, None, 1):
+                with self.subTest(field=field, value=value):
+                    entry = {"local_id": "a", "match": "new", field: value}
+                    _, errors = validate_decisions(self.FINDINGS, {"F-001"}, {"decisions": [
+                        entry, {"local_id": "b", "match": "new"}]})
+                    self.assertTrue(errors)
+
+    def test_out_of_order_decisions_are_rejected(self):
+        _, errors = validate_decisions(self.FINDINGS, set(), {"decisions": [
+            {"local_id": "b", "match": "new"}, {"local_id": "a", "match": "new"}]})
+        self.assertTrue(any("input order" in error for error in errors))
+
 
 
 class RateTests(unittest.TestCase):

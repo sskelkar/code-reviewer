@@ -67,7 +67,7 @@ class HelpTextTests(unittest.TestCase):
         text = render_help("review")
         for option in RUN_OPTIONS + ("--post", "--local-path"):
             self.assertIn(option, text)
-        for phrase in ("maximum number of review passes", "refute its own findings", "temporary read-only checkout",
+        for phrase in ("maximum number of review passes", "refute its own findings", "separate temporary checkout",
                        "extra progress detail", "alias or full name", "explicit opt-in",
                        "no model is called"):
             self.assertIn(phrase, text)
@@ -79,6 +79,20 @@ class HelpTextTests(unittest.TestCase):
 
 
 class ParsingTests(unittest.TestCase):
+    def test_criteria_override_reaches_host_and_vm_settings_without_mutating_config(self):
+        from code_reviewer.config import CRITERIA_MODES
+        from code_reviewer.sandbox.settings import config_from_job, job_settings
+        from pathlib import Path
+        for flow in ('single-agent', 'agent-personas'):
+            original = Config(review_mode=flow)
+            for mode in CRITERIA_MODES:
+                with self.subTest(flow=flow, criteria=mode):
+                    args = build_parser().parse_args(['review', 'example/project#1', '--criteria', mode])
+                    cfg = apply_run_options(original, args)
+                    self.assertEqual(cfg.criteria_mode, mode)
+                    self.assertEqual(config_from_job(job_settings(cfg), Path('/work')).criteria_mode, mode)
+                    self.assertEqual(original.criteria_mode, 'merge')
+
     def parse(self, *argv):
         return build_parser().parse_args(["review", "owner/repo#1"] + list(argv))
 

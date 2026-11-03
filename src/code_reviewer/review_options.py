@@ -5,7 +5,7 @@ import argparse
 from dataclasses import replace
 from typing import Any
 
-from .config import Config, REVIEW_MODES
+from .config import Config, CRITERIA_MODES, REVIEW_MODES
 
 
 class OptionError(ValueError):
@@ -46,11 +46,14 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
         "--model", metavar="NAME",
         help="model for all roles, an alias or full name such as haiku or sonnet (default: the model_* settings in review.toml)")
     parser.add_argument(
+        "--criteria", choices=CRITERIA_MODES, metavar="MODE",
+        help="which review criteria to apply: merge, project_only or defaults_only (default: criteria_mode in review.toml, merge)")
+    parser.add_argument(
         "--no-self-check", action="store_true",
         help="skip the phase where the reviewer tries to refute its own findings (cheaper, but findings are not double-checked)")
     parser.add_argument(
         "--keep-checkout", action="store_true",
-        help="keep the temporary read-only checkout (its location is printed) instead of deleting it, for debugging")
+        help="host-only: keep the separate temporary checkout (its location is printed); model tools remain read-only")
     parser.add_argument(
         "--verbose", action="store_true",
         help="print extra progress detail while the review runs")
@@ -85,6 +88,8 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
         else:
             cfg.max_passes = args.passes
             cfg.min_passes = min(cfg.min_passes, args.passes)
+    if getattr(args, "criteria", None):
+        cfg.criteria_mode = args.criteria
     if args.no_self_check:
         cfg.self_check = False
     if args.model:
@@ -105,6 +110,7 @@ BANNER_OPTIONS = [
     ("--mode NAME", "single-agent (default); agent-personas defaults to three passes each"),
     ("--passes N", "single-agent maximum passes; agent-personas passes per persona"),
     ("--model NAME", "model for all roles, for example haiku or sonnet"),
+    ("--criteria MODE", "merge (default), project_only or defaults_only"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
     ("--keep-checkout", "keep the temporary checkout (its location is printed)"),
     ("--verbose", "print extra progress detail"),

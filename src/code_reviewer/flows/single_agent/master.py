@@ -150,19 +150,21 @@ def validate_decisions(
     entries = payload.get("decisions") if isinstance(payload, dict) else None
     if not isinstance(entries, list):
         return {}, ["output has no 'decisions' list"]
+    if [entry.get("local_id") if isinstance(entry, dict) else None for entry in entries] != order:
+        errors.append("one decision per incoming local_id, in input order, is required")
     for entry in entries:
         if not isinstance(entry, dict):
             errors.append("a decision is not an object")
             continue
         local_id = entry.get("local_id")
         match = entry.get("match")
-        if local_id not in order:
+        if not isinstance(local_id, str) or local_id not in order:
             errors.append("unknown local_id: %s" % local_id)
             continue
         if local_id in decisions:
             errors.append("duplicate decision for %s" % local_id)
             continue
-        if match != "new" and match not in allowed:
+        if not isinstance(match, str) or (match != "new" and match not in allowed):
             errors.append("%s: match %r is neither 'new' nor a candidate id" % (local_id, match))
             continue
         same_as = entry.get("same_as")

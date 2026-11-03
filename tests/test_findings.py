@@ -35,6 +35,17 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(prepared.ok[0]["local_id"], "p1-f1")
         self.assertEqual(prepared.line_corrected, 1)
 
+    def test_nonfinite_line_numbers_do_not_crash_grounding(self):
+        for line in (float('inf'), float('-inf'), float('nan')):
+            with self.subTest(line=line):
+                prepared = self.prepare([finding(line=line)])
+                self.assertEqual(len(prepared.ok), 1)
+                self.assertEqual(prepared.ok[0]['line'], 3)
+                prepared = self.prepare([finding(kind='absent', quote='', expected='Missing check',
+                    anchor={'file': 'app.py', 'line_start': line, 'line_end': 4})])
+                self.assertEqual(len(prepared.ungrounded), 1)
+                self.assertEqual(prepared.ok, [])
+
     def test_fabricated_quote_is_ungrounded(self):
         prepared = self.prepare([finding(quote="exec(user_input)")])
         self.assertEqual(len(prepared.ok), 0)

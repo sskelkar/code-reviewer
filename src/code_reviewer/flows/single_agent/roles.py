@@ -17,7 +17,7 @@ NEW_DECISION = {"match": "new", "same_as": None}
 
 
 class Reviewer:
-    """Reviews the PR in a fresh session. Sees the PR, criteria and a read-only checkout; never earlier passes."""
+    """Reviews the PR in a fresh session. Sees the PR, criteria and head snapshot through read-only tools; never earlier passes."""
 
     TOOLS = "Read,Grep,Glob"
 
