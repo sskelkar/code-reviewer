@@ -32,13 +32,13 @@ def validate_settings(value):
         from .settings import config_from_job
         config_from_job(value, Path('/work'))
         return value
-    keys = {'model', 'prices', 'mode', 'passes', 'parallel', 'budget', 'call_budget', 'probe_only'}
+    keys = {'model', 'prices', 'passes', 'parallel', 'budget', 'call_budget', 'probe_only'}
     if not isinstance(value, dict) or set(value) != keys:
         raise ValueError('invalid trusted settings')
     if not isinstance(value['model'], str) or not 1 <= len(value['model']) <= 128:
         raise ValueError('explicit model required')
-    if value['mode'] not in ('single-agent', 'agent-personas') or type(value['probe_only']) is not bool:
-        raise ValueError('invalid mode')
+    if type(value['probe_only']) is not bool:
+        raise ValueError('invalid probe setting')
     for name, max_ in (('passes', 10), ('parallel', 4)):
         if type(value[name]) is not int or not 1 <= value[name] <= max_:
             raise ValueError('invalid slot limits')
@@ -94,7 +94,7 @@ def run_job(sock, root, *, probe_network=network_probes, seal=None):
 def _run_job(sock, root, settings, *, probe_network, seal):
     from .settings import provider
     from .progress import GuestProgress
-    progress = GuestProgress(sock, settings['config']['review_mode']) if sock is not None and 'config' in settings else None
+    progress = GuestProgress(sock) if sock is not None and 'config' in settings else None
     if progress:
         progress.stage('acquiring')
     selected = provider(settings)

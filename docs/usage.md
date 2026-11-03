@@ -10,18 +10,18 @@ Start with the [README quick start](../README.md#quick-start). The REPL is parke
 
 ```bash
 reviewer review OWNER/REPO#123 --preflight
-reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --mode agent-personas --passes 1 --preflight
+reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --passes 1 --preflight
 ```
 
 The CLI prints JSON with the provider, effective settings, configuration errors and execution choice. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means configuration is missing/unsupported. `ready: true` means offline settings passed, it does not verify files, the worker or authentication. `runtime_checked: false` makes clear this is an offline configuration report, not a live check. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
 
-The CLI runs one review and exits. VM execution requires trusted worker/artifact settings; host execution requires explicit operator selection. Both use the selected runtime credential.
+The CLI runs one review and exits. VM execution requires trusted worker/artifact settings; host execution requires explicit operator selection. Both execution locations use the selected runtime credential.
 
 ### Execution selection
 
-Default VM review uses the dedicated Mac/Lima worker and one jailed Firecracker VM. VM dry-run, `doctor --live` and retained paid replay are unsupported and refuse. Explicit host review/dry-run is available. Repository labels do not choose execution behavior. Use `--no-sandbox` or trusted `sandbox = false` to select host execution. `--preflight` cannot be combined with `--post` or `--dry-run`. There is no automatic host fallback.
+VM is the default and never falls back to the host. Use `--no-sandbox` or trusted `sandbox = false` for direct-host execution. VM dry-run is unsupported. `--preflight` cannot be combined with `--post` or `--dry-run`.
 
-The CLI selects execution before acquisition and uses the same flow and selected adapter in either location. See the [security contract](security-contract.md).
+The CLI selects execution before acquisition and uses the same pipeline and selected adapter in either location. See the [security contract](security-contract.md).
 
 ### Review options
 
@@ -34,9 +34,8 @@ Use these with `reviewer review <url> ...`; `reviewer review --help` describes t
 | `--auth NAME` | `api-key` (default) or `subscription`; independent of provider/location. ChatGPT uses reviewer-owned sign-in; Claude uses native subscription login on the host or an explicit OAuth token for host/VM |
 | `--account LABEL` | Local saved ChatGPT account label for subscription access; defaults to `chatgpt_account` |
 | `--provider NAME` | `claude` or `openai`; identical security requirements |
-| `--parallel N` | Persona-only concurrency from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; rejected for single-agent |
-| `--mode NAME` | Select `single-agent` (default) or `agent-personas`. Each runs its own workflow. The REPL is parked |
-| `--passes N` | **Single-agent:** maximum review attempts, default `max_passes` (6). **Agent-personas:** scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots and no quiet-pass stopping. N must be a positive whole number. In single-agent mode: The review can still stop earlier, once at least `min_passes` have run and two in a row find nothing new. `--passes 1` schedules at most one pass, which is the cheap way to try the tool. A value below `min_passes` (3) lowers it to match, so `--passes 2` runs at most 2 |
+| `--parallel N` | Concurrent reviewers from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; available for every review |
+| `--passes N` | Scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots. A positive integer; budget, failure and cancellation limits can stop work earlier |
 | `--model NAME` | Model for all roles (including persona classification and verification), an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--criteria MODE` | `merge`, `project_only` or `defaults_only`; overrides `criteria_mode` for this run. `defaults_only` skips the project's own rules (smaller prompt) |
 | `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
@@ -57,9 +56,9 @@ Options override the settings file for that run only. Everything else (budgets, 
 
 VM reviews stream bounded status messages through the existing private SSH/vsock channel. The CLI shows input acquisition/admission, criteria discovery/classification, scheduled reviewer calls and their completion, consolidation, conflict verification, report transfer and cleanup. During a stage without messages, a host-side heartbeat prints every 15 seconds. “Still waiting” identifies the last reported stage; it is not proof that a guest is making progress, an estimated completion time or permission to skip a failed check. Persona calls can be queued when `--parallel` is below four. Normal reviews use timestamped progress instead of duplicate `sandbox:` lifecycle lines, including image build/reuse summaries. Interactive terminals show a rotating ASCII activity indicator on one temporary line. It clears before logs/previews and on normal exit, cancellation or failure; it does not change cursor visibility. Redirected output and `TERM=dumb` terminals receive plain logs and heartbeats without animation.
 
-As soon as a reviewer returns, a glimpse shows proposed/self-rejected counts and up to three candidate titles, severities and locations, labelled **Verification pending**. Persona glimpses arrive before the round barrier, so other reviewers can still be running. They are raw model proposals: locations and claims have not been checked against the repository and duplicates have not been merged. Clearly self-rejected entries are withheld, malformed preview fields are omitted and further proposed entries are counted as not shown. The single-agent flow exposes the same glimpse before grounding.
+As soon as a reviewer returns, a glimpse shows proposed/self-rejected counts and up to three candidate titles, severities and locations, labelled **Verification pending**. Persona glimpses arrive before the round barrier, so other reviewers can still be running. They are raw model proposals: locations and claims have not been checked against the repository and duplicates have not been merged. Clearly self-rejected entries are withheld, malformed preview fields are omitted and further proposed entries are counted as not shown. The  flow exposes the same glimpse before grounding.
 
-After a consolidated persona round or single-agent pass, a provisional summary shows completed/incomplete slots, new findings and the cumulative distinct total. It lists up to ten newly actionable master findings with ID, severity, title and file/line. Further entries are counted as omitted. Duplicate sightings and self-rejected/ungrounded findings are not presented as new defects. Explicit host reviews use the same per-round/pass preview events.
+After a consolidated round, a provisional summary shows completed/incomplete slots, new findings and the cumulative distinct total. It lists up to ten newly actionable master findings with ID, severity, title and file/line. Further entries are counted as omitted. Duplicate sightings and self-rejected/ungrounded findings are not presented as new defects. Explicit host reviews use the same per-round/pass preview events.
 
 ```text
 [01:10] correctness: review 1 returned — 1 proposed, 0 self-rejected
@@ -77,26 +76,26 @@ Both kinds of preview titles and locations can contain private repository inform
 
 ## Reading the report
 
-The review summary printed at the end is also saved as `summary.md` in the run directory. It is meant to be shared and can be lengthy when there are many findings. `report.md` is the long version for digging in: what the agent was given, what it ignored, cost, and the details of every pass. The single-agent report contains:
+The review summary printed at the end is also saved as `summary.md` in the run directory. It is meant to be shared and can be lengthy when there are many findings. `report.md` is the long version for digging in: what the agent was given, what it ignored, cost, and the details of every pass. The report contains:
 
 | Section | What it tells you |
 |---|---|
 | Header | PR, commits reviewed, models, passes completed, why it stopped, diff size, estimated cost |
 | Criteria applied | Default and project rules used, project criteria files, references that were ignored (for example a wiki link), warnings (for example "this PR modifies the criteria files") |
 | Overview | Finding counts by confidence tier and severity |
-| High / Medium / Low confidence | Findings. Confidence is the share of completed passes that found it (needs at least two completed passes; with one pass the section is **"Findings, unrated"** instead): **High** at 75% or more, **Medium** at 40% or more, **Low** below. Each finding shows `file:line`, the criterion it falls under (by name and source), the evidence, a suggestion and "seen in x/N passes" |
+| Findings | Category-grouped findings with file/line, criterion, evidence, suggestion and per-persona agreement. One completed pass per persona is unrated |
 | Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
 | Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified, and for rule citations that were repaired or unknown |
 
-The persona report groups findings under **Correctness → Production safety → Test quality → Code quality**, omitting empty sections. Within each section, findings appear by severity, then file/line/title for stable ordering. A finding assigned to several categories appears once under the first applicable section, with every category still listed. Descriptive titles replace internal IDs in finding headings; conflict annotations refer to titles and locations. Internal IDs remain in structured state and diagnostic artifacts. This display order does not change reviewer scheduling, category assignments, votes or confidence.
+The report groups findings under **Correctness → Production safety → Test quality → Code quality**, omitting empty sections. Within each section, findings appear by severity, then file/line/title for stable ordering. A finding assigned to several categories appears once under the first applicable section, with every category still listed. Descriptive titles replace internal IDs in finding headings; conflict annotations refer to titles and locations. Internal IDs remain in structured state and diagnostic artifacts. This display order does not change reviewer scheduling, category assignments, votes or confidence.
 
-The persona report shows each finding's agreement per discovering persona, all assigned criteria, all scheduled slots and their statuses (twelve at the default count), and any conflict annotations. It has no combined confidence tier. Its Verifier annotates flagged conflicts without removing findings or changing votes/severity. See [how the modes differ](../README.md#review-flows).
+The report shows each finding's agreement per discovering persona, all assigned criteria, all scheduled slots and their statuses (twelve at the default count), and any conflict annotations. Confidence is measured independently per discovering persona, never across different perspectives. Its Verifier annotates flagged conflicts without removing findings or changing votes/severity. See [how the modes differ](../README.md#review-flow).
 
-How to read either report:
+How to read the report:
 
 - A finding that every pass found has high agreement; repetition alone does not establish correctness. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
 - **Mostly Low findings does not mean they are wrong.** Passes explore different code paths, so independent passes complement each other. Read all findings (Low included) and judge them manually; the appendix shows how many findings each pass raised, and host runs also retain per-pass notes in `pass-NN/findings.json`. The persona Verifier annotates flagged conflicts without changing confidence (see the roadmap in [docs/proposal.md](proposal.md)).
-- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. The separate Verifier in persona mode annotates only flagged conflicts; checking every finding remains later work (see the [persona flow](../README.md#agent-personas)).
+- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. The separate Verifier in persona mode annotates only flagged conflicts; checking every finding remains later work (see the [persona flow](../README.md#review-flow)).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Findings are only kept if their evidence checks out: a whitespace-normalized quote that matches the code, or, for "something is missing", an anchor on a changed hunk. Unverifiable findings are counted in the appendix and dropped.
 - Cost figures come from native CLI accounting or operator-supplied API token rates and may not match billing.
@@ -105,7 +104,7 @@ How to read either report:
 
 The agent applies two sets of criteria:
 
-- **Defaults**: generic, language-agnostic rules shipped with the agent ([src/code_reviewer/flows/single_agent/criteria/general.md](../src/code_reviewer/flows/single_agent/criteria/general.md)).
+- **Defaults**: generic, language-agnostic rules shipped with the agent ([the persona criteria](persona-criteria.md)).
 - **Project criteria**: your project's own rules. **Project rules take precedence** when they cover the same concern (the model is instructed to follow them).
 
 To make your project's rules visible, describe where they are in the **`AGENTS.md` at the repository root**. There is no required format; the agent reads it and works out which files hold criteria. For example:
@@ -135,15 +134,14 @@ Rules of the road:
   The report lists them with the reason each was added.
 - Without a root `AGENTS.md`, or if nothing in it resolves, the files above and the defaults are still used, and the report says so.
 
-The ten single-agent defaults cover correctness, simplicity, clarity and contract documentation, security/privacy, bounded input validation, failure/resource handling, data integrity/concurrency, internal contracts, test coverage/test levels, and test independence/mocking. Each rule states what to inspect, when to report and what not to report, using repository-visible evidence. They do not include generic architecture or performance review requirements. The system prompt still owns finding scope, evidence fields, self-checks and JSON output; project rules take precedence.
 
-The current criteria are numbered `GEN-001` through `GEN-010` in checklist order. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. Tests verify criteria loading and delivery; they do not establish review quality. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
+The default criteria use `COR-*`, `SAFE-*`, `TEST-*` and `CQ-*` by subject. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. Tests verify criteria loading and delivery; they do not establish review quality. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
 
-Persona mode uses thirteen canonical rules with static assignments; see the [persona criteria guide](persona-criteria.md). Accepted project rules are classified to at least one persona; unresolved assignments fall back to all personas with a warning.
+The pipeline uses thirteen canonical rules with static assignments; see the [persona criteria guide](persona-criteria.md). Accepted project rules are classified to at least one persona; unresolved assignments fall back to all personas with a warning.
 
 ### Customizing the default rules
 
-For single-agent, edit [src/code_reviewer/flows/single_agent/criteria/general.md](../src/code_reviewer/flows/single_agent/criteria/general.md). Each rule is a heading of the form `## [GEN-011] Title` followed by the rule text. The ID is what findings cite. To turn rules off for your runs, list them in `disabled_default_rules`, or set `criteria_mode` to `project_only` or `defaults_only`.
+Edit `src/code_reviewer/review/criteria/*.md` using canonical ID-bearing headings, and maintain static assignments in `review/personas.json`. Shared rules have one definition. Prompt/criteria changes require authorized comparisons under the [comparison policy](proposal.md#review-quality-experiments).
 
 ## Configuration
 
@@ -153,17 +151,14 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 |---|---|---|
 | `provider` | `claude` | Select the runtime adapter: Claude or OpenAI |
 | `auth_mode` | `api-key` | Select API-key or subscription access; unsupported combinations refuse without billing fallback. See [LLM support](llm.md) |
-| `review_mode` | `single-agent` | Flow selected by default; override for one run with `--mode`. `agent-personas` uses `persona_passes` slots for each of four personas, then verifies flagged conflicts within budget |
-| `model_reviewer`, `model_comparator`, `model_resolver`, `model_verifier` | `haiku` | Model alias or full name per role. Persona classification uses `model_resolver`; `model_verifier` is persona-only. OpenAI requires a single explicit model ID across roles. |
-| `persona_parallel` | `4` | Persona-only concurrent model calls (1–4), overridden with `--parallel N`. Single-agent stays sequential |
-| `persona_passes` | `3` | Persona-only scheduled passes per persona. `--passes N` overrides it for one run; 4 × N review slots, with no convergence stopping. One completed pass per persona is unrated |
+| `model_reviewer`, `model_comparator`, `model_resolver`, `model_verifier` | `haiku` | Model alias or full name per role. Persona classification uses `model_resolver`; `model_verifier` handles flagged conflicts. OpenAI requires a single explicit model ID across roles. |
+| `persona_parallel` | `4` | Concurrent reviewers (1–4), overridden with `--parallel N`; consolidation follows the round barrier |
+| `persona_passes` | `3` | Scheduled passes per persona. `--passes N` overrides it for one run; 4 × N review slots, with fixed rounds. One completed pass per persona is unrated |
 | `self_check` | `true` | The Reviewer tries to refute its own findings before answering |
 | `criteria_mode` | `merge` | `merge`, `project_only` or `defaults_only` |
 | `criteria_manifest` | `""` | Host-only operator JSON file replacing the Resolver answer; VM mode refuses this override |
 | `disabled_default_rules` | `[]` | Default rule IDs to switch off |
-| `min_passes`, `max_passes` | `3`, `6` | Single-agent only: Successful passes required before convergence / maximum scheduled attempts |
-| `quiet_k` | `2` | Single-agent only: Stop after this many consecutive passes with no new finding (after `min_passes`) |
-| `max_consecutive_failures` | `2` | Single-agent: consecutive failures across passes. Personas: consecutive failures per persona; disable only that persona |
+| `max_consecutive_failures` | `2` | Consecutive failures per persona; disable only that persona |
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
 | `max_diff_lines` | `3000` | Refuse PRs with more changed lines (after exclusions) |
 | `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff (this list replaces the built-in one) |
@@ -173,15 +168,14 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | API estimated spend allowance and per-call timeout; subscription mode ignores dollar allowances |
 | `chatgpt_account` | `default` | Local saved ChatGPT account label |
 | `call_budget_tokens` | `200000` | Subscription per-call token allowance, including cache reads |
-| `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Thresholds for a whole review; new calls stop at the relevant budget check. API token accounting excludes cache reads. Subscription token accounting includes cache reads and conservatively charges incomplete usage. Single-agent checks run thresholds between passes. Persona mode checks before each call/retry and reserves dollars (API) or tokens (subscription) from independent pools; reported usage can overshoot a threshold. API persona call budgets need at least $0.01 |
+| `run_budget_usd`, `run_budget_tokens` | `3.00`, `2000000` | Thresholds for a whole review; new calls stop at the relevant budget check. API token accounting excludes cache reads. Subscription token accounting includes cache reads and conservatively charges incomplete usage. The harness checks before each call/retry and reserves dollars (API) or tokens (subscription) from independent pools; reported usage can overshoot a threshold. API persona call budgets need at least $0.01 |
 | `isolation_flags` | `--safe-mode`, `--restricted` | Claude Code flags that keep the Reviewer isolated from your local setup. Host-only customization; VM mode uses the fixed default flags |
 | `claude_bin` | `claude` | Host native binary; VM mode uses the digest-pinned `vm_claude_binary` artifact |
 | `post_tiers` | `["High","Medium","Low"]` | Confidence tiers shown in the review summary and included in a posted comment. Single-pass (unrated) findings are always included |
 | `redact_emails` | `true` | Replace email addresses in the PR title, description and commit messages with `[email]` before they are sent to the model. The diff and repository files are not redacted. Set to `false` to send PR text as written |
 | `runs_dir` | `""` | Where runs are stored (default `~/.code-reviewer/runs`) |
-| `candidate_window`, `candidate_all_threshold`, `candidate_max`, `grounding_line_window` | `20`, `30`, `40`, `30` | First three tune single-agent duplicate candidates; persona mode supplies the full master; `grounding_line_window` counts corrections larger than this distance. Quotes are searched across the file and line numbers are corrected even within this window |
 
-Environment variables: `CODE_REVIEWER_HOME` (repository checkout containing both flows and their assets), `CODE_REVIEWER_DATA` (replaces `~/.code-reviewer` for runs, cache and config).
+Environment variables: `CODE_REVIEWER_HOME` (repository checkout containing the review pipeline and their assets), `CODE_REVIEWER_DATA` (replaces `~/.code-reviewer` for runs, cache and config).
 
 ## Persona budget pools
 
@@ -197,7 +191,7 @@ A persona budget/failure limit disables only that persona. Criteria exhaustion f
 |---|---|
 | `~/.code-reviewer/auth/chatgpt.json` | Private reviewer-owned ChatGPT registrations and credentials; outside Git, 0600 under 0700 directory |
 | `~/.code-reviewer/runs/vm-<random ID>/` | VM run: private report, summary and stats only; guest raw replies/prompts are not retained |
-| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | Host review: summary/report, master, usage, labels and settings; `input/` holds redacted PR metadata, diff and criteria; `pass-NN/` holds raw replies, findings and mappings. Single-agent prompts live under `input/reviewer.*.md`; persona prompts under `input/personas/`, with conditional annotations under `verification/` |
+| `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | Host review: summary/report, master, usage, labels and settings; `input/` holds redacted PR metadata, diff and criteria; `pass-NN/` holds raw replies, findings and mappings. Frozen persona prompts live under `input/personas/`, with conditional annotations under `verification/` |
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
 | `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's separate PR snapshot, exposed through read-only model tools, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless host-only `--keep-checkout` |
 | `refs/code-reviewer/*` in your local clone | The PR head and base commits fetched for a review. Your branches and working tree are never changed |
@@ -210,7 +204,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 ## Cost, time and limits
 
-- Single-agent passes run sequentially. Persona Reviewers run concurrently within a round, followed by serial consolidation; rounds wait for the slowest active Reviewer. A review can take several minutes. Cost depends on diff/criteria size, model, tool turns and thinking output. Every run reports tokens and estimated cost; budget settings stop further calls at the applicable checks. Use observed usage to tune the next run.
+- Reviewers run concurrently within a round, followed by serial consolidation; rounds wait for the slowest active Reviewer. A review can take several minutes. Cost depends on diff/criteria size, model, tool turns and thinking output. Every run reports tokens and estimated cost; budget settings stop further calls at the applicable checks. Use observed usage to tune the next run.
 - Only GitHub pull requests are supported (no local-branch mode yet).
 - Diffs above `max_diff_lines` are refused rather than reviewed badly. Lockfiles, vendored and generated files do not count.
 - The tool does not run tests, linters or builds. Your pipeline still owns those.
@@ -233,7 +227,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 |---|---|
 | `reviewer: command not found` | The virtual environment is not active: `source .venv/bin/activate` in the code-reviewer directory |
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
-| Prompt asset not found | Check the active executable/virtual environment matches this checkout. Prompts live under `src/code_reviewer/flows/<flow>/prompts/`; keep the checkout when using an editable install |
+| Prompt asset not found | Check the active executable/virtual environment matches this checkout. Prompts live under `src/code_reviewer/review/prompts/`; keep the checkout when using an editable install |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Use a fresh one-shot invocation after updating. A new review fetches the latest branch tips; commits are pinned only within a run |
 | `VM setup missing Firecracker archive`, `guest kernel` or `Lima worker definition` | Check `vm_artifacts`, `vm_lima_home` and `vm_instance`; restore the [persistent installation](sandbox-check.md#persistent-first-time-setup). Existing empty parent directories are insufficient. Credential access follows successful setup and admission |
@@ -286,7 +280,7 @@ See the [support and qualification matrix](llm.md#support-and-qualification) for
 
 ## Binary omissions
 
-Both strategies omit binary contents from the model checkout and diff hunks, in VM and explicit host execution. Detection samples the first 8000 bytes for NUL or invalid UTF-8, independent of extensions; this is a heuristic, not format validation. UTF-16 files are therefore omitted too. Source, configuration, dependency declarations, checksums and documentation remain reviewable as text. Repository diff attributes cannot force detected binary contents into the model's diff.
+The reviewer omits binary contents from the model checkout and diff hunks, in VM and explicit host execution. Detection samples the first 8000 bytes for NUL or invalid UTF-8, independent of extensions; this is a heuristic, not format validation. UTF-16 files are therefore omitted too. Source, configuration, dependency declarations, checksums and documentation remain reviewable as text. Repository diff attributes cannot force detected binary contents into the model's diff.
 
 The summary warns about omissions. The report lists escaped paths, change types and base/head Git blob sizes, including unchanged checkout binaries and binary deletions. Here “base” means the pinned merge base used for the diff. Report details are capped at 200 with an explicit remaining count; `stats.json` retains the full omission metadata. Binaries are not certified safe or analyzed for their compiled behavior. A binary-only PR produces metadata and an omission warning, not a content review.
 

@@ -22,19 +22,18 @@ from tests.helpers import FakeRunner
 class BoundaryTests(unittest.TestCase):
     def test_every_provider_and_mode_refuses_before_git_models_credentials_or_posting(self):
         for provider in ('claude', 'openai'):
-            for mode in ('single-agent', 'agent-personas'):
-                for flags in ([], ['--dry-run'], ['--post']):
-                    with self.subTest(provider=provider, mode=mode, flags=flags):
-                        err = io.StringIO()
-                        with patch.object(cli, 'load_config', return_value=Config()), \
-                                patch('code_reviewer.tracing.review.finish', side_effect=AssertionError('no tracing for invalid configuration')), \
-                                patch('subprocess.run', side_effect=AssertionError('must not spawn a command')), \
-                                patch('getpass.getpass', side_effect=AssertionError('must not read a key')), \
-                                patch.object(cli, 'post_comment', side_effect=AssertionError('must not post')), \
-                                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
-                            code = cli.main(['review', 'example/project#1', '--provider', provider, '--mode', mode] + flags)
-                        self.assertEqual(code, 1)
-                        self.assertIn('VM review unavailable', err.getvalue())
+            for flags in ([], ['--dry-run'], ['--post']):
+                with self.subTest(provider=provider, mode='agent-personas', flags=flags):
+                    err = io.StringIO()
+                    with patch.object(cli, 'load_config', return_value=Config()), \
+                            patch('code_reviewer.tracing.review.finish', side_effect=AssertionError('no tracing for invalid configuration')), \
+                            patch('subprocess.run', side_effect=AssertionError('must not spawn a command')), \
+                            patch('getpass.getpass', side_effect=AssertionError('must not read a key')), \
+                            patch.object(cli, 'post_comment', side_effect=AssertionError('must not post')), \
+                            contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                        code = cli.main(['review', 'example/project#1', '--provider', provider, ] + flags)
+                    self.assertEqual(code, 1)
+                    self.assertIn('VM review unavailable', err.getvalue())
 
     def test_preflight_is_real_shared_frontend_output_with_no_target_or_model_io(self):
         for provider in ('claude', 'openai'):
@@ -46,7 +45,7 @@ class BoundaryTests(unittest.TestCase):
             with patch.object(cli, 'load_config', return_value=cfg), \
                     patch('subprocess.run', side_effect=AssertionError('no Git/model/version')), \
                     contextlib.redirect_stdout(out):
-                code = cli.main(['review', 'example/project#1', '--provider', provider, '--mode', 'agent-personas',
+                code = cli.main(['review', 'example/project#1', '--provider', provider,
                                  '--passes', '2', '--parallel', '1', '--preflight'])
             report = json.loads(out.getvalue())
             self.assertEqual(code, 1)
@@ -95,7 +94,7 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(values[0]['blockers'],['vm-configuration'])
 
     def test_low_level_connected_entry_cannot_bypass_live_release_gate(self):
-        settings = dict(model='synthetic-model', prices=[1, .5, 2], mode='single-agent', passes=1,
+        settings = dict(model='synthetic-model', prices=[1, .5, 2], passes=1,
                         parallel=1, budget=3, call_budget=.5, probe_only=False)
         with patch.object(connected, 'regular', side_effect=AssertionError('no input access')), \
                 patch('getpass.getpass', side_effect=AssertionError('no key')):
@@ -111,12 +110,6 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
             self.assertEqual(cli.main(['doctor']), 1)
 
-    def test_retained_replay_cannot_launch_models_outside_the_boundary(self):
-        from code_reviewer.parked import replay
-        with patch('subprocess.run', side_effect=AssertionError('no external process')), \
-                patch('pathlib.Path.read_text', side_effect=AssertionError('no target/saved-run reads')), \
-                contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(replay.main(['/missing/saved-run']), 1)
 
     def test_invalid_integer_limits_fail_before_review(self):
         for name in ('call_timeout_s','run_budget_tokens','max_diff_lines','criteria_max_chars','max_consecutive_failures'):

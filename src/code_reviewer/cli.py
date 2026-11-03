@@ -18,9 +18,9 @@ from .presentation import render_summary, run_line
 MAIN_EPILOG = """\
 examples:
   reviewer                                show help (the interactive prompt is parked)
-  reviewer review <PR URL> --passes 1     one cheap pass over a pull request
+  reviewer review <PR URL> --passes 1     one review from each perspective
   reviewer review <PR URL> --no-sandbox --dry-run      show what the reviewer would be given, without calling the model
-  reviewer review <PR URL>                a full review (several passes)
+  reviewer review <PR URL>                a full review (three passes per perspective by default)
   reviewer review <PR URL> --preflight    check configuration; no network or model calls
 
 Each subcommand has its own options, for example: reviewer review --help
@@ -39,7 +39,7 @@ The review never posts to GitHub unless you pass --post.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reviewer",
-        description="Multi-pass pull request review agent. The interactive prompt is parked; use reviewer review.",
+        description="Multi-perspective pull request review agent. The interactive prompt is parked; use reviewer review.",
         epilog=MAIN_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     review = sub.add_parser(
         "review", help="review a pull request with the one-shot CLI",
-        description="Review a pull request: several independent passes, then a merged report with findings, tokens and cost.",
+        description="Review a pull request from four independent perspectives, then consolidate findings and annotate conflicts.",
         epilog=REVIEW_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     review.add_argument("pr", metavar="PR", help="pull request URL, or owner/repo#number")
     add_run_options(review)
@@ -150,7 +150,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             except git_ops.GitError as exc:
                 print("posting failed: %s" % exc, file=sys.stderr)
                 return 1
-        return 0 if result.stop_reason in ("converged", "max_passes", "completed", "cancelled", "budget_exceeded") else 1
+        return 0 if result.stop_reason in ("completed", "cancelled", "budget_exceeded") else 1
 
 
 if __name__ == "__main__":  # pragma: no cover

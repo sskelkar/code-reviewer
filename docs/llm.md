@@ -1,6 +1,6 @@
 # LLM interface and access
 
-Provider, authentication and execution location are independent operator choices. Both review algorithms use the same `Runner` contract, validation, criteria, accounting and reports. Subscription access does not change the VM boundary or select a different review algorithm.
+Provider, authentication and execution location are independent operator choices. The review pipeline use the same `Runner` contract, validation, criteria, accounting and reports. Subscription access does not change the VM boundary or select a different review algorithm.
 
 ## Support and qualification
 
@@ -23,7 +23,7 @@ flowchart TD
     HOST["Host ChatGPT credential store"] -->|refresh locally| TOKEN["Selected access token"]
     TOKEN -->|after admission if VM| FACTORY
     FACTORY --> ADAPTER["ClaudeRunner or OpenAIRunner"]
-    FLOW["Selected review flow"] --> CALLER["ModelCaller: validate, retry output, account, save"]
+    FLOW["Four-perspective review pipeline"] --> CALLER["ModelCaller: validate, retry output, account, save"]
     CALLER --> RUNNER["Runner: instructions, input, schema, tools, limits"]
     RUNNER --> ADAPTER
     ADAPTER --> RESULT["LLMResult: structured output, usage, safe errors, billing mode"]

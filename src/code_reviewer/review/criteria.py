@@ -6,14 +6,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ...config import Config, ConfigError
-from ...shared.criteria import Rule, load_default_rules
+from ..config import Config, ConfigError
+from ..shared.criteria import Rule, load_default_rules
 
 PERSONAS = ('correctness', 'code-quality', 'test-quality', 'production-safety')
-LEGACY_IDS = dict(zip(('GEN-%03d' % n for n in range(1, 11)), (
-    'COR-001', 'CQ-001', 'CQ-002', 'SAFE-001', 'SAFE-002', 'SAFE-003', 'SAFE-004', 'COR-002', 'TEST-001', 'TEST-002')))
-
-
 class Catalog:
     def __init__(self, root: Path, defaults_dir: Path):
         try:
@@ -40,7 +36,7 @@ class Catalog:
             raise ConfigError('invalid persona assets: %s' % exc) from exc
 
     def input_config(self, cfg: Config) -> Config:
-        disabled = [LEGACY_IDS.get(r.strip(), r.strip()) for r in cfg.disabled_default_rules]
+        disabled = [r.strip() for r in cfg.disabled_default_rules]
         unknown = set(disabled) - {r.rule_id for r in self.rules}
         if unknown:
             raise ConfigError('unknown disabled persona defaults: %s' % ', '.join(sorted(unknown)))

@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(os.environ.get("CODE_REVIEWER_HOME") or Path(__file__).resolve().parents[2])
-SINGLE_AGENT_DIR = REPO_ROOT / "src" / "code_reviewer" / "flows" / "single_agent"
-PROMPTS_DIR = SINGLE_AGENT_DIR / "prompts"
-DEFAULT_CRITERIA_DIR = SINGLE_AGENT_DIR / "criteria"
+REVIEW_DIR = REPO_ROOT / "src" / "code_reviewer" / "review"
+PROMPTS_DIR = REVIEW_DIR / "prompts"
+DEFAULT_CRITERIA_DIR = REVIEW_DIR / "criteria"
 DATA_DIR = Path(os.environ.get("CODE_REVIEWER_DATA") or Path.home() / ".code-reviewer")
 
 DEFAULT_EXCLUDE_PATTERNS = [
@@ -39,8 +39,6 @@ DEFAULT_EXCLUDE_PATTERNS = [
     ".idea/",
 ]
 
-REVIEW_MODES = ("single-agent", "agent-personas")
-
 CRITERIA_MODES = ("merge", "project_only", "defaults_only")
 
 
@@ -62,19 +60,11 @@ class Config:
     disabled_default_rules: List[str] = field(default_factory=list)
 
     # Loop control
-    min_passes: int = 3
-    max_passes: int = 6
-    quiet_k: int = 2
     max_consecutive_failures: int = 2
 
     # Confidence tiers (share of completed passes that saw a finding)
     tier_high: float = 0.75
     tier_medium: float = 0.40
-
-    # Comparator candidates
-    candidate_window: int = 20
-    candidate_all_threshold: int = 30
-    candidate_max: int = 40
 
     # Input limits
     max_diff_lines: int = 3000
@@ -97,14 +87,12 @@ class Config:
     isolation_flags: List[str] = field(default_factory=lambda: ["--safe-mode", "--restricted"])
 
     # Posting
-    # Confidence tiers shown in the summary and included in a posted comment (single-pass findings are always included)
+    # Agreement tiers shown in summaries and posted comments (one completed pass is unrated)
     post_tiers: List[str] = field(default_factory=lambda: ["High", "Medium", "Low"])
 
     # Storage
     runs_dir: str = ""
 
-    # Append new fields to preserve existing positional constructor arguments.
-    review_mode: str = "single-agent"
     model_verifier: str = "haiku"
     persona_prompt_max_chars: int = 500000
     persona_passes: int = 3
@@ -129,7 +117,7 @@ class Config:
     tracing: bool = True
 
     def validate(self) -> None:
-        for name in ('min_passes', 'max_passes', 'quiet_k', 'max_consecutive_failures', 'max_diff_lines',
+        for name in ('max_consecutive_failures', 'max_diff_lines',
                      'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars', 'call_budget_tokens'):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
@@ -167,18 +155,12 @@ class Config:
             raise ConfigError("persona_parallel must be an integer from 1 to 4")
         if isinstance(self.persona_passes, bool) or not isinstance(self.persona_passes, int) or self.persona_passes < 1:
             raise ConfigError('persona_passes must be a positive integer')
-        if self.auth_mode != 'subscription' and self.review_mode == 'agent-personas' and self.call_budget_usd < 0.01:
-            raise ConfigError('agent-personas needs call_budget_usd >= 0.01 (Claude CLI dollar limits use cents)')
+        if self.auth_mode != 'subscription' and self.call_budget_usd < 0.01:
+            raise ConfigError('call_budget_usd must be >= 0.01 (Claude CLI dollar limits use cents)')
         if self.persona_prompt_max_chars < 1:
             raise ConfigError("persona_prompt_max_chars must be positive")
-        if self.review_mode not in REVIEW_MODES:
-            raise ConfigError("review_mode must be one of %s" % ", ".join(REVIEW_MODES))
         if self.criteria_mode not in CRITERIA_MODES:
             raise ConfigError("criteria_mode must be one of %s" % ", ".join(CRITERIA_MODES))
-        if self.min_passes < 1 or self.max_passes < self.min_passes:
-            raise ConfigError("need 1 <= min_passes <= max_passes")
-        if self.quiet_k < 1:
-            raise ConfigError("quiet_k must be >= 1")
         if not (0 < self.tier_medium < self.tier_high <= 1):
             raise ConfigError("need 0 < tier_medium < tier_high <= 1")
         if self.call_budget_usd <= 0 or self.run_budget_usd <= 0:

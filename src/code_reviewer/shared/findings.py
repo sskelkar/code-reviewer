@@ -27,7 +27,7 @@ class PreparedFindings:
     out_of_scope: List[Dict[str, Any]] = field(default_factory=list)  # findings located in excluded files
     self_check_missing: int = 0
     line_corrected: int = 0
-    rule_repaired: int = 0  # rule citations that only needed reformatting, e.g. "[GEN-010]" -> "GEN-010"
+    rule_repaired: int = 0  # rule citations that only needed reformatting, e.g. "[TEST-002]" -> "TEST-002"
     rule_unknown: int = 0   # rule citations that matched no rule: the finding is kept with rule "none"
 
     def all_records(self) -> List[Dict[str, Any]]:

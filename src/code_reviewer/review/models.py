@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ...config import Config
-from ...shared.criteria import CriteriaSet, Rule
-from ...shared.models import PassRecord, PRContext
-from ...shared.stats import Stats
+from ..config import Config
+from ..shared.criteria import CriteriaSet, Rule
+from ..shared.models import PassRecord, PRContext
+from ..shared.stats import Stats
 from .master import MasterList
 
 
@@ -54,7 +54,7 @@ class DryRun:
     assignments: Dict[str, List[Rule]]
     diff_summary: Dict[str, Any]
     model: str
-    review_mode: str = 'agent-personas'
     passes_per_persona: int = 3
     parallel: int = 4
+    redacted_emails: int = 0
     budget_pools: Dict[str, Any] = field(default_factory=dict)

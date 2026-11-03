@@ -12,8 +12,6 @@ openai_input_price = 0.0
 openai_cached_input_price = 0.0
 openai_output_price = 0.0
 
-# Review flow: single-agent (default); agent-personas defaults to three passes for each of four personas, then conflict-only verification.
-review_mode = "single-agent"
 
 # Persona mode: scheduled passes per persona (4 times this many total); --passes N overrides for one run.
 persona_passes = 3
@@ -33,14 +31,9 @@ self_check = true
 criteria_mode = "merge"
 # Path to a JSON manifest that replaces the criteria resolver's output (reproducible experiments).
 criteria_manifest = ""
-# Default rule IDs to switch off, for example ["GEN-003"].
+# Default rule IDs to switch off, for example ["CQ-002"].
 disabled_default_rules = []
 
-# Single-agent loop control (persona mode uses persona_passes, with no quiet-pass stopping)
-min_passes = 3
-max_passes = 6
-quiet_k = 2                    # stop after this many consecutive passes with no new finding
-max_consecutive_failures = 2    # single-agent globally; persona mode separately per persona
 
 # Confidence tiers: share of completed passes that found an issue
 tier_high = 0.75
@@ -58,9 +51,6 @@ criteria_max_chars = 200000    # about 50k tokens
 # extra_exclude_patterns = ["docs/prds/", "docs/plans/"]
 
 # Matching tuning (rarely needed)
-candidate_window = 20          # same-file line distance for duplicate candidates
-candidate_all_threshold = 30   # up to this many findings the Comparator sees all of them
-candidate_max = 40
 grounding_line_window = 30     # count corrections exceeding this distance; quotes are searched across the file
 
 # Budgets and timeouts

@@ -57,7 +57,7 @@ def export_result(value, output, key, probe_only):
         if name.endswith('.json'):
             json.loads(data)
         decoded[name] = data
-    allowed = {'probes_passed'} if probe_only else {'completed', 'converged', 'max_passes', 'budget_exceeded',
+    allowed = {'probes_passed'} if probe_only else {'completed', 'budget_exceeded',
                                                   'incomplete', 'cancelled', 'failures'}
     if value.get('stop_reason') not in allowed:
         raise ValueError('invalid job completion state')

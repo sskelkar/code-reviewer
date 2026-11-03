@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
   <title id="title">code-reviewer</title>
-  <desc id="desc">Independent AI reviews. Grounded in your code. Single-agent and four-persona pull-request review with sandboxing and local tracing.</desc>
+  <desc id="desc">Four review perspectives. Grounded in your code. Four focused pull-request reviewers with sandboxing and local tracing.</desc>
   <defs>
     <linearGradient id="bg" x2="1" y2="1">
       <stop stop-color="#0b1426"/>
@@ -16,10 +16,10 @@
   <g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif">
     <text x="64" y="65" font-size="13" font-weight="600" letter-spacing="3" fill="#65dfbc">PULL REQUEST REVIEW · ON YOUR TERMS</text>
     <text x="62" y="143" font-size="62" font-weight="700" letter-spacing="-2" fill="#f0f6fc">code-reviewer</text>
-    <text x="64" y="190" font-size="23" fill="#b8cbda">Independent AI reviews. Grounded in your code.</text>
+    <text x="64" y="190" font-size="23" fill="#b8cbda">Four review perspectives. Grounded in your code.</text>
     <g font-size="13" font-weight="500" fill="#bed3e0">
       <rect x="64" y="230" width="142" height="32" rx="16" fill="#20394c"/>
-      <text x="135" y="251" text-anchor="middle">Two review flows</text>
+      <text x="135" y="251" text-anchor="middle">Four perspectives</text>
       <rect x="218" y="230" width="151" height="32" rx="16" fill="#20394c"/>
       <text x="293" y="251" text-anchor="middle">Read-only tools</text>
       <rect x="381" y="230" width="139" height="32" rx="16" fill="#20394c"/>

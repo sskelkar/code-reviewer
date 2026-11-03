@@ -11,19 +11,19 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
 - [ ] Show existing Verifier qualifications beside each finding in reports and summaries (see review-report follow-ups below).
 - [ ] Improve criterion attribution and repository context after manually checking findings.
-- [ ] Compare strategies/models manually before changing review algorithms or canonical prompts.
+- [ ] Compare models and pass counts manually before changing review orchestration or canonical prompts.
 
 ## Qualification evidence
 
-Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover both simulated flows, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. End-to-end execution has been exercised with ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
+Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. End-to-end execution has been exercised with ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
-Local synthetic Langfuse ingestion covers both adapter paths/flows and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
+Local synthetic Langfuse ingestion covers both adapters and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
 
 ## Review-quality experiments
 
 Canonical prompt/schema/criteria changes require separately authorized before/after comparisons and honest results here. Required prior observations are retained once in [experiment evidence](history.md); they are not proof of current quality.
 
-Compare single-pass versus repeated review, self-check on/off, models and strategies on manually judged PRs. Inspect useful discoveries, false positives, misses, rule attribution and duplicate merges. Agreement measures repeated sightings, not correctness. Parked replay helpers have no supported CLI route.
+Compare one versus multiple passes per persona, self-check on/off, models and pass counts on manually judged PRs. Inspect useful discoveries, false positives, misses, rule attribution and duplicate merges. Agreement measures repeated sightings, not correctness.
 
 ## Roadmap
 
@@ -31,11 +31,8 @@ Compare single-pass versus repeated review, self-check on/off, models and strate
 |---|---|
 | Now | Fix post-call token-overrun handling and failure reporting; complete a Claude review, then show per-finding Verifier qualifications |
 | Next | Manually compare findings, improve criterion/context traceability, and qualify live persona coverage, usage/cache accounting and long-running refresh |
-| Later, if needed | Single-agent presentation grouping, parked frontends, private in-VM source authentication and scoped extensions below |
 
-### Possible future improvement: single-agent presentation
 
-Consider grouping single-agent findings by cited review criterion, with a general-concerns section for uncited findings. Do not force persona categories onto this flow. Decide the layout using representative reports; its current confidence-based layout remains supported.
 
 ### Possible future improvement: pluggable review skills
 

@@ -5,7 +5,7 @@ Thank you for helping improve code-reviewer. Use [GitHub issues](https://github.
 ## Find your way around
 
 - [Development guide](docs/development.md): installation, tests, debugging and deployment checks.
-- [Architecture](docs/architecture.md): package ownership and review algorithms.
+- [Architecture](docs/architecture.md): package ownership and review orchestration.
 - [Code walkthrough](docs/project-explainer.md): method-level call chains from the CLI to reports.
 - [Roadmap](docs/proposal.md#checklist): outstanding work and qualification evidence.
 - [Repository guidance](AGENTS.md): compatibility, security and implementation rules.

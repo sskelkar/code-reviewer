@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from code_reviewer import cli
 from code_reviewer.backends.factory import credential_name
-from code_reviewer.flows.agent_personas.runner import ParallelRunner
+from code_reviewer.review.runner import ParallelRunner
 from code_reviewer.config import Config
 from code_reviewer.sandbox import review, settings, guest, connected, wire, network
 from code_reviewer.sandbox.channel import Channel
@@ -34,8 +34,8 @@ class VMReviewTests(unittest.TestCase):
         self.ref = PRRef('github.com', 'example', 'project', 1)
         self.options = SimpleNamespace(dry_run=False, local_path=None, keep_checkout=False)
 
-    def cfg(self, provider='openai', mode='single-agent'):
-        return Config(tracing=False, provider=provider, review_mode=mode, min_passes=1, max_passes=1, persona_passes=1,
+    def cfg(self, provider='openai', mode='agent-personas'):
+        return Config(tracing=False, provider=provider, persona_passes=1,
                       model_reviewer='synthetic-model', model_comparator='synthetic-model',
                       model_resolver='synthetic-model', model_verifier='synthetic-model',
                       openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
@@ -94,18 +94,17 @@ class VMReviewTests(unittest.TestCase):
 
     def test_normal_cli_selects_vm_instead_of_host_for_each_provider_and_strategy(self):
         for provider in ('claude','openai'):
-            for mode in ('single-agent','agent-personas'):
-                cfg = self.cfg(provider, mode)
-                result = review.ExportedReview(cfg,self.root,'completed','review summary')
-                out = io.StringIO()
-                with patch.object(cli,'load_config',return_value=cfg), patch.object(settings.sys,'platform','darwin'), \
-                     patch.object(review,'run',return_value=result) as run, \
-                     patch('code_reviewer.engine.Engine.prepare',side_effect=AssertionError('no host acquisition')), \
-                     contextlib.redirect_stdout(out):
-                    self.assertEqual(cli.main(['review','example/project#1']),0)
-                run.assert_called_once()
-                self.assertIn('review summary',out.getvalue())
-                self.assertIn('VM review:',out.getvalue())
+            cfg = self.cfg(provider, 'agent-personas')
+            result = review.ExportedReview(cfg,self.root,'completed','review summary')
+            out = io.StringIO()
+            with patch.object(cli,'load_config',return_value=cfg), patch.object(settings.sys,'platform','darwin'), \
+                 patch.object(review,'run',return_value=result) as run, \
+                 patch('code_reviewer.engine.Engine.prepare',side_effect=AssertionError('no host acquisition')), \
+                 contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(['review','example/project#1']),0)
+            run.assert_called_once()
+            self.assertIn('review summary',out.getvalue())
+            self.assertIn('VM review:',out.getvalue())
 
     def test_private_channel_releases_only_selected_credential_after_exact_request(self):
         from .test_live_progress import frame, preview
@@ -329,27 +328,26 @@ class VMReviewTests(unittest.TestCase):
             return {'status':'completed','usage':{'input_tokens':10,'output_tokens':2},
                     'output':[{'type':'message','content':[{'type':'output_text','text':json.dumps(value)}]}]}
         for provider,auth in (('claude','api-key'),('claude','subscription'),('openai','api-key'),('openai','subscription')):
-            for mode in ('single-agent','agent-personas'):
-                cfg = self.cfg(provider,mode)
-                cfg.auth_mode=auth
-                cfg.criteria_mode='defaults_only'
-                root = self.root/(provider+auth+mode)
-                root.mkdir()
-                with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
-                     patch.object(guest,'receive',side_effect=[target.read_bytes(),b'fake-selected-key']), \
-                     patch.object(guest,'send_json'),patch('code_reviewer.backends.openai.request_response',api), \
-                     patch('code_reviewer.backends.factory.ClaudeRunner') as native:
-                    native.return_value=FakeRunner([{'findings':[]}] * 8)
-                    result=guest.run_job(None,root,probe_network=lambda:self.checks()['network'])
-                self.assertIn(result['stop_reason'],('completed','max_passes'))
-                metadata=json.loads(next((root/'runs').glob('*/config.json')).read_text())['config']
-                self.assertEqual(metadata['provider'],provider)
-                self.assertEqual(metadata['criteria_mode'],'defaults_only')
-                if provider=='claude':
-                    env=native.call_args.kwargs['env']
-                    selected_name=credential_name(provider,auth)
-                    self.assertEqual(env[selected_name],'fake-selected-key')
-                    self.assertNotIn('ANTHROPIC_API_KEY' if auth=='subscription' else 'CLAUDE_CODE_OAUTH_TOKEN',env)
-                    self.assertNotIn('OPENAI_API_KEY',env)
-                self.assertNotIn('fake-selected-key',json.dumps(result))
-                self.assertIn('ephemeral guest files',base64.b64decode(result['files']['report.md']).decode())
+            cfg = self.cfg(provider,'agent-personas')
+            cfg.auth_mode=auth
+            cfg.criteria_mode='defaults_only'
+            root = self.root/(provider+auth+'agent-personas')
+            root.mkdir()
+            with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
+                 patch.object(guest,'receive',side_effect=[target.read_bytes(),b'fake-selected-key']), \
+                 patch.object(guest,'send_json'),patch('code_reviewer.backends.openai.request_response',api), \
+                 patch('code_reviewer.backends.factory.ClaudeRunner') as native:
+                native.return_value=FakeRunner([{'findings':[]}] * 8)
+                result=guest.run_job(None,root,probe_network=lambda:self.checks()['network'])
+            self.assertIn(result['stop_reason'],('completed',))
+            metadata=json.loads(next((root/'runs').glob('*/config.json')).read_text())['config']
+            self.assertEqual(metadata['provider'],provider)
+            self.assertEqual(metadata['criteria_mode'],'defaults_only')
+            if provider=='claude':
+                env=native.call_args.kwargs['env']
+                selected_name=credential_name(provider,auth)
+                self.assertEqual(env[selected_name],'fake-selected-key')
+                self.assertNotIn('ANTHROPIC_API_KEY' if auth=='subscription' else 'CLAUDE_CODE_OAUTH_TOKEN',env)
+                self.assertNotIn('OPENAI_API_KEY',env)
+            self.assertNotIn('fake-selected-key',json.dumps(result))
+            self.assertIn('ephemeral guest files',base64.b64decode(result['files']['report.md']).decode())

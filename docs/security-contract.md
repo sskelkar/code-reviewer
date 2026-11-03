@@ -1,14 +1,13 @@
 # Reviewer execution and security contract
 
-One reviewer supports runtime-selected providers and an independent operator choice of execution location.
+One four-perspective reviewer supports runtime-selected providers and an independent operator choice of execution location.
 
 ## Independent runtime choices
 
 | Choice | Meaning |
 |---|---|
-| Provider | Claude or OpenAI adapter; same review algorithms and output contract |
+| Provider | Claude or OpenAI adapter; same review orchestration and output contract |
 | Authentication | Explicit API-key or subscription access; unsupported combinations refuse without billing fallback |
-| Review strategy | Single-agent or agent-personas; independent of provider/execution location |
 | Execution | VM by default; explicit direct-host selection for trusted use without VM startup overhead |
 
 The direct flag is `--no-sandbox`; trusted operator config can also set `sandbox = false`. Explicit host dispatch is implemented. Host acquisition is supported. No repository classification chooses these settings. Only trusted operator configuration/arguments may choose execution location, provider credentials or executables. A VM failure refuses that request; it never silently switches to host execution.

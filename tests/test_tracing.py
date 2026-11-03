@@ -98,43 +98,40 @@ class TracingTests(unittest.TestCase):
         self.assertEqual(stats['important'], 'report accounting')
         self.assertLessEqual(len(json.dumps(stats, indent=2).encode()) + 1, 130)
 
-    def test_actual_flows_preserve_results_and_persona_parentage(self):
-        for mode in ('single-agent', 'agent-personas'):
-            root = self.root / mode
-            root.mkdir()
-            ctx = make_repo(root)
-            cfg = Config(review_mode=mode, min_passes=1, max_passes=1, persona_passes=1,
-                         criteria_mode='defaults_only', runs_dir=str(root / 'runs'))
-            recorder = tracing.Recorder()
-            with tracing.activate(recorder), tracing.observation('review.run'):
-                result = Engine(cfg, FakeRunner([{'findings': []}])).review(ctx)
-            value = tracing.validate(recorder.snapshot())
-            generations = [r for r in value['records'] if r['kind'] == 'generation']
-            self.assertEqual(len(generations), 4 if mode == 'agent-personas' else 1)
-            self.assertTrue(all(r['parent'] is not None for r in generations))
-            if mode == 'agent-personas':
-                personas = {r['attributes'].get('persona') for r in value['records'] if r['kind'] == 'agent'}
-                self.assertEqual(personas, set(tracing.ENUMS['persona']))
-            self.assertTrue(result.report_path.is_file())
+    def test_review_pipeline_preserve_results_and_persona_parentage(self):
+        root = self.root / 'agent-personas'
+        root.mkdir()
+        ctx = make_repo(root)
+        cfg = Config(persona_passes=1,
+                     criteria_mode='defaults_only', runs_dir=str(root / 'runs'))
+        recorder = tracing.Recorder()
+        with tracing.activate(recorder), tracing.observation('review.run'):
+            result = Engine(cfg, FakeRunner([{'findings': []}])).review(ctx)
+        value = tracing.validate(recorder.snapshot())
+        generations = [r for r in value['records'] if r['kind'] == 'generation']
+        self.assertEqual(len(generations), 4)
+        self.assertTrue(all(r['parent'] is not None for r in generations))
+        personas = {r['attributes'].get('persona') for r in value['records'] if r['kind'] == 'agent'}
+        self.assertEqual(personas, set(tracing.ENUMS['persona']))
+        self.assertTrue(result.report_path.is_file())
 
     def test_validation_retry_is_visible_without_changing_accounting(self):
         ctx = make_repo(self.root)
-        cfg = Config(min_passes=1, max_passes=1, criteria_mode='defaults_only', runs_dir=str(self.root / 'runs'))
+        cfg = Config(persona_passes=1, persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.root / 'runs'))
         recorder = tracing.Recorder()
         with tracing.activate(recorder), tracing.observation('review.run'):
             result = Engine(cfg, FakeRunner([{}, {'findings': []}])).review(ctx)
         attempts = [r for r in recorder.snapshot()['records'] if r['kind'] == 'generation']
-        self.assertEqual(len(attempts), 2)
+        self.assertEqual(len(attempts), 5)
         self.assertEqual(attempts[0]['attributes']['outcome'], 'error')
         self.assertEqual(attempts[0]['attributes']['rejected'], 1)
         self.assertEqual(attempts[1]['attributes']['outcome'], 'ok')
-        self.assertEqual(len(result.stats.calls), 2)
-        self.assertEqual(result.passes_completed, 1)
+        self.assertEqual(len(result.stats.calls), 5)
+        self.assertEqual(result.passes_completed, 4)
 
     def test_host_frontdoor_saves_trace_even_when_export_fails(self):
         ctx = make_repo(self.root)
-        cfg = Config(sandbox=False, criteria_mode='defaults_only', min_passes=1, max_passes=1,
-                     runs_dir=str(self.root / 'runs'))
+        cfg = Config(sandbox=False, criteria_mode='defaults_only', runs_dir=str(self.root / 'runs'))
         self.assertTrue(cfg.tracing)  # An ordinary review records traces by default.
         options = SimpleNamespace(preflight=False, dry_run=False)
         with patch.object(Engine, 'prepare', return_value=ctx), patch('code_reviewer.tracing.langfuse.export', side_effect=RuntimeError('SECRET_CANARY')), redirect_stderr(io.StringIO()) as err:
@@ -244,27 +241,26 @@ class TracingTests(unittest.TestCase):
         ctx = make_repo(self.root)
         archive = self.root / 'input.tar'
         capsule.prepare(ctx.git_dir, ctx.base_sha, ctx.head_sha, archive)
-        for mode in ('single-agent', 'agent-personas'):
-            directory = self.root / mode
-            directory.mkdir()
-            cfg = Config(tracing=True, provider='openai', review_mode=mode, model_reviewer='synthetic',
-                         model_comparator='synthetic', model_resolver='synthetic', model_verifier='synthetic',
-                         openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
-                         criteria_mode='defaults_only', min_passes=1, max_passes=1, persona_passes=1)
-            host = tracing.Recorder()
-            with tracing.activate(host), tracing.observation('review.run'):
-                settings = job_settings(cfg)
-            with patch.object(guest, 'receive_json', return_value=settings), patch.object(guest, 'receive',
-                    side_effect=[archive.read_bytes(), b'CREDENTIAL_CANARY']), patch.object(guest, 'send_json'), \
-                    patch('code_reviewer.backends.openai.request_response', return_value=response(final({'findings': []}))):
-                result = guest.run_job(None, directory, probe_network=lambda: {k: True for k in connected.NETWORK_CHECKS})
-            self.assertEqual(set(result['files']), {'report.md', 'summary.md', 'stats.json'})
-            data = base64.b64decode(result['files']['stats.json'])
-            self.assertNotIn(b'CREDENTIAL_CANARY', data)
-            trace = json.loads(data)['trace']
-            tracing.validate(trace, trace_id=host.trace_id, parent_id=host.guest_context['parent_id'], models={'synthetic'})
-            self.assertTrue(any(r['kind'] == 'generation' for r in trace['records']))
-            self.assertLessEqual(sum(len(base64.b64decode(v)) for v in result['files'].values()), guest.MAX_EXPORT)
+        directory = self.root / 'agent-personas'
+        directory.mkdir()
+        cfg = Config(tracing=True, provider='openai', model_reviewer='synthetic',
+                     model_comparator='synthetic', model_resolver='synthetic', model_verifier='synthetic',
+                     openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
+                     criteria_mode='defaults_only', persona_passes=1)
+        host = tracing.Recorder()
+        with tracing.activate(host), tracing.observation('review.run'):
+            settings = job_settings(cfg)
+        with patch.object(guest, 'receive_json', return_value=settings), patch.object(guest, 'receive',
+                side_effect=[archive.read_bytes(), b'CREDENTIAL_CANARY']), patch.object(guest, 'send_json'), \
+                patch('code_reviewer.backends.openai.request_response', return_value=response(final({'findings': []}))):
+            result = guest.run_job(None, directory, probe_network=lambda: {k: True for k in connected.NETWORK_CHECKS})
+        self.assertEqual(set(result['files']), {'report.md', 'summary.md', 'stats.json'})
+        data = base64.b64decode(result['files']['stats.json'])
+        self.assertNotIn(b'CREDENTIAL_CANARY', data)
+        trace = json.loads(data)['trace']
+        tracing.validate(trace, trace_id=host.trace_id, parent_id=host.guest_context['parent_id'], models={'synthetic'})
+        self.assertTrue(any(r['kind'] == 'generation' for r in trace['records']))
+        self.assertLessEqual(sum(len(base64.b64decode(v)) for v in result['files'].values()), guest.MAX_EXPORT)
 
     def test_openai_turns_tools_and_cache_usage_have_no_content_or_duplicate_generations(self):
         (self.root / 'app.py').write_text('SOURCE_CANARY\n')

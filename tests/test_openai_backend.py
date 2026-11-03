@@ -1,4 +1,4 @@
-"""Synthetic Responses protocol, local read boundaries and both review flows; no API calls."""
+"""Synthetic Responses protocol, local read boundaries and the multi-perspective pipeline; no API calls."""
 from __future__ import annotations
 
 import copy
@@ -60,7 +60,7 @@ class OpenAIBackendTests(unittest.TestCase):
                 self.assert_supported_arrays(child)
 
     def test_actual_role_schemas_are_compatible_in_both_authentication_modes(self):
-        root = Path(__file__).resolve().parents[1] / 'src/code_reviewer/flows'
+        root = Path(__file__).resolve().parents[1] / 'src/code_reviewer/review'
         for path in root.glob('*/prompts/schemas/*.json'):
             schema = json.loads(path.read_text())
             before = copy.deepcopy(schema)
@@ -216,21 +216,21 @@ class OpenAIBackendTests(unittest.TestCase):
             with self.assertRaises(openai.ProviderError):
                 openai.request_response({'synthetic': 'payload'}, 'synthetic', 5)
 
-    def test_both_flows_complete_via_offline_responses_and_real_read_dispatch(self):
+    def test_review_pipeline_complete_via_offline_responses_and_real_read_dispatch(self):
         original = openai_smoke.offline_response
         def transport(payload, key, timeout):
             self.assert_supported_arrays(payload['text']['format']['schema'])
             return original(payload, key, timeout)
         with patch.object(openai_smoke, 'offline_response', transport):
             result = openai_smoke.run_offline()
-        self.assertEqual(result['flows']['single-agent']['completed'], 2)
-        self.assertEqual(result['flows']['agent-personas']['completed'], 4)
+        self.assertEqual(result['review']['completed'], 4)
+        self.assertEqual(result['review']['completed'], 4)
         framed = openai_smoke.RESULT_PREFIX + json.dumps(result)
         self.assertEqual(openai_smoke.parse_result(framed), result)
         with self.assertRaises(ValueError):
             openai_smoke.parse_result(framed + '\n' + framed)
 
-    def test_subscription_completes_both_flows_with_persona_comparison(self):
+    def test_subscription_completes_review_pipeline_with_persona_comparison(self):
         def transport(payload, key, timeout):
             self.assertTrue(payload['stream'])
             self.assert_supported_arrays(payload['text']['format']['schema'])
@@ -243,10 +243,10 @@ class OpenAIBackendTests(unittest.TestCase):
             billing_mode='subscription', transport=transport)
         with patch.object(smoke, 'Config', side_effect=lambda **kw: Config(**dict(kw, auth_mode='subscription'))):
             result = smoke.run_smoke(runner, model=runner.model, provider='openai')
-        self.assertEqual(result['flows']['single-agent']['completed'], 2)
-        self.assertEqual(result['flows']['agent-personas']['completed'], 4)
-        self.assertEqual(result['flows']['agent-personas']['findings'], 1)
-        self.assertEqual(result['flows']['agent-personas']['calls'], 8)
+        self.assertEqual(result['review']['completed'], 4)
+        self.assertEqual(result['review']['completed'], 4)
+        self.assertEqual(result['review']['findings'], 1)
+        self.assertEqual(result['review']['calls'], 8)
 
 
 @unittest.skipUnless(os.name == 'posix', 'descriptor-relative POSIX file tools')

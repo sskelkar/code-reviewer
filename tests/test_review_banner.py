@@ -29,8 +29,8 @@ class BannerContentTests(unittest.TestCase):
         self.assertIn("--config", flags_in_banner)  # the top-level option that goes before `review`
 
     def test_banner_describes_this_run_and_what_happens_afterwards(self):
-        text = review_banner("acme/project#7", Config(max_passes=4, model_reviewer="sonnet", self_check=False, redact_emails=False))
-        for expected in ("acme/project#7", "up to 4 passes", "model sonnet", "self-check off", "NOT redacted",
+        text = review_banner("acme/project#7", Config(model_reviewer="sonnet", self_check=False, redact_emails=False))
+        for expected in ("acme/project#7", "12 scheduled reviews", "model sonnet", "self-check off", "NOT redacted",
                          "Options you can add to this command:", "--passes N", "--dry-run", "--post",
                          "the review summary", "interactive prompt", "mark/drop commands are parked"):
             self.assertIn(expected, text)
@@ -43,8 +43,8 @@ class BannerContentTests(unittest.TestCase):
         self.assertEqual(len({l.index(d) for l, (_, d) in zip(lines, BANNER_OPTIONS)}), 1)
 
     def test_persona_banner_uses_configured_per_persona_and_total_counts(self):
-        text = review_banner('a/b#1', Config(review_mode='agent-personas', persona_passes=2))
-        self.assertIn('up to 8 passes', text)
+        text = review_banner('a/b#1', Config(persona_passes=2))
+        self.assertIn('8 scheduled reviews', text)
         self.assertIn('2 passes per persona', text)
 
 
@@ -68,21 +68,21 @@ class BannerInTheCliTests(TempDirTestMixin, unittest.TestCase):
         out = TerminalStringIO()
         self.assertEqual(self.run_cli(out, "--passes", "1"), 0)
         text = out.getvalue()
-        self.assertTrue(text.startswith("reviewer review: multi-pass pull request review"))
-        self.assertIn("up to 1 passes", text)  # the effective settings, after --passes
-        self.assertLess(text.index("Options you can add"), text.index("## AI-generated code review"))
+        self.assertTrue(text.startswith("reviewer review: multi-perspective pull request review"))
+        self.assertIn("4 scheduled reviews", text)  # the effective settings, after --passes
+        self.assertLess(text.index("Options you can add"), text.index("## AI-generated persona review"))
 
     def test_banner_is_not_printed_when_output_is_not_a_terminal(self):
         out = io.StringIO()
         self.assertEqual(self.run_cli(out, "--passes", "1"), 0)
         self.assertNotIn("Options you can add", out.getvalue())
-        self.assertIn("## AI-generated code review", out.getvalue())
+        self.assertIn("## AI-generated persona review", out.getvalue())
 
     def test_banner_is_also_shown_for_a_dry_run(self):
         out = TerminalStringIO()
         self.assertEqual(self.run_cli(out, "--dry-run"), 0)
         self.assertIn("Options you can add", out.getvalue())
-        self.assertIn("WHAT THE REVIEWER IS GIVEN", out.getvalue())
+        self.assertIn("WHAT THE REVIEWERS ARE GIVEN", out.getvalue())
 
 
 if __name__ == "__main__":

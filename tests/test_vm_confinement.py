@@ -128,16 +128,14 @@ class VMConfinementTests(unittest.TestCase):
                     vm.stop_unit(name)
             command.assert_not_called()
 
-    def test_both_flows_reuse_external_snapshot_without_exporting_or_deleting_it(self):
+    def test_review_pipeline_reuse_external_snapshot_without_exporting_or_deleting_it(self):
         ctx = make_repo(self.root)
         checkout = self.root/'snapshot'
         bounded_export(ctx.git_dir, ctx.head_sha, checkout)
-        for mode in ('single-agent', 'agent-personas'):
-            cfg = Config(review_mode=mode, criteria_mode='defaults_only', min_passes=1, max_passes=1,
-                         persona_passes=1, persona_parallel=1, runs_dir=str(self.root/mode))
-            runner = FakeRunner([{'findings': []}])
-            with patch('code_reviewer.shared.git_ops.export_tree', side_effect=AssertionError('already exported')):
-                result = Engine(cfg, runner).review(ctx, prepared_checkout=checkout)
-            self.assertEqual(result.passes_completed, 1 if mode == 'single-agent' else 4)
-            self.assertTrue((checkout/'app.py').exists())
-            self.assertTrue(all(call['cwd'] == checkout for call in runner.calls if call['tools']))
+        cfg = Config(criteria_mode='defaults_only', persona_passes=1, persona_parallel=1, runs_dir=str(self.root/'agent-personas'))
+        runner = FakeRunner([{'findings': []}])
+        with patch('code_reviewer.shared.git_ops.export_tree', side_effect=AssertionError('already exported')):
+            result = Engine(cfg, runner).review(ctx, prepared_checkout=checkout)
+        self.assertEqual(result.passes_completed, 4)
+        self.assertTrue((checkout/'app.py').exists())
+        self.assertTrue(all(call['cwd'] == checkout for call in runner.calls if call['tools']))

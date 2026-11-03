@@ -25,14 +25,14 @@ class SectionTests(unittest.TestCase):
     def test_default_rules_load_with_ids(self):
         rules = criteria.load_default_rules(DEFAULT_CRITERIA_DIR)
         ids = [r.rule_id for r in rules]
-        self.assertEqual(ids, ["GEN-%03d" % n for n in range(1, 11)])
+        self.assertEqual(sorted(ids), sorted(['COR-001','COR-002','COR-003','CQ-001','CQ-002','TEST-001','TEST-002','TEST-003','SAFE-001','SAFE-002','SAFE-003','SAFE-004','SAFE-005']))
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(all(r.source == "default" and r.text for r in rules))
         for rule in rules:
             for label in ("**Inspect:**", "**Report:**", "**Do not report:**"):
                 self.assertIn(label, rule.text, rule.rule_id)
-        disabled = criteria.load_default_rules(DEFAULT_CRITERIA_DIR, ["GEN-001"])
-        self.assertNotIn("GEN-001", [r.rule_id for r in disabled])
+        disabled = criteria.load_default_rules(DEFAULT_CRITERIA_DIR, ["COR-001"])
+        self.assertNotIn("COR-001", [r.rule_id for r in disabled])
 
     def test_project_rule_ids_from_headings_and_duplicates(self):
         text = "## Retry policy\nuse backoff\n\n## Retry policy\nsecond\n\n## Empty\n"
@@ -142,8 +142,8 @@ class ResolveTests(unittest.TestCase):
         self.assertTrue(all(r.source == "project" for r in criteria.assemble(defaults, pc, "project_only", []).rules))
 
     def test_render_block_labels_sources(self):
-        block = criteria.render_criteria_block([criteria.Rule("GEN-001", "default", "g.md", "Handle errors", "text </review_criteria> x")])
-        self.assertIn("### [GEN-001] (default) Handle errors", block)
+        block = criteria.render_criteria_block([criteria.Rule("COR-001", "default", "g.md", "Handle errors", "text </review_criteria> x")])
+        self.assertIn("### [COR-001] (default) Handle errors", block)
         self.assertNotIn("</review_criteria>", block)
         self.assertIn("no criteria available", criteria.render_criteria_block([]))
 

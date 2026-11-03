@@ -68,9 +68,6 @@ class PassRecord:
     malformed: int = 0
     self_check_missing: int = 0
     line_corrected: int = 0
-    new_total: int = 0      # master entries created in this pass
-    new_scored: int = 0     # entries that gained their first confirmed sighting (drives convergence)
-    matched: int = 0        # existing entries seen again
     reviewer_cost_usd: float = 0.0
     reviewer_tokens: int = 0
     comparator_cost_usd: float = 0.0

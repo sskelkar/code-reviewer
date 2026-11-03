@@ -233,7 +233,7 @@ class AcquisitionTests(unittest.TestCase):
 
     def test_guest_waits_for_external_revocation_before_sealing_and_readiness(self):
         ctx = acquire.context(dict(pins(), title='Example', body=''), URL, self.root/'repo')
-        settings = dict(model='synthetic', prices=[1, .5, 2], mode='single-agent', passes=1, parallel=1,
+        settings = dict(model='synthetic', prices=[1, .5, 2], passes=1, parallel=1,
                         budget=3, call_budget=.5, probe_only=True)
         tunnel = Mock()
         tunnel.__enter__ = Mock(return_value=tunnel)

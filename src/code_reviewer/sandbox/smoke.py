@@ -1,4 +1,4 @@
-"""Exercise both real flows with a synthetic Git repository and fake headless executable."""
+"""Exercise the review pipeline with a synthetic Git repository and fake headless executable."""
 from __future__ import annotations
 
 import json
@@ -24,7 +24,6 @@ def git(repo, *args):
 
 
 def run_smoke(runner=None, *, model="haiku", expected_findings=1, provider="claude"):
-    results = {}
     with tempfile.TemporaryDirectory(prefix='reviewer-vm-smoke-') as name:
         root = Path(name)
         repo = root / 'fixture'
@@ -42,20 +41,18 @@ def run_smoke(runner=None, *, model="haiku", expected_findings=1, provider="clau
         fake = root / 'fake-claude'
         fake.write_bytes(Path(__file__).with_name('fake_claude.py').read_bytes())
         fake.chmod(0o700)
-        for mode in ('single-agent', 'agent-personas'):
-            cfg = Config(provider=provider, model_reviewer=model, model_comparator=model, model_resolver=model, model_verifier=model,
-                         review_mode=mode, criteria_mode='defaults_only', min_passes=1, max_passes=2,
-                         persona_passes=1, claude_bin=str(fake), runs_dir=str(root / mode))
-            result = Engine(cfg, runner if runner is not None else ClaudeRunner(str(fake))).review(ctx)
-            expected = 2 if mode == 'single-agent' else 4
-            if (result.passes_completed != expected
-                    or (expected_findings is not None and len(result.master.scored()) != expected_findings)):
-                raise RuntimeError('%s review/consolidation did not complete' % mode)
-            if result.stats.retries_and_failures()['failed_calls'] or not result.report_path.is_file():
-                raise RuntimeError('%s failed calls or report missing' % mode)
-            results[mode] = {'completed': result.passes_completed, 'findings': len(result.master.scored()),
-                             'calls': len(result.stats.calls), 'stop_reason': result.stop_reason}
-    return {'format': 1, 'synthetic': True, 'flows': results}
+        cfg = Config(provider=provider, model_reviewer=model, model_comparator=model, model_resolver=model, model_verifier=model,
+                     criteria_mode='defaults_only', persona_passes=1, claude_bin=str(fake), runs_dir=str(root / 'run'))
+        result = Engine(cfg, runner if runner is not None else ClaudeRunner(str(fake))).review(ctx)
+        if (result.passes_completed != 4
+                or (expected_findings is not None and len(result.master.scored()) != expected_findings)):
+            raise RuntimeError('review/consolidation did not complete')
+        if result.stats.retries_and_failures()['failed_calls'] or not result.report_path.is_file():
+            raise RuntimeError('failed calls or report missing')
+        review = {'completed': result.passes_completed, 'findings': len(result.master.scored()),
+                  'calls': len(result.stats.calls), 'stop_reason': result.stop_reason}
+    return {'format': 1, 'synthetic': True, 'review': review}
+
 
 
 if __name__ == '__main__':

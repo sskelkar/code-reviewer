@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List
 
-from ...shared.findings import SEVERITY_RANK
+from ..shared.findings import SEVERITY_RANK
 
 FIELDS = ('title', 'description', 'severity', 'kind', 'rule_id', 'file', 'line', 'quote', 'anchor', 'expected', 'suggestion')
 

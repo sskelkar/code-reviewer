@@ -24,7 +24,7 @@ from code_reviewer.backends.openai_stream import read_stream, StreamFailure
 from code_reviewer.backends.contract import LLMResult
 from code_reviewer.config import Config, ConfigError
 from code_reviewer.engine import Engine
-from code_reviewer.flows.agent_personas.budget import Budget, RunStopped
+from code_reviewer.review.budget import Budget, RunStopped
 from code_reviewer.sandbox import settings
 from tests.helpers import make_repo
 
@@ -33,7 +33,7 @@ def config(**kwargs):
     values = dict(tracing=False, provider='openai', auth_mode='subscription', sandbox=False,
                   model_reviewer='test-model', model_comparator='test-model',
                   model_resolver='test-model', model_verifier='test-model',
-                  min_passes=1, max_passes=1, persona_passes=1, criteria_mode='defaults_only')
+                  persona_passes=1, criteria_mode='defaults_only')
     values.update(kwargs)
     return Config(**values)
 
@@ -340,32 +340,31 @@ class AdapterTests(unittest.TestCase):
             factory.create_runner(config(auth_mode='api-key', openai_input_price=1, openai_cached_input_price=1, openai_output_price=1), selected_credential='x'*8000)
 
 class WiringTests(unittest.TestCase):
-    def test_both_one_shot_flows_use_subscription_factory_and_write_reports(self):
-        for mode in ('single-agent', 'agent-personas'):
-            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as name:
-                root = Path(name)
-                ctx = make_repo(root)
-                cfg = config(review_mode=mode, runs_dir=str(root/'runs'))
-                output = io.StringIO()
-                with patch.object(cli, 'load_config', return_value=cfg), \
-                     patch.object(Engine, 'prepare', return_value=ctx), \
-                     patch.object(Store, 'access', return_value='synthetic-access') as access, \
-                     patch('code_reviewer.backends.openai.request_response', return_value=reply()) as infer, \
-                     contextlib.redirect_stdout(output):
-                    code = cli.main(['review', 'example/project#1', '--account', 'selected'])
-                self.assertEqual(code, 0, output.getvalue())
-                self.assertEqual(infer.call_count, 4 if mode == 'agent-personas' else 1)
-                self.assertEqual(access.call_args.args[1], 'selected')
-                for call in infer.call_args_list:
-                    self.assertTrue(call.args[0]['stream'])
-                    self.assertNotIn('max_output_tokens', call.args[0])
-                stats_file = next((root/'runs').rglob('stats.json'))
-                stats = json.loads(stats_file.read_text())
-                self.assertIsNone(stats['total_cost_usd_estimated'])
-                self.assertGreater(stats['budget_tokens'], 0)
-                report = stats_file.with_name('report.md').read_text()
-                self.assertNotIn('$0.00', report)
-                self.assertIn('subscription', output.getvalue())
+    def test_one_shot_review_use_subscription_factory_and_write_reports(self):
+        with self.subTest(mode='agent-personas'), tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            ctx = make_repo(root)
+            cfg = config(runs_dir=str(root/'runs'))
+            output = io.StringIO()
+            with patch.object(cli, 'load_config', return_value=cfg), \
+                 patch.object(Engine, 'prepare', return_value=ctx), \
+                 patch.object(Store, 'access', return_value='synthetic-access') as access, \
+                 patch('code_reviewer.backends.openai.request_response', return_value=reply()) as infer, \
+                 contextlib.redirect_stdout(output):
+                code = cli.main(['review', 'example/project#1', '--account', 'selected'])
+            self.assertEqual(code, 0, output.getvalue())
+            self.assertEqual(infer.call_count, 4)
+            self.assertEqual(access.call_args.args[1], 'selected')
+            for call in infer.call_args_list:
+                self.assertTrue(call.args[0]['stream'])
+                self.assertNotIn('max_output_tokens', call.args[0])
+            stats_file = next((root/'runs').rglob('stats.json'))
+            stats = json.loads(stats_file.read_text())
+            self.assertIsNone(stats['total_cost_usd_estimated'])
+            self.assertGreater(stats['budget_tokens'], 0)
+            report = stats_file.with_name('report.md').read_text()
+            self.assertNotIn('$0.00', report)
+            self.assertIn('subscription', output.getvalue())
 
     def test_browser_authorization_uses_loopback_pkce_nonce_and_no_secret_hint(self):
         from unittest.mock import MagicMock
@@ -594,7 +593,7 @@ class HeaderlessStreamTests(unittest.TestCase):
             runner = factory.create_runner(cfg, selected_credential='synthetic-access', transport=transport)
             result = Engine(cfg, runner).review(ctx)
             self.assertEqual(result.passes_completed, 0)
-            self.assertEqual(transport.call_count, 1)
+            self.assertEqual(transport.call_count, 4)
             self.assertIn('subscription_sharing_unsupported_capability', result.report_path.read_text())
 
 class DocumentedProtocolTests(unittest.TestCase):

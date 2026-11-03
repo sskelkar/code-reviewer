@@ -56,7 +56,7 @@ class NativeLoginTests(unittest.TestCase):
         self.binary.write_text(FAKE.format(python=sys.executable))
         self.binary.chmod(0o700)
         self.cfg=Config(tracing=False, sandbox=False, auth_mode='subscription', claude_bin=str(self.binary),
-            criteria_mode='defaults_only', min_passes=1, max_passes=1, persona_passes=1,
+            criteria_mode='defaults_only', persona_passes=1,
             runs_dir=str(self.root/'runs'))
         self.set_status(dict(loggedIn=True,authMethod='claude.ai',email='PRIVATE_IDENTITY_CANARY'))
         environment=patch.dict(os.environ,dict(HOME=str(self.home),USER='synthetic-native-user',PATH='/usr/bin:/bin',
@@ -150,25 +150,24 @@ class NativeLoginTests(unittest.TestCase):
                     factory.create_runner(self.cfg)
                 self.assertNotIn('PRIVATE_IDENTITY_CANARY',str(caught.exception))
 
-    def test_both_one_shot_flows_use_native_login_without_persisting_status_metadata(self):
+    def test_one_shot_review_use_native_login_without_persisting_status_metadata(self):
         source=self.root/'source'
         source.mkdir()
         ctx=make_repo(source)
-        for mode in ('single-agent','agent-personas'):
-            cfg=replace(self.cfg,review_mode=mode,runs_dir=str(self.root/mode))
-            out,err=io.StringIO(),io.StringIO()
-            with patch.object(cli,'load_config',return_value=cfg),patch.object(Engine,'prepare',return_value=ctx), \
-                    contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
-                code=cli.main(['review','example/project#1','--no-sandbox','--provider','claude',
-                               '--auth','subscription','--mode',mode,'--passes','1'])
-            self.assertEqual(code,0,err.getvalue())
-            stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
-            self.assertEqual(len(stats['calls']),4 if mode=='agent-personas' else 1)
-            self.assertTrue(all(call['billing_mode']=='subscription' for call in stats['calls']))
-            for path in Path(cfg.runs_dir).rglob('*'):
-                if path.is_file():
-                    self.assertNotIn(b'PRIVATE_IDENTITY_CANARY',path.read_bytes())
-        self.assertEqual(sum(row['kind']=='status' for row in self.calls()),2)
+        cfg=replace(self.cfg,runs_dir=str(self.root/'agent-personas'))
+        out,err=io.StringIO(),io.StringIO()
+        with patch.object(cli,'load_config',return_value=cfg),patch.object(Engine,'prepare',return_value=ctx), \
+                contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
+            code=cli.main(['review','example/project#1','--no-sandbox','--provider','claude',
+                           '--auth','subscription','--passes','1'])
+        self.assertEqual(code,0,err.getvalue())
+        stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
+        self.assertEqual(len(stats['calls']),4)
+        self.assertTrue(all(call['billing_mode']=='subscription' for call in stats['calls']))
+        for path in Path(cfg.runs_dir).rglob('*'):
+            if path.is_file():
+                self.assertNotIn(b'PRIVATE_IDENTITY_CANARY',path.read_bytes())
+        self.assertEqual(sum(row['kind']=='status' for row in self.calls()),1)
 
     def test_host_preflight_and_dry_run_do_not_check_native_login(self):
         source=self.root/'source'

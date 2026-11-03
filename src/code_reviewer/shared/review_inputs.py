@@ -1,6 +1,6 @@
 """Building what the Reviewer is given: the redacted PR text, the filtered diff, and the criteria.
 
-Shared by both flows. Dry runs build the pinned diff and default criteria but omit project discovery and model calls.
+Shared by the review pipeline. Dry runs build the pinned diff and default criteria but omit project discovery and model calls.
 """
 from __future__ import annotations
 from ..tracing import traced

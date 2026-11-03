@@ -16,7 +16,7 @@ from code_reviewer.review_options import apply_run_options
 
 from .helpers import FakeRunner
 
-RUN_OPTIONS = ("--mode", "--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose", "--dry-run")
+RUN_OPTIONS = ("--passes", "--model", "--no-self-check", "--keep-checkout", "--verbose", "--dry-run")
 
 
 def squash(text):
@@ -67,7 +67,7 @@ class HelpTextTests(unittest.TestCase):
         text = render_help("review")
         for option in RUN_OPTIONS + ("--post", "--local-path"):
             self.assertIn(option, text)
-        for phrase in ("maximum number of review passes", "refute its own findings", "separate temporary checkout",
+        for phrase in ("passes per persona", "refute its own findings", "separate temporary checkout",
                        "extra progress detail", "alias or full name", "explicit opt-in",
                        "no model is called"):
             self.assertIn(phrase, text)
@@ -75,7 +75,7 @@ class HelpTextTests(unittest.TestCase):
     def test_repl_help_describes_the_options(self):
         for option in RUN_OPTIONS:
             self.assertIn(option, HELP)
-        self.assertIn("single, cheap pass", HELP)
+        self.assertIn("one review per perspective", HELP)
 
 
 class ParsingTests(unittest.TestCase):
@@ -83,15 +83,14 @@ class ParsingTests(unittest.TestCase):
         from code_reviewer.config import CRITERIA_MODES
         from code_reviewer.sandbox.settings import config_from_job, job_settings
         from pathlib import Path
-        for flow in ('single-agent', 'agent-personas'):
-            original = Config(review_mode=flow)
-            for mode in CRITERIA_MODES:
-                with self.subTest(flow=flow, criteria=mode):
-                    args = build_parser().parse_args(['review', 'example/project#1', '--criteria', mode])
-                    cfg = apply_run_options(original, args)
-                    self.assertEqual(cfg.criteria_mode, mode)
-                    self.assertEqual(config_from_job(job_settings(cfg), Path('/work')).criteria_mode, mode)
-                    self.assertEqual(original.criteria_mode, 'merge')
+        original = Config()
+        for mode in CRITERIA_MODES:
+            with self.subTest(flow='agent-personas', criteria=mode):
+                args = build_parser().parse_args(['review', 'example/project#1', '--criteria', mode])
+                cfg = apply_run_options(original, args)
+                self.assertEqual(cfg.criteria_mode, mode)
+                self.assertEqual(config_from_job(job_settings(cfg), Path('/work')).criteria_mode, mode)
+                self.assertEqual(original.criteria_mode, 'merge')
 
     def parse(self, *argv):
         return build_parser().parse_args(["review", "owner/repo#1"] + list(argv))
@@ -106,29 +105,11 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual((args.passes, args.model), (2, "sonnet"))
         self.assertTrue(args.no_self_check and args.keep_checkout and args.verbose and args.post)
 
-    def test_passes_must_be_a_positive_whole_number(self):
-        for bad in ("0", "-1", "two"):
-            with self.assertRaises(SystemExit) as caught, contextlib.redirect_stderr(io.StringIO()):
-                self.parse("--passes", bad)
-            self.assertEqual(caught.exception.code, 2)
-
-
-class ApplyOptionsTests(unittest.TestCase):
-    def test_passes_sets_max_and_lowers_min(self):
-        cfg = apply_run_options(Config(), options(passes=1))
-        self.assertEqual((cfg.max_passes, cfg.min_passes), (1, 1))
-        cfg = apply_run_options(Config(), options(passes=10))
-        self.assertEqual((cfg.max_passes, cfg.min_passes), (10, 3))
-
-    def test_persona_default_and_cli_overrides_are_separate_from_single_agent_controls(self):
-        original = Config(review_mode='agent-personas', persona_passes=5)
-        self.assertEqual(Config().persona_passes, 3)
-        self.assertEqual(apply_run_options(original, options()).persona_passes, 5)
-        cfg = apply_run_options(original, options(passes=2))
-        self.assertEqual((cfg.persona_passes, cfg.min_passes, cfg.max_passes), (2, 3, 6))
-        cfg = apply_run_options(original, options(mode='single-agent', passes=1))
-        self.assertEqual((cfg.persona_passes, cfg.min_passes, cfg.max_passes), (5, 1, 1))
-        self.assertEqual(original.persona_passes, 5)
+    def test_passes_and_parallel_override_the_review(self):
+        original = Config()
+        cfg = apply_run_options(original, options(passes=2, parallel=2))
+        self.assertEqual((cfg.persona_passes, cfg.persona_parallel), (2, 2))
+        self.assertEqual(original.persona_passes, 3)
 
     def test_model_applies_to_all_roles_and_self_check_can_be_disabled(self):
         cfg = apply_run_options(Config(), options(model="sonnet", no_self_check=True))
@@ -138,11 +119,11 @@ class ApplyOptionsTests(unittest.TestCase):
     def test_original_config_is_not_modified(self):
         original = Config()
         apply_run_options(original, options(passes=1, model="sonnet", no_self_check=True))
-        self.assertEqual((original.max_passes, original.model_reviewer, original.self_check), (6, "haiku", True))
+        self.assertEqual((original.persona_passes, original.model_reviewer, original.self_check), (3, "haiku", True))
 
     def test_invalid_combination_raises(self):
         with self.assertRaises(ConfigError):
-            apply_run_options(Config(min_passes=3, max_passes=3, quiet_k=0), options())
+            apply_run_options(Config(persona_passes=0), options())
 
 
 class ReplReviewCommandTests(unittest.TestCase):
@@ -157,7 +138,7 @@ class ReplReviewCommandTests(unittest.TestCase):
         self.session.dispatch("review --help")
         for option in RUN_OPTIONS:
             self.assertIn(option, self.text())
-        self.assertIn("maximum number of review passes", self.text())
+        self.assertIn("passes per persona", self.text())
 
     def test_bad_option_value_gives_a_helpful_error_and_does_not_exit(self):
         self.assertTrue(self.session.dispatch("review owner/repo#1 --passes 0"))

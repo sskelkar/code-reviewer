@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from code_reviewer.progress import LiveProgress, ProgressPrinter
 from code_reviewer.sandbox import progress
 from code_reviewer.shared.events import Event, round_preview, reviewer_preview
-from code_reviewer.flows.single_agent.master import MasterList
+from code_reviewer.review.master import MasterList
 
 
 def frame(event='stage', **data):
@@ -20,7 +20,7 @@ def frame(event='stage', **data):
 
 
 def preview():
-    return frame('round_preview', mode='agent-personas', round=1, completed=4, failed=0, total=1, new=1,
+    return frame('round_preview', round=1, completed=4, failed=0, total=1, new=1,
                  findings=[dict(id='F-001', severity='medium', title='Synthetic finding', file='app.py', line=2)])
 
 
@@ -65,7 +65,7 @@ class ProgressTests(unittest.TestCase):
             progress.validate(too_many, allow_preview=True)
 
     def test_guest_redacts_credentials_and_stops_advisory_output_at_its_cap(self):
-        sink = progress.GuestProgress(None, 'agent-personas')
+        sink = progress.GuestProgress(None)
         sink.secret = 'synthetic-key'
         value = preview()['data']
         value['findings'][0]['title'] = 'Do not expose synthetic-key'
@@ -76,7 +76,7 @@ class ProgressTests(unittest.TestCase):
             sink.stage('criteria')
             self.assertEqual(send.call_count, 1)
         # Worst-case escaped Unicode still fits the per-frame limit.
-        sink = progress.GuestProgress(None, 'agent-personas')
+        sink = progress.GuestProgress(None)
         value = preview()['data']
         value.update(new=10, total=10)
         value['findings'] = [dict(value['findings'][0], title='字'*240, file='字'*240) for _ in range(10)]
@@ -153,7 +153,7 @@ class ProgressTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_CANARY', json.dumps(data))
         event = Event('persona_review_finished', dict(persona='correctness', round_no=1, ok=True, **data))
         with patch.object(progress, 'send_json') as send:
-            sink = progress.GuestProgress(None, 'agent-personas')
+            sink = progress.GuestProgress(None)
             sink(event)
         result = send.call_args.args[1]
         progress.validate(result, allow_preview=True)
@@ -180,7 +180,7 @@ class ProgressTests(unittest.TestCase):
                                        description='PRIVATE_SOURCE_CANARY', quote='PRIVATE_SOURCE_CANARY'))
         master.items = {'F-001': item('F-001', [1]), 'F-002': item('F-002', []), 'F-003': item('F-003', [2])}
         before = copy.deepcopy(master.items)
-        data = round_preview('single-agent', 2, master, {'F-001'}, 1, 0)
+        data = round_preview(2, master, {'F-001'}, 1, 0)
         self.assertEqual([f['id'] for f in data['findings']], ['F-003'])
         self.assertEqual(data['total'], 2)
         self.assertNotIn('PRIVATE_SOURCE_CANARY', json.dumps(data))
@@ -190,7 +190,7 @@ class ProgressTests(unittest.TestCase):
         self.assertIn('UNCONFIRMED', out.getvalue())
         self.assertNotIn('\x1b', out.getvalue())
 
-    def test_complete_flows_emit_previews_after_consolidation_without_repeating_findings(self):
+    def test_complete_review_emit_previews_after_consolidation_without_repeating_findings(self):
         from code_reviewer.engine import Engine
         from code_reviewer.sandbox import openai_smoke, smoke
         events = []
@@ -199,18 +199,18 @@ class ProgressTests(unittest.TestCase):
         with patch.object(smoke, 'Engine', side_effect=engine):
             openai_smoke.run_offline()
         previews = [e.data for e in events if e.type == 'round_preview']
-        self.assertEqual([(e['mode'], e['round'], e['new']) for e in previews],
-                         [('single-agent', 1, 1), ('single-agent', 2, 0), ('agent-personas', 1, 1)])
+        self.assertEqual([(e['round'], e['new']) for e in previews],
+                         [(1, 1)])
         self.assertEqual(previews[-1]['completed'], 4)
         self.assertEqual(previews[-1]['total'], 1)
         self.assertEqual(sum(e.type == 'persona_review_finished' for e in events), 4)
         # Transport exactly the same events through the guest's projection.
         with patch.object(progress, 'send_json') as send:
-            sink = progress.GuestProgress(None, 'agent-personas')
+            sink = progress.GuestProgress(None)
             for event in events:
                 sink(event)
         frames = [call.args[1] for call in send.call_args_list]
-        self.assertEqual(sum(f['event'] == 'round_preview' for f in frames), 3)
+        self.assertEqual(sum(f['event'] == 'round_preview' for f in frames), 1)
         self.assertTrue(any(f['event'] == 'review_finished' for f in frames))
 
 

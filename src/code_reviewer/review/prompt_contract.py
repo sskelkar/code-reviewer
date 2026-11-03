@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict
 
-from ...shared.templates import PromptSet, escape_untrusted
+from ..shared.templates import PromptSet, escape_untrusted
 
 ROLES = ('resolver', 'classifier', 'reviewer', 'comparator', 'verifier')
 _EXTRA_TAGS = re.compile(r'</\s*(project_rules|persona_definitions|conflict_claims)\s*>', re.I)

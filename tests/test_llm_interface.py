@@ -30,7 +30,8 @@ class LLMInterfaceTests(unittest.TestCase):
 
     def test_flow_and_shared_code_import_neutral_contract_not_provider_implementation(self):
         root=REPO_ROOT/'src/code_reviewer'
-        for folder in ('flows','shared'):
+        for folder in ('review','shared'):
+            self.assertTrue(list((root/folder).rglob('*.py')))
             for path in (root/folder).rglob('*.py'):
                 for node in ast.walk(ast.parse(path.read_text())):
                     if isinstance(node,ast.ImportFrom):

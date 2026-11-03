@@ -1,6 +1,6 @@
 # VM execution architecture
 
-The reviewer chooses provider, authentication, review strategy and execution location independently. VM execution is the default; `--no-sandbox` explicitly selects the implemented direct-host path. Neither path is selected from repository ownership or purpose. See the [shared execution contract](security-contract.md).
+The reviewer chooses provider, authentication and execution location independently. VM execution is the default; `--no-sandbox` explicitly selects the implemented direct-host path. Neither path is selected from repository ownership or purpose. See the [shared execution contract](security-contract.md).
 
 ## Boundaries and process placement
 
@@ -17,7 +17,7 @@ flowchart TB
             PROXY["Standard Squid CONNECT proxy<br/>External nftables TAP and proxy-UID policy"]
             subgraph JOB["Disposable review VM: separate Linux kernel"]
                 ACQUIRE["Unprivileged API/Git acquisition<br/>Pin and admit base/head/merge-base"]
-                PY["Unprivileged Python: selected flow + selected adapter"]
+                PY["Unprivileged Python: review pipeline + selected adapter"]
                 TREE["Read-only admitted Git input and head snapshot"]
                 TOOLS["Read / Grep / Glob only"]
                 SCRATCH["512 MiB scratch: runs and temporary files"]
@@ -106,7 +106,7 @@ The optional capsule path transfers bounded file-only Git objects from a chosen 
 
 ## Lifecycle
 
-1. Read trusted operator settings and choose provider, strategy and execution location.
+1. Read trusted operator settings and choose provider, authentication and execution location.
 2. For VM execution, prepare clean artifacts/images and start the jailed disposable guest with external policy already installed.
 3. Acquire/admit/pin input inside the guest, export the snapshot, revoke source access and seal read-only mounts before model work.
 4. Supply selected-adapter authentication privately at runtime; never bake credentials into images, target files, arguments or logs.
@@ -119,6 +119,6 @@ The optional capsule path transfers bounded file-only Git objects from a chosen 
 
 Use [the supported deployment command](sandbox-check.md), [qualification evidence](proposal.md#qualification-evidence) and [development guide](development.md). Checks run an offline simulated-provider workload and a sequential connected probe workload; these are tests, not additional VM layers or per-persona isolation.
 
-`sandbox/runtime.py` contains bounded subprocess, boot configuration and result-validation utilities for the shared jailed lifecycle. See [the code map](architecture.md#code-map).
+`sandbox/runtime.py` contains bounded subprocess, boot configuration and result-validation utilities for the shared jailed lifecycle. See [the code map](architecture.md#module-map).
 
 The guest and explicit host path use the same provider/authentication factory and `LLMResult` contract. The VM still determines confinement, endpoint policy and delayed credential release; adapters do not change these. ChatGPT consent/refresh run on the host, with only an access token transferred after admission. See [LLM access](llm.md).

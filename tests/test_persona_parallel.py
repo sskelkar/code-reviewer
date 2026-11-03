@@ -12,9 +12,9 @@ from pathlib import Path
 
 from code_reviewer.config import Config, ConfigError
 from code_reviewer.engine import Engine
-from code_reviewer.flows.agent_personas.budget import Budget, RunStopped
-from code_reviewer.flows.agent_personas.criteria import PERSONAS
-from code_reviewer.flows.agent_personas.runner import ParallelRunner
+from code_reviewer.review.budget import Budget, RunStopped
+from code_reviewer.review.criteria import PERSONAS
+from code_reviewer.review.runner import ParallelRunner
 from code_reviewer.backends.contract import LLMResult
 from code_reviewer.backends.claude import ClaudeRunner
 from .helpers import TempDirTestMixin, finding, make_repo
@@ -51,7 +51,7 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
-        self.cfg = Config(review_mode='agent-personas', criteria_mode='defaults_only',
+        self.cfg = Config(criteria_mode='defaults_only',
                           persona_passes=2, runs_dir=str(self.tmp / 'runs'))
 
     def test_round_barriers_serial_merge_and_isolated_request_logs(self):
@@ -116,16 +116,13 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn('correctness budget exhausted', result.warnings + [result.passes[4].error])
         self.assertIn('Correctness: 1/1 (Unrated)', result.report_path.read_text())
 
-    def test_bad_parallel_values_and_single_agent_override_rejected(self):
+    def test_parallel_limits_and_cli_override(self):
         from code_reviewer.cli import build_parser
         from code_reviewer.review_options import apply_run_options
         for value in (0, 5, True, 1.5):
             with self.assertRaises(ConfigError):
                 Config(persona_parallel=value).validate()
         args = build_parser().parse_args(['review', 'owner/repo#1', '--parallel', '2'])
-        with self.assertRaises(ConfigError):
-            apply_run_options(Config(), args)
-        args.mode = 'agent-personas'
         self.assertEqual(apply_run_options(Config(), args).persona_parallel, 2)
 
     @unittest.skipUnless(os.name == 'posix', 'process group test')

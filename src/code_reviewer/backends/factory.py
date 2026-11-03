@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from ..config import ConfigError
-from .claude import ClaudeRunner, build_command, require_subscription_login
+from .claude import ClaudeRunner, require_subscription_login
 from .contract import Runner
 from .openai import OpenAIRunner, TokenPrices
 
@@ -88,14 +88,3 @@ def create_runner(cfg, *, selected_credential=None, env=None, transport=None, pr
         return ClaudeRunner(cfg.claude_bin, cfg.isolation_flags, env=native_env, billing_mode=cfg.auth_mode)
     secret = credential(cfg.provider, cfg.auth_mode) if selected_credential is None else validate_credential(selected_credential, name)
     return OpenAIRunner(secret, model=cfg.model_reviewer, prices=prices(cfg), transport=transport, proxy=proxy)
-
-
-def preview_command(cfg, tools):
-    """Credential-free request preview; review algorithms know no native flags."""
-    if cfg.provider == 'openai':
-        return ['POST', 'https://api.openai.com/v1/responses', 'model=' + cfg.model_reviewer]
-    command = build_command(cfg.claude_bin, system_prompt='', schema={}, model=cfg.model_reviewer,
-                            tools=tools, budget_usd=None if cfg.auth_mode == 'subscription' else cfg.call_budget_usd, isolation_flags=cfg.isolation_flags)
-    placeholders = {'--append-system-prompt': '<system prompt: input/reviewer.system.md>',
-                    '--json-schema': '<JSON schema of the findings>'}
-    return [placeholders.get(command[i-1], arg) if i else arg for i,arg in enumerate(command)]

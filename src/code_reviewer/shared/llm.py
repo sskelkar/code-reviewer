@@ -52,7 +52,7 @@ class ModelCaller:
         try:
             with observation('model.call', 'agent', role=spec.role, persona=getattr(self, 'persona', ''),
                              model=spec.model, **{'pass': spec.pass_no},
-                             round=((spec.pass_no - 1) // 4 + 1) if self.cfg.review_mode == 'agent-personas' and spec.pass_no else None,
+                             round=((spec.pass_no - 1) // 4 + 1) if spec.pass_no else None,
                              prompt_hash=fingerprint(spec.system + '\n' + spec.user)):
                 return self._attempts(spec, validate, raw_log)
         finally:

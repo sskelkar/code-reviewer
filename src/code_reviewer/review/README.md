@@ -1,6 +1,6 @@
-# Agent-personas implementation
+# Review implementation
 
-Select with `--mode agent-personas`. [Architecture](../../../../docs/architecture.md#persona-implementation) describes scheduling, consolidation and verification; [usage](../../../../docs/usage.md#persona-budget-pools) specifies budgets; [criteria](../../../../docs/persona-criteria.md) indexes defaults; [prompts](../../../../docs/prompts.md#persona-prompts) defines model contracts.
+[Architecture](../../../docs/architecture.md#review-pipeline) describes scheduling, consolidation and verification; [usage](../../../docs/usage.md#persona-budget-pools) specifies budgets; [criteria](../../../docs/persona-criteria.md) indexes defaults; [prompts](../../../docs/prompts.md#persona-prompts) defines model contracts.
 
 | Module | Responsibility |
 |---|---|

@@ -1,7 +1,7 @@
 """Configured round-robin persona review, then advisory verification of flagged groups."""
 from __future__ import annotations
 
-from ...shared.git_content import omission_section
+from ..shared.git_content import omission_section
 
 from dataclasses import replace
 import copy
@@ -11,17 +11,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from ...config import ConfigError, REPO_ROOT
-from ...shared import git_ops
-from ...backends.contract import RunnerError
-from ...shared.diffview import DiffIndex
-from ...shared.events import Event, null_sink, round_preview, reviewer_preview
-from ...shared.findings import FileCache, FindingsPreparer
-from ...shared.models import PassFailed
-from ...shared.pr_source import load_pr_context
-from ...shared.review_inputs import InputBuilder
-from ...shared.run_store import RunStore, dump_json
-from ...tracing import traced, event as trace_event
+from ..config import ConfigError, REPO_ROOT
+from ..shared import git_ops
+from ..backends.contract import RunnerError
+from ..shared.diffview import DiffIndex
+from ..shared.events import Event, null_sink, round_preview, reviewer_preview
+from ..shared.findings import FileCache, FindingsPreparer
+from ..shared.models import PassFailed
+from ..shared.pr_source import load_pr_context
+from ..shared.review_inputs import InputBuilder
+from ..shared.run_store import RunStore, dump_json
+from ..tracing import traced, event as trace_event
 from .caller import PersonaCaller, RunStopped
 from .budget import Budget, ConcurrentStats
 from .runner import ParallelRunner
@@ -31,10 +31,10 @@ from .models import DryRun, PersonaPass, RunResult
 from .prompt_contract import digest, load_prompts
 from .roles import Roles, freeze, save_frozen
 
-ROOT = REPO_ROOT / 'src/code_reviewer/flows/agent_personas'
+ROOT = REPO_ROOT / 'src/code_reviewer/review'
 
 
-class AgentPersonasFlow:
+class ReviewFlow:
     def __init__(self, cfg: Any, runner: Any, emit: Any = None, prompts_dir: Any = None, defaults_dir: Any = None):
         cfg.validate()
         self.cfg, self.runner, self.sink = cfg, runner, emit or null_sink
@@ -74,7 +74,7 @@ class AgentPersonasFlow:
         self._freeze(ctx, files, criteria, assigned, Path('<checkout>'), store)
         store.save_inputs(self.inputs.review_input(ctx, files, criteria, Path('<checkout>')), criteria)
         return DryRun(ctx, store.root, assigned, summary, self.cfg.model_reviewer, passes_per_persona=self.cfg.persona_passes,
-                      parallel=self.cfg.persona_parallel, budget_pools=Budget(self.cfg).snapshot())
+                      parallel=self.cfg.persona_parallel, redacted_emails=count, budget_pools=Budget(self.cfg).snapshot())
 
     def review(self, ctx: Any, keep_checkout: bool = False, prepared_checkout: Any = None) -> RunResult:
         from .report import render_report, render_summary
@@ -214,7 +214,7 @@ class AgentPersonasFlow:
                         self.emit('pass_failed', pass_no=slot.pass_no, error=str(exc))
                         if failures[slot.persona] >= self.cfg.max_consecutive_failures:
                             disabled[slot.persona] = 'persona failure limit reached'
-                self.emit('round_preview', **round_preview('agent-personas', wave[0].round_no,
+                self.emit('round_preview', **round_preview(wave[0].round_no,
                     result.master, previous, sum(s.ok for s in wave), sum(not s.ok for s in wave)))
                 if len(disabled) == len(PERSONAS):
                     break

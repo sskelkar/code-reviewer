@@ -26,9 +26,9 @@ ENUMS = {
     'role': ('reviewer', 'resolver', 'comparator', 'verifier', 'classifier'),
     'persona': ('correctness', 'code-quality', 'test-quality', 'production-safety'),
     'provider': ('openai', 'claude'), 'auth': ('api-key', 'subscription'),
-    'mode': ('single-agent', 'agent-personas'), 'execution': ('vm', 'host'),
+    'execution': ('vm', 'host'),
     'outcome': ('ok', 'error', 'cancelled', 'incomplete'),
-    'stop_reason': ('completed', 'converged', 'max_passes', 'budget_exceeded', 'incomplete', 'cancelled', 'failures'),
+    'stop_reason': ('completed', 'budget_exceeded', 'incomplete', 'cancelled', 'failures'),
     'visibility': ('native-aggregate', 'model-turn'),
     'pool': ('criteria', 'comparator', 'verifier', 'correctness', 'code-quality', 'test-quality', 'production-safety'),
 }

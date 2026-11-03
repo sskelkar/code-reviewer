@@ -1,13 +1,13 @@
 """Category-grouped persona findings, agreement by source and conflict annotations."""
 from __future__ import annotations
 
-from ...shared.git_content import omission_notice
+from ..shared.git_content import omission_notice
 
 import json
 import re
 from typing import Any
 
-from ...shared.findings import SEVERITY_RANK
+from ..shared.findings import SEVERITY_RANK
 from .master import agreement
 
 
@@ -63,7 +63,7 @@ def render_finding(result: Any, item: Any) -> str:
 
 
 def run_line(result: Any) -> str:
-    return 'agent-personas: %d/%d completed · %s · %s' % (
+    return 'Multi-perspective review: %d/%d completed · %s · %s' % (
         result.passes_completed, len(result.passes), result.stop_reason,
         'subscription (no API charge)' if result.cfg.auth_mode == 'subscription' else '$%.4f estimated' % result.stats.total_cost())
 
@@ -142,10 +142,12 @@ def render_report(result: Any) -> str:
 
 
 def render_dry_run(dry: Any) -> str:
-    return '\n'.join(['Dry run: agent-personas. No model calls, posting or checkout creation.',
+    return '\n'.join(['Dry run: multi-perspective review. No model calls, posting or checkout creation.',
         '%d passes per persona (%d scheduled). Defaults only: project discovery and classification are omitted.' % (
             dry.passes_per_persona, len(dry.assignments) * dry.passes_per_persona),
         'Concurrent calls: %d; budget allocation: %s' % (dry.parallel, ', '.join(('%s %d tokens' % (p, v['allocated_tokens'])) if 'allocated_tokens' in v else ('%s $%.2f' % (p, v['allocated_usd'])) for p, v in dry.budget_pools.items())),
         'Model: %s; tools: Read,Grep,Glob in the temporary head checkout.' % dry.model,
+        'WHAT THE REVIEWERS ARE GIVEN', dry.ctx.title, dry.ctx.body, dry.ctx.commit_messages,
+        'Email addresses replaced with [email]: %d replaced above.' % dry.redacted_emails if dry.redacted_emails else 'No email addresses replaced; email redaction is OFF or no addresses were present.',
         'Diff: %s' % dry.diff_summary] + ['%s: %d default rules; prompts saved under input/personas/%s/' % (p, len(r), p)
         for p, r in dry.assignments.items()] + ['Saved in %s' % dry.run_dir])

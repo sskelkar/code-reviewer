@@ -1,4 +1,4 @@
-"""Exercise the OpenAI adapter and both flows offline; never reads a real API key."""
+"""Exercise the OpenAI adapter and the review pipeline offline; never reads a real API key."""
 from __future__ import annotations
 
 import json

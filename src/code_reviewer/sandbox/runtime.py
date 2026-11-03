@@ -66,15 +66,9 @@ def parse_result(output):
     data = json.loads(records[0])
     if not isinstance(data, dict) or type(data.get('format')) is not int or data.get('format') != 1 or data.get('synthetic') is not True:
         raise ValueError('invalid synthetic result envelope')
-    flows = data.get('flows')
-    if not isinstance(flows, dict) or set(flows) != {'single-agent', 'agent-personas'}:
-        raise ValueError('both flow results required')
-    for mode, count, calls in (('single-agent', 2, 3), ('agent-personas', 4, 8)):
-        row = flows[mode]
-        if (not isinstance(row, dict) or type(row.get('completed')) is not int or type(row.get('findings')) is not int
-                or type(row.get('calls')) is not int or row.get('calls') != calls
-                or row.get('completed') != count or row.get('findings') != 1):
-            raise ValueError('incomplete synthetic flow: %s' % mode)
-        if row.get('stop_reason') != ('max_passes' if mode == 'single-agent' else 'completed'):
-            raise ValueError('unexpected synthetic stop reason')
+    row = data.get('review')
+    if (not isinstance(row, dict) or type(row.get('completed')) is not int or type(row.get('findings')) is not int
+            or type(row.get('calls')) is not int or row.get('calls') != 8
+            or row.get('completed') != 4 or row.get('findings') != 1 or row.get('stop_reason') != 'completed'):
+        raise ValueError('incomplete synthetic review')
     return data

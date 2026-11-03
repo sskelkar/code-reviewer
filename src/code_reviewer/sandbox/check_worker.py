@@ -62,7 +62,7 @@ def check(root, binary_sha, kernel_sha, jailer_sha, image_dir=None, image_sha=No
         prepare(repo, base, head, capsule, title='Sandbox boundary check')
     initrd = (Path(image_dir) if image_dir else root/'connected') / 'initrd.cpio.gz'
     initrd_sha = image_sha or hashlib.sha256(initrd.read_bytes()).hexdigest()
-    settings = dict(model='synthetic-probe', prices=[1, .5, 2], mode='single-agent',
+    settings = dict(model='synthetic-probe', prices=[1, .5, 2],
                     passes=1, parallel=1, budget=3, call_budget=.5, probe_only=True)
     result = run(Artifact(root / 'firecracker', binary_sha, MAX_KERNEL_BYTES),
                  Artifact(root / 'kernel', kernel_sha, MAX_KERNEL_BYTES),

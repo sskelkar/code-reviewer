@@ -61,8 +61,6 @@ class ProgressPrinter:
             self._say("%s: round %d completed, %d usable findings · %s" % (d["persona"], d["round_no"], d["usable"], _fmt_money(d["cost"])))
         elif kind == "verification_started":
             self._say("investigating flagged conflict %s ..." % d["conflict"])
-        elif kind == "pass_started":
-            self._say("pass %d/%d ..." % (d["pass_no"], d["max_passes"]))
         elif kind == "reviewer_started" and self.verbose:
             self._say("  reviewer (%s) is reading the PR" % d["model"])
         elif kind == "reviewer_done":
@@ -72,26 +70,20 @@ class ProgressPrinter:
                 + ("; %d in excluded files, dropped" % d["out_of_scope"] if d.get("out_of_scope") else "")))
         elif kind == "comparator_started" and self.verbose:
             self._say("  comparing %d new findings with %d candidates" % (d["new"], d["candidates"]))
-        elif kind == "pass_finished":
-            self._say("pass %d: %d new, %d matched, %d ungrounded · %s · quiet streak %d/%d" % (
-                d["pass_no"], d["new"], d["matched"], d["ungrounded"], _fmt_money(d["cost"]), d["quiet_streak"], d["quiet_k"]))
         elif kind == "pass_failed":
             self._say("pass %d FAILED: %s" % (d["pass_no"], d["error"]))
-        elif kind == "converged":
-            self._say("converged after %d passes" % d["passes"])
         elif kind == "report_ready":
             self._say("done (%s)" % d["stop_reason"])
-        elif kind in ('persona_review_finished', 'reviewer_returned'):
-            persona, number = d.get('persona', 'single-agent'), d.get('round_no', d.get('pass_no'))
+        elif kind == 'persona_review_finished':
+            persona, number = d['persona'], d['round_no']
             if d.get('ok', True):
                 self.reviewer_glimpse(persona, number, d)
             else:
                 self._say('%s: review %d failed' % (persona, number))
         elif kind == 'round_preview':
-            label = 'Round' if d['mode'] == 'agent-personas' else 'Pass'
             self._say('%s %d provisional: %d completed, %d incomplete; candidates: %d new, %d total. '
                       'UNCONFIRMED — not independently verified; see the final report.' % (
-                          label, d['round'], d['completed'], d['failed'], d['new'], d['total']))
+                          'Round', d['round'], d['completed'], d['failed'], d['new'], d['total']))
             for row in d['findings']:
                 self._say('  [%s] %s %s:%d — %s' % (row['severity'], row['id'],
                     display_text(row['file']), row['line'], display_text(row['title'])))

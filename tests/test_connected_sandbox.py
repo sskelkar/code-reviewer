@@ -29,7 +29,7 @@ class ConnectedTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.settings = dict(model='synthetic-model', prices=[1,.5,2], mode='single-agent', passes=1,
+        self.settings = dict(model='synthetic-model', prices=[1,.5,2], passes=1,
                              parallel=1, budget=3, call_budget=.5, probe_only=True)
 
     def checks(self):
@@ -179,50 +179,46 @@ class ConnectedTests(unittest.TestCase):
                 value = {'findings': []}
             return {'status': 'completed', 'usage': {'input_tokens': 100, 'output_tokens': 20},
                     'output': [{'type': 'message', 'content': [{'type':'output_text','text':json.dumps(value)}]}]}
-        for mode in ('single-agent', 'agent-personas'):
-            root = self.root / mode
-            root.mkdir()
-            settings = job_settings(Config(provider='openai', review_mode=mode,
-                model_reviewer='synthetic-model', model_comparator='synthetic-model',
-                model_resolver='synthetic-model', model_verifier='synthetic-model',
-                openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
-                min_passes=1, max_passes=1, persona_passes=1, persona_parallel=1, tracing=False))
-            with patch.object(guest, 'receive_json', return_value=settings), \
-                    patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
-                    patch.object(guest, 'send_json') as ready_message, patch('code_reviewer.backends.openai.request_response', provider):
-                value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
-            metadata = next((root / 'runs').glob('*/config.json'))
-            self.assertEqual(json.loads(metadata.read_text())['config']['provider'], 'openai')
-            self.assertEqual(ready_message.call_args.args[1]['kind'], 'ready')
-            self.assertEqual(set(value['files']), {'report.md', 'summary.md', 'stats.json'})
-            for encoded in value['files'].values():
-                self.assertNotIn(b'disposable-unit-test-key',base64.b64decode(encoded))
-            output = self.root / (mode + '-export')
-            result = connected.export_result(value,output,'disposable-unit-test-key',False)
-            self.assertIn(result['stop_reason'],('max_passes','completed'))
+        root = self.root / 'agent-personas'
+        root.mkdir()
+        settings = job_settings(Config(provider='openai', model_reviewer='synthetic-model', model_comparator='synthetic-model',
+            model_resolver='synthetic-model', model_verifier='synthetic-model',
+            openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
+            persona_passes=1, persona_parallel=1, tracing=False))
+        with patch.object(guest, 'receive_json', return_value=settings), \
+                patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
+                patch.object(guest, 'send_json') as ready_message, patch('code_reviewer.backends.openai.request_response', provider):
+            value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
+        metadata = next((root / 'runs').glob('*/config.json'))
+        self.assertEqual(json.loads(metadata.read_text())['config']['provider'], 'openai')
+        self.assertEqual(ready_message.call_args.args[1]['kind'], 'ready')
+        self.assertEqual(set(value['files']), {'report.md', 'summary.md', 'stats.json'})
+        for encoded in value['files'].values():
+            self.assertNotIn(b'disposable-unit-test-key',base64.b64decode(encoded))
+        output = self.root / ('agent-personas' + '-export')
+        result = connected.export_result(value,output,'disposable-unit-test-key',False)
+        self.assertIn(result['stop_reason'],('completed',))
 
     def test_failed_reviews_preserve_reports_and_failure_accounting(self):
         source, _ = self.capsule()
-        for mode in ('single-agent', 'agent-personas'):
-            root = self.root / mode
-            root.mkdir()
-            settings = job_settings(Config(provider='openai', review_mode=mode,
-                model_reviewer='synthetic-model', model_comparator='synthetic-model',
-                model_resolver='synthetic-model', model_verifier='synthetic-model',
-                openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
-                min_passes=1, max_passes=1, persona_passes=1, persona_parallel=1, tracing=False))
-            with patch.object(guest, 'receive_json', return_value=settings), \
-                    patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
-                    patch.object(guest, 'send_json'), \
-                    patch('code_reviewer.backends.openai.request_response', return_value={
-                        'status': 'completed', 'usage': {'input_tokens': 10, 'output_tokens': 5},
-                        'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]}):
-                value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
-            self.assertEqual(value['stop_reason'], 'failures')
-            output = self.root / (mode + '-failed-export')
-            result = connected.export_result(value, output, 'disposable-unit-test-key', False)
-            self.assertEqual(result['stop_reason'], 'failures')
-            self.assertGreater(len(json.loads((output / 'stats.json').read_text())['calls']), 0)
+        root = self.root / 'agent-personas'
+        root.mkdir()
+        settings = job_settings(Config(provider='openai', model_reviewer='synthetic-model', model_comparator='synthetic-model',
+            model_resolver='synthetic-model', model_verifier='synthetic-model',
+            openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
+            persona_passes=1, persona_parallel=1, tracing=False))
+        with patch.object(guest, 'receive_json', return_value=settings), \
+                patch.object(guest, 'receive', side_effect=[source.read_bytes(), b'disposable-unit-test-key']), \
+                patch.object(guest, 'send_json'), \
+                patch('code_reviewer.backends.openai.request_response', return_value={
+                    'status': 'completed', 'usage': {'input_tokens': 10, 'output_tokens': 5},
+                    'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]}):
+            value = guest.run_job(None, root, probe_network=lambda: self.checks()['network'])
+        self.assertEqual(value['stop_reason'], 'failures')
+        output = self.root / ('agent-personas' + '-failed-export')
+        result = connected.export_result(value, output, 'disposable-unit-test-key', False)
+        self.assertEqual(result['stop_reason'], 'failures')
+        self.assertGreater(len(json.loads((output / 'stats.json').read_text())['calls']), 0)
 
     def test_output_ownership_is_assigned_after_files_without_widening_permissions(self):
         with patch.object(connected.os, 'chown') as chown, patch.object(connected.pwd, 'getpwuid') as user:

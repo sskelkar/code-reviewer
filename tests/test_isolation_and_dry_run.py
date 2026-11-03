@@ -9,7 +9,7 @@ from unittest import mock
 from code_reviewer import cli
 from code_reviewer.backends.contract import RunnerError
 from code_reviewer.config import Config
-from code_reviewer.flows.single_agent.dry_run import render_dry_run
+from code_reviewer.presentation import render_dry_run
 from code_reviewer.engine import Engine
 
 from .helpers import FakeRunner, TempDirTestMixin, finding, make_repo
@@ -31,7 +31,7 @@ class CheckoutLocationTests(TempDirTestMixin, unittest.TestCase):
 
     def test_checkout_is_not_inside_the_run_directory_or_next_to_run_files(self):
         runner = self.runner()
-        result = self.engine(runner, max_passes=3, min_passes=3).review(self.ctx)
+        result = self.engine(runner).review(self.ctx)
         cwd = Path(runner.calls_for("reviewer")[0]["cwd"])
         self.assertNotIn(result.run_dir, cwd.parents)
         self.assertFalse(str(cwd).startswith(str(result.run_dir)))
@@ -56,14 +56,15 @@ class CheckoutLocationTests(TempDirTestMixin, unittest.TestCase):
                 seen.append((checkout, (checkout / "app.py").exists()))  # the checkout existed and was populated
                 raise RunnerError("claude binary not found")
 
-        with self.assertRaises(RunnerError):
-            self.engine(Boom(reviewer=[{"findings": []}]), criteria_mode="defaults_only").review(self.ctx)
-        self.assertEqual([populated for _, populated in seen], [True])
+        result = self.engine(Boom(reviewer=[{"findings": []}]), criteria_mode="defaults_only").review(self.ctx)
+        self.assertEqual(result.stop_reason, "failures")
+        self.assertTrue(seen)
+        self.assertTrue(all(populated for _, populated in seen))
         self.assertFalse(seen[0][0].parent.exists())  # removed although the run raised
 
     def test_keep_checkout_keeps_it_outside_the_run_dir_and_reports_where(self):
         runner = self.runner()
-        result = self.engine(runner, max_passes=1, min_passes=1).review(self.ctx, keep_checkout=True)
+        result = self.engine(runner).review(self.ctx, keep_checkout=True)
         cwd = Path(runner.calls_for("reviewer")[0]["cwd"])
         self.addCleanup(shutil.rmtree, str(cwd.parent), True)
         self.assertTrue((cwd / "app.py").exists())
@@ -82,7 +83,7 @@ class CheckoutLocationTests(TempDirTestMixin, unittest.TestCase):
                 return super().run(**kwargs)
 
         peek = Peek(reviewer=[{"findings": []}], resolver=RESOLVER)
-        self.engine(peek, max_passes=1, min_passes=1).review(self.ctx)
+        self.engine(peek).review(self.ctx)
         self.assertNotIn(".git", seen["files"])
         self.assertIn("app.py", seen["files"])
 
@@ -94,13 +95,16 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
 
     def test_saved_prompts_and_pr_text_are_exactly_what_the_reviewer_received(self):
         runner = FakeRunner(reviewer=[{"findings": [finding(rule_id="none")]}], resolver=RESOLVER)
-        result = Engine(Config(runs_dir=str(self.tmp / "runs"), max_passes=1, min_passes=1), runner).review(self.ctx)
+        result = Engine(Config(runs_dir=str(self.tmp / "runs")), runner).review(self.ctx)
         call = runner.calls_for("reviewer")[0]
-        inputs = result.run_dir / "input"
-        self.assertEqual((inputs / "reviewer.system.md").read_text(), call["system_prompt"])
-        self.assertEqual((inputs / "reviewer.user.md").read_text(), call["user_prompt"])
+        inputs = result.run_dir / "input/personas/correctness"
+        pairs = [((result.run_dir / 'input/personas' / persona / 'reviewer.system.md').read_text(),
+                  (result.run_dir / 'input/personas' / persona / 'reviewer.user.md').read_text())
+                 for persona in result.assignments]
+        self.assertTrue(all((entry['system_prompt'], entry['user_prompt']) in pairs
+                            for entry in runner.calls_for('reviewer')))
         import json
-        pr = json.loads((inputs / "pr.json").read_text())
+        pr = json.loads((result.run_dir / "input/pr.json").read_text())
         self.assertEqual((pr["title"], pr["description"], pr["commit_messages"]),
                          (self.ctx.title, self.ctx.body, self.ctx.commit_messages))
         self.assertEqual((pr["head_sha"], pr["number"]), (self.ctx.head_sha, 7))
@@ -125,7 +129,7 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
 
     def test_the_reviewer_only_has_read_tools(self):
         runner = FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER)
-        Engine(Config(runs_dir=str(self.tmp / "runs"), max_passes=1, min_passes=1), runner).review(self.ctx)
+        Engine(Config(runs_dir=str(self.tmp / "runs")), runner).review(self.ctx)
         self.assertEqual({c["tools"] for c in runner.calls_for("reviewer")}, {"Read,Grep,Glob"})
         self.assertEqual({c["tools"] for c in runner.calls_for("comparator") + runner.calls_for("resolver")}, {""})
 
@@ -151,23 +155,23 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(dry.run_dir.name.endswith("_dry-run"))
 
     def test_dry_run_prompts_equal_a_real_reviews_prompts(self):
-        runner, engine = self.make(criteria_mode="defaults_only", max_passes=1, min_passes=1)
+        runner, engine = self.make(criteria_mode="defaults_only")
         dry = engine.dry_run(self.ctx)
-        runner2, engine2 = self.make(criteria_mode="defaults_only", max_passes=1, min_passes=1)
+        runner2, engine2 = self.make(criteria_mode="defaults_only")
         real = engine2.review(self.ctx)
-        for name in ("reviewer.system.md", "reviewer.user.md", "diff.txt"):
-            self.assertEqual((dry.run_dir / "input" / name).read_text(), (real.run_dir / "input" / name).read_text(), name)
-        self.assertEqual((dry.run_dir / "input" / "reviewer.user.md").read_text(), runner2.calls_for("reviewer")[0]["user_prompt"])
-        self.assertEqual((dry.run_dir / "input" / "reviewer.system.md").read_text(), runner2.calls_for("reviewer")[0]["system_prompt"])
+        for persona in ('correctness', 'code-quality', 'test-quality', 'production-safety'):
+            for name in ('reviewer.system.md', 'reviewer.user.md'):
+                relative = Path('input/personas') / persona / name
+                self.assertEqual((dry.run_dir / relative).read_text(), (real.run_dir / relative).read_text())
+        calls = runner2.calls_for('reviewer')
+        self.assertTrue(all(call['system_prompt'] in [(dry.run_dir / 'input/personas' / persona / 'reviewer.system.md').read_text()
+            for persona in dry.assignments] for call in calls))
 
     def test_dry_run_output_shows_the_pr_text_the_tools_and_the_command(self):
         _, engine = self.make()
         text = render_dry_run(engine.dry_run(self.ctx))
-        for expected in ("nothing was sent to Claude", "Speed up lookups", "Summary by SomeBot", "Build query by concatenation",
-                         "Read, Grep, Glob", "no shell, no network, no GitHub access", "WHAT IT IS NOT GIVEN",
-                         "Pull request comments, review threads", "claude -p --model haiku", "--tools Read,Grep,Glob",
-                         "<system prompt: input/reviewer.system.md>", "<JSON schema of the findings>", "reviewer.user.md",
-                         "default rules", "criteria resolver"):
+        for expected in ('No model calls', 'Speed up lookups', 'Summary by SomeBot', 'Build query by concatenation',
+                         'Read,Grep,Glob', 'default rules', 'input/personas/correctness/'):
             self.assertIn(expected, text)
         self.assertNotIn("You are a meticulous senior engineer", text)  # the command shows placeholders, not the prompt itself
 
@@ -188,7 +192,7 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
             code = cli.main(["review", "acme/project#7", "--dry-run"])
         self.assertEqual(code, 0)
         self.assertEqual(fake.calls, [])
-        self.assertIn("WHAT THE REVIEWER IS GIVEN", out.getvalue())
+        self.assertIn("WHAT THE REVIEWERS ARE GIVEN", out.getvalue())
 
     def test_dry_run_cannot_be_combined_with_post(self):
         with self.assertRaises(SystemExit) as caught, contextlib.redirect_stderr(io.StringIO()):

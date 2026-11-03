@@ -4,7 +4,7 @@ Guidance for agents working on this repository. Create a handover document only 
 
 ## Product direction
 
-One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same review algorithms, criteria, validation, accounting and reports. `backends/contract.py` owns provider-neutral Runner/LLMResult/RunnerError; host and guest use one factory. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
+One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same four-perspective pipeline, criteria, validation, accounting and reports. `backends/contract.py` owns provider-neutral Runner/LLMResult/RunnerError; host and guest use one factory. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
 
 Execution location is a separate operator choice: **VM by default**, with an explicit **direct-host option** for trusted use without VM startup overhead. The flag is `--no-sandbox`; trusted operator config may also select `sandbox = false`. Host acquisition is a supported feature. A failed VM request must never silently fall back to the host. Repository files and model text cannot select execution location or infrastructure policy.
 
@@ -14,7 +14,7 @@ The supported VM backend uses the shared jailed lifecycle. Do not add a separate
 
 ## Working scope and references
 
-Focus on the one-shot CLI. Bare `reviewer` prints help without loading configuration. Preserve the parked `parked/repl.py`, `repl_help.py`, replay helpers and their tests; do not wire new features through them or restore forwarding wrappers.
+Focus on the one-shot CLI. Bare `reviewer` prints help without loading configuration. Preserve the parked `parked/repl.py`, `repl_help.py` and their tests; do not wire new features through them or restore forwarding wrappers.
 
 Read [architecture](docs/architecture.md) for ownership, [the roadmap](docs/proposal.md#checklist) for work and qualification evidence, [VM architecture](docs/sandbox-architecture.md) for controls and [VM setup](docs/sandbox-check.md) for deployment checks. Use [usage](docs/usage.md) for configuration/reports, [LLM](docs/llm.md) for authentication, [tracing](docs/tracing.md) for observability, [prompts](docs/prompts.md) for model contracts and [the walkthrough](docs/project-explainer.md) for method-level call chains.
 
@@ -40,11 +40,11 @@ Support Python **3.13**. Run the whole suite on Python 3.13 before finishing a c
 ## Code and working rules
 
 - Every module starts with `from __future__ import annotations`. Use Python 3.13 syntax and standard-library APIs.
-- Keep modules focused. `Engine` selects a flow; `flows/single_agent/flow.py` and `flows/agent_personas/flow.py` own their algorithms. Common mechanics live in `shared/`. Import implementations from their canonical owner. Retained REPL/replay code lives under `parked/`; do not restore forwarding wrappers.
+- Keep modules focused. `Engine` delegates to `review/flow.py`, which owns the multi-perspective review algorithm. Common mechanics live in `shared/`. Import implementations from their canonical owner. Retained REPL code lives under `parked/`; do not restore forwarding wrappers.
 - Persona Reviewers run concurrently within each round, then consolidate serially in fixed order. Configured passes default to three per persona. Budgets remain independent: criteria 10%, Comparator 10%, Verifier 13⅓%, remainder divided among personas; no borrowing. Verification annotates flagged conflicts without suppressing findings or changing votes/severity. Cancel/join workers before checkout cleanup.
 - Validate model output, count dropped data and report the counts. Operator settings remain separate from repository review criteria.
 - Do not commit/push unless explicitly requested. Leave changes reviewable in the working tree.
 - Keep relevant code, prompts, README, proposal and explainers consistent. No automatic handover maintenance.
 - Never copy private source, saved-run contents, company/PR identifiers, PII or credentials into this repository. Use synthetic fixtures. Do not inspect previously restricted private material merely to develop the reviewer.
-- Canonical prompt changes require authorized before/after comparison evidence and honest results under the [review-quality comparison policy](docs/proposal.md#review-quality-experiments). Paid comparator replay is parked; do not present its CLI as working. Infrastructure changes do not justify paid prompt calls.
+- Canonical prompt changes require authorized before/after comparison evidence and honest results under the [review-quality comparison policy](docs/proposal.md#review-quality-experiments). Infrastructure changes do not justify paid prompt calls.
 - Preserve no-target-IO/credential-free preflight and concrete VM admission checks; host execution requires the explicit operator selection. Frontend presentation tests may use `tests.helpers.synthetic_frontend`; actual boundary tests must not use that seam.

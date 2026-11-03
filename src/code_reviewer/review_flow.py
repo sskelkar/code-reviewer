@@ -32,9 +32,9 @@ def run_review(cfg: Config, runner: Any, ref: PRRef, options: Any, local_path: P
     from .security import readiness
     report = readiness(cfg, ref, options)
     report['request'] = {'repository': ref.slug, 'pr': ref.number, 'host': ref.host,
-                         'mode': cfg.review_mode, 'model': cfg.model_reviewer,
-                         'passes': cfg.persona_passes if cfg.review_mode == 'agent-personas' else cfg.max_passes,
-                         'parallel': cfg.persona_parallel if cfg.review_mode == 'agent-personas' else 1,
+                         'model': cfg.model_reviewer,
+                         'passes': cfg.persona_passes,
+                         'parallel': cfg.persona_parallel,
                          'run_budget_usd': cfg.run_budget_usd, 'call_budget_usd': cfg.call_budget_usd,
                          'models': {role: getattr(cfg, 'model_' + role)
                                     for role in ('reviewer', 'resolver', 'comparator', 'verifier')}}

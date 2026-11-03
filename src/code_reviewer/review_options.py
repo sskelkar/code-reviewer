@@ -5,7 +5,7 @@ import argparse
 from dataclasses import replace
 from typing import Any
 
-from .config import Config, CRITERIA_MODES, REVIEW_MODES
+from .config import Config, CRITERIA_MODES
 
 
 class OptionError(ValueError):
@@ -34,14 +34,11 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preflight", action="store_true", help="check configuration without fetching code, running a model or reading credentials")
     parser.add_argument("--provider", choices=("claude", "openai"), help="runtime inference adapter; independent of host/VM execution")
     parser.add_argument('--no-sandbox', action='store_true', help='explicit trusted direct-host acquisition/review, without starting a VM')
-    parser.add_argument("--parallel", type=positive_int, metavar="N", help="persona-only concurrent calls, 1 to 4 (default: persona_parallel, 4)")
-    parser.add_argument("--mode", choices=REVIEW_MODES,
-                        help="review flow (default: review_mode in review.toml, single-agent); agent-personas defaults to three passes per persona")
+    parser.add_argument("--parallel", type=positive_int, metavar="N", help="concurrent reviewers, 1 to 4 (default: persona_parallel, 4)")
     parser.add_argument(
         "--passes", type=positive_int, metavar="N",
-        help="single-agent: maximum number of review passes (default: max_passes in review.toml, 6), with early convergence stopping. "
-             "agent-personas: passes per persona (default: persona_passes in review.toml, 3), with no quiet-pass stopping. "
-             "Use --passes 1 for a single, cheap pass in single-agent or one pass per persona in agent-personas")
+        help="passes per persona (default: persona_passes in review.toml, 3), with fixed rounds. "
+             "Use --passes 1 for one review from each perspective")
     parser.add_argument(
         "--model", metavar="NAME",
         help="model for all roles, an alias or full name such as haiku or sonnet (default: the model_* settings in review.toml)")
@@ -75,19 +72,10 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
     if getattr(args, 'preflight', False) and getattr(args, 'dry_run', False):
         from .config import ConfigError
         raise ConfigError('--preflight cannot be combined with --dry-run')
-    if getattr(args, "mode", None):
-        cfg.review_mode = args.mode
     if getattr(args, 'parallel', None) is not None:
-        from .config import ConfigError
-        if cfg.review_mode != 'agent-personas':
-            raise ConfigError('--parallel applies only to agent-personas')
         cfg.persona_parallel = args.parallel
     if args.passes:
-        if cfg.review_mode == 'agent-personas':
-            cfg.persona_passes = args.passes
-        else:
-            cfg.max_passes = args.passes
-            cfg.min_passes = min(cfg.min_passes, args.passes)
+        cfg.persona_passes = args.passes
     if getattr(args, "criteria", None):
         cfg.criteria_mode = args.criteria
     if args.no_self_check:
@@ -106,9 +94,8 @@ BANNER_OPTIONS = [
     ("--preflight", "check configuration; no fetch, model call or credential access"),
     ("--provider NAME", "runtime adapter: claude or openai, independent of execution location"),
     ('--no-sandbox', 'explicit direct-host execution; default is VM, with no automatic fallback'),
-    ("--parallel N", "persona-only concurrent calls, 1 to 4 (default 4)"),
-    ("--mode NAME", "single-agent (default); agent-personas defaults to three passes each"),
-    ("--passes N", "single-agent maximum passes; agent-personas passes per persona"),
+    ("--parallel N", "concurrent reviewers, 1 to 4 (default 4)"),
+    ("--passes N", "passes per persona (default 3)"),
     ("--model NAME", "model for all roles, for example haiku or sonnet"),
     ("--criteria MODE", "merge (default), project_only or defaults_only"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
@@ -125,16 +112,15 @@ def review_banner(pr: str, cfg: Config) -> str:
     """The banner `reviewer review` prints at the start in a terminal: what this run will do and the options you can add."""
     width = max(len(flag) for flag, _ in BANNER_OPTIONS) + 2
     lines = [
-        "reviewer review: multi-pass pull request review",
+        "reviewer review: multi-perspective pull request review",
         "",
-        "This run: %s · up to %d passes · model %s · self-check %s · emails %s · mode %s" % (
-            pr, 4 * cfg.persona_passes if cfg.review_mode == "agent-personas" else cfg.max_passes, cfg.model_reviewer, "on" if cfg.self_check else "off",
-            "redacted" if cfg.redact_emails else "NOT redacted", cfg.review_mode),
+        "This run: %s · %d scheduled reviews · model %s · self-check %s · emails %s" % (
+            pr, 4 * cfg.persona_passes, cfg.model_reviewer, "on" if cfg.self_check else "off",
+            "redacted" if cfg.redact_emails else "NOT redacted"),
         "",
         "Options you can add to this command:",
     ]
-    if cfg.review_mode == 'agent-personas':
-        lines.insert(3, 'Persona schedule: %d passes per persona; no quiet-pass stopping.' % cfg.persona_passes)
+    lines.insert(3, 'Schedule: %d passes per persona; fixed rounds.' % cfg.persona_passes)
     lines.insert(3, 'Execution: %s · provider %s · auth %s' % ('VM' if cfg.sandbox else 'direct host (explicitly selected)', cfg.provider, cfg.auth_mode))
     lines += ["  %s%s" % (flag.ljust(width), description) for flag, description in BANNER_OPTIONS]
     lines += [

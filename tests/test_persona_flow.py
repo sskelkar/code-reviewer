@@ -7,10 +7,10 @@ import unittest
 
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
-from code_reviewer.flows.agent_personas.contracts import validate_annotation, validate_comparison
-from code_reviewer.flows.agent_personas.criteria import PERSONAS
-from code_reviewer.flows.agent_personas.master import MasterList, agreement
-from code_reviewer.flows.agent_personas.report import CATEGORY_TITLES, render_summary
+from code_reviewer.review.contracts import validate_annotation, validate_comparison
+from code_reviewer.review.criteria import PERSONAS
+from code_reviewer.review.master import MasterList, agreement
+from code_reviewer.review.report import CATEGORY_TITLES, render_summary
 from code_reviewer.backends.contract import LLMResult
 from code_reviewer.shared.findings import FileCache
 from .helpers import TempDirTestMixin, finding, make_repo
@@ -69,7 +69,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
-        self.cfg = Config(review_mode='agent-personas', persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.tmp / 'runs'))
+        self.cfg = Config(persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.tmp / 'runs'))
 
     def run_flow(self, runner, **changes):
         for key, value in changes.items():
@@ -139,7 +139,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 self.assertEqual([s.pass_no for s in result.passes], list(range(1, 4 * count + 1)))
                 self.assertEqual(result.completed_by_persona, dict.fromkeys(PERSONAS, count))
                 report = result.report_path.read_text()
-                self.assertIn('agent-personas: %d/%d completed' % (4 * count, 4 * count), report)
+                self.assertIn('Multi-perspective review: %d/%d completed' % (4 * count, 4 * count), report)
                 self.assertIn('round %d/%d (slot %d/%d)' % (count, count, 4 * count, 4 * count), output.getvalue())
                 rates = agreement(result.master.items['F-001'], result.completed_by_persona, self.cfg)
                 for persona in PERSONAS:
@@ -166,7 +166,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(len(result.passes), 20)
         self.assertEqual(result.passes_completed, 1)
         summary = render_summary(result, ['High'], [])
-        self.assertIn('agent-personas: 1/20 completed', summary)
+        self.assertIn('Multi-perspective review: 1/20 completed', summary)
         self.assertIn('Correctness 1/5', summary)
         self.assertIn('Correctness: 1/1 (Unrated)', summary)
 
@@ -219,6 +219,13 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         filtered = render_summary(result, self.cfg.post_tiers, hidden)
         self.assertNotIn('### Correctness', filtered)
         self.assertNotIn('correctness issue', filtered)
+
+    def test_posted_comment_is_the_grouped_summary_with_a_private_marker(self):
+        from code_reviewer.post import MARKER, format_comment
+        result = self.run_flow(PersonaRunner(reviewer=[{'findings': [finding()]}]), persona_passes=1)
+        summary = render_summary(result, self.cfg.post_tiers, [])
+        self.assertEqual(format_comment(result, self.cfg.post_tiers, []), MARKER + '\n' + summary)
+        self.assertIn('### Production safety', summary)
 
     def test_all_personas_can_independently_discover_the_same_issue(self):
         result = self.run_flow(PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}]))
@@ -280,7 +287,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
 
     def test_interrupted_consolidation_rolls_back_only_the_incomplete_slot(self):
         from unittest.mock import patch
-        from code_reviewer.flows.agent_personas import flow
+        from code_reviewer.review import flow
         original_dump = flow.dump_json
         for stage in ('mapping', 'completion_event'):
             with self.subTest(stage=stage):
@@ -308,7 +315,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 self.assertEqual(saved['findings'][0]['seen_in_passes'], [1])
 
     def test_scheduled_pass_table_is_one_markdown_block_even_with_multiline_errors(self):
-        from code_reviewer.flows.agent_personas.report import render_report
+        from code_reviewer.review.report import render_report
         result = self.run_flow(PersonaRunner())
         result.passes[0].error = 'example | error\nsecond line'
         block = render_report(result).split('## Scheduled passes\n\n')[1].split('\n\n')[0]
@@ -329,15 +336,12 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         runner.version = lambda: self.fail('dry run must not call version')
         self.cfg.persona_passes = 2
         dry = Engine(self.cfg, runner).dry_run(self.ctx)
-        from code_reviewer.flows.agent_personas.report import render_dry_run
+        from code_reviewer.review.report import render_dry_run
         self.assertIn('2 passes per persona (8 scheduled)', render_dry_run(dry))
         self.assertEqual(runner.calls, [])
         self.assertEqual(set(dry.assignments), set(PERSONAS))
         self.assertFalse((dry.run_dir / 'pass-01').exists())
 
-    def test_legacy_disabled_ids_map_only_within_persona_flow(self):
-        result = self.run_flow(PersonaRunner(), disabled_default_rules=['GEN-004'])
-        self.assertNotIn('SAFE-001', [r.rule_id for r in result.criteria.rules])
 
     def test_prompt_limit_fails_visibly_without_sending_partial_master(self):
         runner = PersonaRunner()
@@ -453,11 +457,11 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         runner = self.conflict_runner(self.annotation())
         runner.cost = 0.01
         from unittest.mock import patch
-        from code_reviewer.flows.agent_personas.budget import Budget
+        from code_reviewer.review.budget import Budget
         budget = Budget(self.cfg)
         allowance = budget.reserve('verifier', .4)
         budget.settle('verifier', allowance, LLMResult(ok=True, cost_usd=.4))
-        with patch('code_reviewer.flows.agent_personas.flow.Budget', return_value=budget):
+        with patch('code_reviewer.review.flow.Budget', return_value=budget):
             result = self.run_flow(runner)
         self.assertEqual(result.passes_completed, 12)
         self.assertEqual(result.stop_reason, 'budget_exceeded')
@@ -496,13 +500,13 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         runner = PersonaRunner()
         with patch.object(cli, 'load_config', return_value=self.cfg), patch('code_reviewer.backends.factory.create_runner', return_value=runner), \
                 patch.object(Engine, 'prepare', return_value=self.ctx), contextlib.redirect_stdout(output):
-            self.assertEqual(cli.main(['review', self.ctx.label, '--mode', 'agent-personas']), 0)
-        self.assertIn('agent-personas: 12/12 completed', output.getvalue())
+            self.assertEqual(cli.main(['review', self.ctx.label, ]), 0)
+        self.assertIn('Multi-perspective review: 12/12 completed', output.getvalue())
         lines = []
         runner = PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}])
         session = Session(self.cfg, runner, local_path=self.tmp, out=lines.append)
         with patch.object(Engine, 'prepare', return_value=self.ctx), contextlib.redirect_stdout(io.StringIO()):
-            session.dispatch('review ' + self.ctx.label + ' --mode agent-personas')
+            session.dispatch('review ' + self.ctx.label + '')
         session.dispatch('show F-001')
         self.assertIn('Correctness: 3/3', '\n'.join(lines))
         self.assertIn('SQL built by concatenation', format_comment(session.result, ['High'], []))
@@ -514,10 +518,10 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
     def test_persona_pass_override_and_all_role_models_override_together(self):
         from argparse import Namespace
         from code_reviewer.review_options import apply_run_options
-        args = Namespace(mode='agent-personas', passes=1, model='sonnet', no_self_check=False)
+        args = Namespace(passes=1, model='sonnet', no_self_check=False)
         cfg = apply_run_options(self.cfg, args)
         self.assertEqual(cfg.persona_passes, 1)
-        self.assertEqual((cfg.min_passes, cfg.max_passes), (3, 6))
+        self.assertEqual(cfg.persona_passes, 1)
         self.assertEqual(self.cfg.persona_passes, 3)
         self.assertEqual((cfg.model_reviewer, cfg.model_comparator, cfg.model_resolver, cfg.model_verifier), ('sonnet',) * 4)
         self.assertEqual(self.cfg.model_verifier, 'haiku')
@@ -543,7 +547,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(validate_comparison(payload, findings, MasterList()))
 
     def test_repeated_routing_ids_fall_back_even_if_one_assignment_is_invalid(self):
-        from code_reviewer.flows.agent_personas.criteria import routes, validate_routes
+        from code_reviewer.review.criteria import routes, validate_routes
         payload = {'assignments': [
             {'rule_id': 'P:a', 'personas': ['bogus'], 'reason': 'Invalid'},
             {'rule_id': 'P:a', 'personas': ['correctness'], 'reason': 'Duplicate'},
@@ -552,7 +556,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(validate_routes(payload, ['P:a']))
 
     def test_uniqueness_is_enforced_locally_without_provider_schema_constraints(self):
-        from code_reviewer.flows.agent_personas.criteria import validate_routes
+        from code_reviewer.review.criteria import validate_routes
         assignment = {'assignments': [{'rule_id': 'P:a', 'personas': ['correctness', 'correctness'],
                                        'reason': 'Synthetic duplicate assignment'}]}
         self.assertTrue(validate_routes(assignment, ['P:a']))
@@ -583,16 +587,6 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         annotation['claims'][0]['evidence'][0]['file'] = 'bad\x00path'
         self.assertTrue(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, FileCache(self.ctx.git_dir)))
 
-    def test_single_agent_replay_rejects_persona_runs_before_model_calls(self):
-        import contextlib
-        import io
-        from unittest.mock import patch
-        from code_reviewer.parked import replay
-        result = self.run_flow(PersonaRunner())
-        error = io.StringIO()
-        with patch('subprocess.Popen', side_effect=AssertionError('must not call models')), contextlib.redirect_stderr(error):
-            self.assertEqual(replay.main([str(result.run_dir)]), 1)
-        self.assertIn('replay is parked', error.getvalue())
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):
         runner = self.conflict_runner(self.annotation())

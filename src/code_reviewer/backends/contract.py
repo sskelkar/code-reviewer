@@ -41,7 +41,7 @@ class LLMResult:
 class Runner(Protocol):
     """One fresh, structured conversation; adapters enforce only the allowed tools.
 
-    No adapter chooses a review strategy, reads prior findings, changes criteria,
+    No adapter chooses review criteria, reads prior findings, changes criteria,
     posts comments or selects another provider/authentication method on failure.
     """
     def run(self, *, system_prompt: str, user_prompt: str, schema: Dict[str, Any], model: str,

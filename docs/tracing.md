@@ -1,6 +1,6 @@
 # Local review traces
 
-Optional Langfuse tracing records how a review executes: stages, model calls, read tools, retries, validation counts, usage and outcomes. Both strategies and providers use the same recorder. Tracing does not change prompts, budgets, stopping rules, findings or posting.
+Optional Langfuse tracing records how a review executes: stages, model calls, read tools, retries, validation counts, usage and outcomes. Both providers use the same recorder. Tracing does not change prompts, budgets, stopping rules, findings or posting.
 
 ## Start local Langfuse
 
@@ -49,7 +49,7 @@ The generated file is trusted local operator configuration, not repository input
 tracing = false
 ```
 
-Run the usual `reviewer review …` command with your selected provider/authentication/strategy. Metadata recording is on by default; local export still needs the SDK and project-key environment variables above. No additional flags, model credentials or Langfuse settings go inside the repository being reviewed. Invalid configuration, preflight and dry-run never contact Langfuse or read its keys, even when tracing is enabled.
+Run the usual `reviewer review …` command with your selected provider and authentication. Metadata recording is on by default; local export still needs the SDK and project-key environment variables above. No additional flags, model credentials or Langfuse settings go inside the repository being reviewed. Invalid configuration, preflight and dry-run never contact Langfuse or read its keys, even when tracing is enabled.
 
 After cleanup, trace metadata is saved atomically before export starts. A successful export prints a local trace link and saves it in `stats.json` under `tracing`. Bounded metadata remains under `trace`, including a dropped-observation count. If Langfuse, keys, the SDK or a compatible host Python are unavailable, the review still completes and prints a warning; metadata remains available with the stats. Failed reviews can have a separate private `trace-<opaque ID>/stats.json` directory. There is no automatic retry daemon. The export subprocess has a 20-second total deadline and receives no model credentials or ambient OTLP/proxy settings.
 
@@ -108,6 +108,6 @@ Unit tests use synthetic repositories, fake providers and exporters. With the op
 | [tracing/langfuse.py](../src/code_reviewer/tracing/langfuse.py) | Isolated optional SDK/OTLP export to the fixed loopback endpoint |
 | [shared/llm.py](../src/code_reviewer/shared/llm.py), [backends/openai.py](../src/code_reviewer/backends/openai.py) | Role, attempt, generation, HTTP and tool boundaries |
 | [sandbox/settings.py](../src/code_reviewer/sandbox/settings.py), [guest.py](../src/code_reviewer/sandbox/guest.py) | Trusted enable/context handoff and bounded stats export |
-| [test_tracing.py](../tests/test_tracing.py) | Privacy, failures, bounds, threading, both flows, guest transfer and optional SDK checks |
+| [test_tracing.py](../tests/test_tracing.py) | Privacy, failures, bounds, threading, the review pipeline, guest transfer and optional SDK checks |
 
-Local server 4.72.0 ingestion is verified with synthetic reviews in both flows and adapter paths. Stored observations preserve one logical root, parent links, original timing, usage and metadata-only capture. Remaining provider usage and adapter qualification is tracked in [the roadmap](proposal.md#checklist). Tracing does not move prompts into Langfuse, add evaluations, expand guest networking or introduce another review flow.
+Local server 4.72.0 ingestion is verified with synthetic reviews in the review pipeline and adapter paths. Stored observations preserve one logical root, parent links, original timing, usage and metadata-only capture. Remaining provider usage and adapter qualification is tracked in [the roadmap](proposal.md#checklist). Tracing does not move prompts into Langfuse, add evaluations, expand guest networking or introduce another review flow.

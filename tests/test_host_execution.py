@@ -55,7 +55,7 @@ class HostExecutionTests(unittest.TestCase):
             for directory in (store.root,store.input_dir,passes,root/'cache'):
                 self.assertEqual(directory.stat().st_mode & 0o777,0o700)
 
-    def test_real_native_adapter_reaches_both_host_flows_through_cli(self):
+    def test_real_native_adapter_reaches_host_review_through_cli(self):
         import sys
         ctx=make_repo(self.root)
         binary=self.root/'fake-native'
@@ -64,14 +64,13 @@ class HostExecutionTests(unittest.TestCase):
                           'assert os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") == "synthetic-subscription"\n'
                           'print(json.dumps({"type":"result","structured_output":{"findings":[]},"total_cost_usd":0.001}))\n')
         binary.chmod(0o700)
-        for mode in ('single-agent','agent-personas'):
-            cfg=replace(self.cfg,claude_bin=str(binary),review_mode=mode,auth_mode='subscription',runs_dir=str(self.root/('native-'+mode)))
-            with patch.object(Engine,'prepare',return_value=ctx), patch.dict(os.environ, {'CLAUDE_CODE_OAUTH_TOKEN':'synthetic-subscription','ANTHROPIC_API_KEY':'unselected-key'}):
-                status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
-            self.assertEqual(status,0,(mode,err))
-            self.assertIn('full report:',out)
-            stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
-            self.assertTrue(all(c['billing_mode']=='subscription' for c in stats['calls']))
+        cfg=replace(self.cfg,claude_bin=str(binary),auth_mode='subscription',runs_dir=str(self.root/('native-'+'agent-personas')))
+        with patch.object(Engine,'prepare',return_value=ctx), patch.dict(os.environ, {'CLAUDE_CODE_OAUTH_TOKEN':'synthetic-subscription','ANTHROPIC_API_KEY':'unselected-key'}):
+            status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
+        self.assertEqual(status,0,('agent-personas',err))
+        self.assertIn('full report:',out)
+        stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
+        self.assertTrue(all(c['billing_mode']=='subscription' for c in stats['calls']))
 
     def test_invalid_host_manifest_is_a_configuration_error_instead_of_traceback(self):
         ctx=make_repo(self.root)
@@ -110,44 +109,43 @@ class HostExecutionTests(unittest.TestCase):
     def test_host_cli_runs_both_providers_and_both_algorithms_with_fake_model_transport(self):
         ctx = make_repo(self.root)
         for provider in ('claude', 'openai'):
-            for mode in ('single-agent', 'agent-personas'):
-                with self.subTest(provider=provider, mode=mode):
-                    calls = []
-                    def transport(payload, token, timeout):
-                        calls.append(payload)
-                        history = payload['input']
-                        if payload['tools'] and not any(i.get('type') == 'function_call_output' for i in history):
-                            items = [dict(type='function_call', name='Read', call_id='read-fixture',
-                                          arguments=json.dumps(dict(path='app.py', offset=1, limit=20)))]
-                        else:
-                            if payload['tools']:
-                                self.assertIn('SELECT', json.loads(history[-1]['output'])['text'])
-                            items = [dict(type='message', content=[dict(type='output_text', text='{"findings":[]}')])]
-                        return dict(status='completed', usage=dict(input_tokens=100, output_tokens=20), output=items)
-                    cfg = replace(self.cfg, runs_dir=str(self.root/(provider+'-'+mode)))
-                    def api_runner(*args, **kwargs):
-                        kwargs['transport'] = transport
-                        return OpenAIRunner(*args, **kwargs)
-                    with patch.object(Engine, 'prepare', return_value=ctx), \
-                         patch.object(factory, 'ClaudeRunner', return_value=FakeRunner(reviewer=[{'findings':[]}])) as native, \
-                         patch.object(factory, 'OpenAIRunner', side_effect=api_runner) as api, \
-                         patch.dict(os.environ, {'OPENAI_API_KEY':'synthetic-runtime-test-key','ANTHROPIC_API_KEY':'synthetic-native-key'}):
-                        args = ['--no-sandbox', '--provider', provider, '--mode', mode, '--passes', '1']
-                        if provider == 'openai':
-                            args += ['--model', 'synthetic-model']
-                        status, text, err = self.invoke(cfg, *args)
-                    self.assertEqual(status, 0, err)
-                    self.assertIn('full report:', text)
-                    self.assertEqual(native.call_count, int(provider == 'claude'))
-                    self.assertEqual(api.call_count, int(provider == 'openai'))
-                    stats_path = next(Path(cfg.runs_dir).glob('*/stats.json'))
-                    stats = json.loads(stats_path.read_text())
-                    self.assertEqual(len(stats['calls']), 4 if mode == 'agent-personas' else 1)
+            with self.subTest(provider=provider, mode='agent-personas'):
+                calls = []
+                def transport(payload, token, timeout):
+                    calls.append(payload)
+                    history = payload['input']
+                    if payload['tools'] and not any(i.get('type') == 'function_call_output' for i in history):
+                        items = [dict(type='function_call', name='Read', call_id='read-fixture',
+                                      arguments=json.dumps(dict(path='app.py', offset=1, limit=20)))]
+                    else:
+                        if payload['tools']:
+                            self.assertIn('SELECT', json.loads(history[-1]['output'])['text'])
+                        items = [dict(type='message', content=[dict(type='output_text', text='{"findings":[]}')])]
+                    return dict(status='completed', usage=dict(input_tokens=100, output_tokens=20), output=items)
+                cfg = replace(self.cfg, runs_dir=str(self.root/(provider+'-'+'agent-personas')))
+                def api_runner(*args, **kwargs):
+                    kwargs['transport'] = transport
+                    return OpenAIRunner(*args, **kwargs)
+                with patch.object(Engine, 'prepare', return_value=ctx), \
+                     patch.object(factory, 'ClaudeRunner', return_value=FakeRunner(reviewer=[{'findings':[]}])) as native, \
+                     patch.object(factory, 'OpenAIRunner', side_effect=api_runner) as api, \
+                     patch.dict(os.environ, {'OPENAI_API_KEY':'synthetic-runtime-test-key','ANTHROPIC_API_KEY':'synthetic-native-key'}):
+                    args = ['--no-sandbox', '--provider', provider, '--passes', '1']
                     if provider == 'openai':
-                        self.assertEqual(len(calls), 8 if mode == 'agent-personas' else 2)
-                    for path in stats_path.parent.rglob('*'):
-                        if path.is_file():
-                            self.assertNotIn(b'synthetic-runtime-test-key', path.read_bytes())
+                        args += ['--model', 'synthetic-model']
+                    status, text, err = self.invoke(cfg, *args)
+                self.assertEqual(status, 0, err)
+                self.assertIn('full report:', text)
+                self.assertEqual(native.call_count, int(provider == 'claude'))
+                self.assertEqual(api.call_count, int(provider == 'openai'))
+                stats_path = next(Path(cfg.runs_dir).glob('*/stats.json'))
+                stats = json.loads(stats_path.read_text())
+                self.assertEqual(len(stats['calls']), 4)
+                if provider == 'openai':
+                    self.assertEqual(len(calls), 8)
+                for path in stats_path.parent.rglob('*'):
+                    if path.is_file():
+                        self.assertNotIn(b'synthetic-runtime-test-key', path.read_bytes())
 
     def test_host_dry_run_reads_target_without_runner_credentials_or_model_calls(self):
         ctx = make_repo(self.root)
@@ -156,8 +154,8 @@ class HostExecutionTests(unittest.TestCase):
              patch.object(factory, 'create_runner', side_effect=AssertionError('no credentials/model')):
             status, text, err = self.invoke(cfg, '--no-sandbox', '--dry-run', '--provider', 'openai', '--model', 'synthetic-model')
         self.assertEqual(status, 0, err)
-        self.assertIn('nothing was sent to OpenAI', text)
-        self.assertIn('THE HTTPS REQUEST', text)
+        self.assertIn('No model calls', text)
+        self.assertIn('Model: synthetic-model', text)
         self.assertNotIn('--append-system-prompt', text)
 
     def test_invalid_api_configuration_or_missing_key_refuses_before_host_acquisition(self):

@@ -70,9 +70,9 @@ def review_trace(fn):
             return fn(cfg, *args, **kwargs)
         recorder, outcome = Recorder(), None
         try:
-            with activate(recorder), observation('review.run', mode=cfg.review_mode, provider=cfg.provider,
+            with activate(recorder), observation('review.run', provider=cfg.provider,
                     auth=cfg.auth_mode, execution='vm' if cfg.sandbox else 'host',
-                    passes=cfg.persona_passes if cfg.review_mode == 'agent-personas' else cfg.max_passes,
+                    passes=cfg.persona_passes,
                     parallel=cfg.persona_parallel) as root:
                 outcome = fn(cfg, *args, **kwargs)
                 if outcome.result is not None:

@@ -6,18 +6,17 @@ from __future__ import annotations
 
 from typing import Optional
 
-REVIEW_USAGE = "review PR [--preflight] [--provider claude|openai] [--mode single-agent|agent-personas] [--passes N] [--parallel N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
+REVIEW_USAGE = "review PR [--preflight] [--provider claude|openai] [--passes N] [--parallel N] [--model NAME] [--no-self-check] [--keep-checkout] [--verbose] [--dry-run]"
 
 HELP = """\
-Production review is gated pending security qualification. Use review <PR URL> --preflight first.
+This interactive frontend is parked. Use the one-shot reviewer review command.
 Commands:
   review <PR URL | owner/repo#n> [options]
       Review a pull request (several independent passes, then a merged report). Options:
         --preflight       show release blockers; no fetch, model call or credentials
         --provider NAME   claude or openai; the same security gates apply
-        --parallel N      persona-only concurrent calls, 1 to 4 (default 4)
-        --mode NAME       single-agent (default) or agent-personas (3 passes each by default)
-        --passes N        single-agent: maximum passes (1 for a single, cheap pass); agent-personas: passes per persona
+        --parallel N      concurrent reviewers, 1 to 4 (default 4)
+        --passes N        passes per persona (default 3); --passes 1 gives one review per perspective
         --model NAME      model for all roles, for example haiku or sonnet
         --no-self-check   skip the reviewer's self-refutation phase (cheaper, findings are not double-checked)
         --keep-checkout   keep the temporary checkout (its location is printed), for debugging
@@ -63,7 +62,7 @@ COMMAND_GROUPS = [
 def welcome_text(repo: Optional[str]) -> str:
     """The banner shown when the REPL starts. `repo` is "owner/repo (host)" when the current directory is a clone."""
     width = max(len(command) for _, entries in COMMAND_GROUPS for command, _ in entries) + 2
-    lines = ["code-reviewer: multi-pass pull request review", ""]
+    lines = ["code-reviewer: multi-perspective pull request review", ""]
     lines.append("Repository here: %s" % repo if repo else "Not inside a clone: target-directory discovery is disabled; use a PR URL and --preflight.")
     for title, entries in COMMAND_GROUPS:
         lines += ["", "%s:" % title]

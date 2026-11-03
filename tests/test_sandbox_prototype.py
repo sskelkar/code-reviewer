@@ -62,19 +62,19 @@ class SandboxPrototypeTests(unittest.TestCase):
         self.assertEqual(config['machine-config']['mem_size_mib'], 1024)
         self.assertEqual(boot_config(path, path, runtime=True)['machine-config']['mem_size_mib'], 4096)
 
-    def test_both_real_flows_work_with_the_fake_headless_executable(self):
+    def test_real_pipeline_work_with_the_fake_headless_executable(self):
         result = run_smoke()
-        self.assertEqual(result['flows']['agent-personas']['calls'], 8)
-        self.assertEqual(result['flows']['single-agent']['calls'], 3)
+        self.assertEqual(result['review']['calls'], 8)
+        self.assertEqual(result['review']['calls'], 8)
         text = 'synthetic boot noise\n' + RESULT_PREFIX + json.dumps(result) + '\n'
         self.assertEqual(parse_result(text), result)
         with self.assertRaises(ValueError):
             parse_result(text + text)
-        result['flows']['agent-personas']['calls'] = True
+        result['review']['calls'] = True
         with self.assertRaises(ValueError):
             parse_result(RESULT_PREFIX + json.dumps(result))
-        result['flows']['agent-personas']['calls'] = 8
-        result['flows']['agent-personas']['completed'] = 0
+        result['review']['calls'] = 8
+        result['review']['completed'] = 0
         with self.assertRaises(ValueError):
             parse_result(RESULT_PREFIX + json.dumps(result))
         with self.assertRaises(ValueError):

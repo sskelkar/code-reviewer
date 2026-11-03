@@ -8,7 +8,7 @@ from code_reviewer.config import REPO_ROOT
 from code_reviewer.shared.criteria import load_default_rules, render_criteria_block
 
 
-ASSETS = REPO_ROOT / 'src/code_reviewer/flows/agent_personas'
+ASSETS = REPO_ROOT / 'src/code_reviewer/review'
 
 
 class PersonaCriteriaTests(unittest.TestCase):

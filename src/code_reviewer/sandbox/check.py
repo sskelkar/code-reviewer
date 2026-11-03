@@ -220,7 +220,7 @@ def run_check(artifacts, lima_home, instance, output=None, *, lifecycle=False, s
             try:
                 root_env, preparation = prepare_worker(worker, stage, job, bundle['sha256'], builder_sha)
                 images = preparation['images']
-                print('sandbox: running both flows with simulated OpenAI replies (no network)', file=sys.stderr)
+                print('sandbox: running the review pipeline with simulated OpenAI replies (no network)', file=sys.stderr)
                 arguments = (*root_env, 'PYTHONPATH=' + images['connected']['path'] + '/root/opt/reviewer/src',
                     '/usr/local/bin/python3.13', '-m', 'code_reviewer.sandbox.check_worker', '--root', job,
                     '--firecracker-sha256', FIRECRACKER_SHA, '--jailer-sha256', JAILER_SHA, '--kernel-sha256', KERNEL_SHA)
@@ -294,7 +294,7 @@ def cli(args):
             return 0
         report = run_check(args.artifacts, args.lima_home, args.instance, args.output,
                            lifecycle=args.lifecycle, source=args.pr)
-        print('Sandbox check passed: both flows, boundary probes and cleanup. No key or model request used.')
+        print('Sandbox check passed: the review pipeline, boundary probes and cleanup. No key or model request used.')
         print('Lima worker stopped. This check does not qualify live reviews.')
         print('report: %s' % report)
         return 0

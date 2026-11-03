@@ -23,7 +23,7 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
         (self.root / "app.py").write_text(SOURCE)
         self.diff = diffview.DiffIndex(diffview.parse_unified_diff(DIFF))
         self.cache = FileCache(self.root)
-        self.rules = {"GEN-004": {}, "P:docs/review.md#logging": {}}
+        self.rules = {"SAFE-001": {}, "P:docs/review.md#logging": {}}
 
     def prepare(self, findings, self_check=True):
         return FindingsPreparer(self.rules, self_check, self.cache, self.diff, 30).prepare(findings, 1)
@@ -87,17 +87,17 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(prepared.ungrounded[0]["reason"], "kind present requires a quote")
 
     def test_a_rule_citation_never_causes_a_grounded_finding_to_be_dropped(self):
-        prepared = self.prepare([finding(rule_id="GEN-999"), finding(rule_id="none"), finding(rule_id="P:docs/review.md#logging")])
+        prepared = self.prepare([finding(rule_id="UNKNOWN-999"), finding(rule_id="none"), finding(rule_id="P:docs/review.md#logging")])
         self.assertEqual(len(prepared.ok), 3)
         self.assertEqual([f["rule_id"] for f in prepared.ok], ["none", "none", "P:docs/review.md#logging"])
-        self.assertEqual(prepared.ok[0]["rule_citation"], "GEN-999")  # what the model wrote is kept for auditing
+        self.assertEqual(prepared.ok[0]["rule_citation"], "UNKNOWN-999")  # what the model wrote is kept for auditing
         self.assertEqual((prepared.rule_unknown, prepared.rule_repaired), (1, 0))
 
     def test_badly_formatted_citations_of_real_rules_are_repaired(self):
-        rules = {"GEN-004": {}, "P:docs/review.md#logging": {}}
+        rules = {"SAFE-001": {}, "P:docs/review.md#logging": {}}
         preparer = FindingsPreparer(rules, True, self.cache, self.diff, 30)
-        prepared = preparer.prepare([finding(rule_id=c) for c in ("[GEN-004]", "`gen-004`", "docs/review.md#logging", "[P:docs/review.md#logging]")], 1)
-        self.assertEqual([f["rule_id"] for f in prepared.ok], ["GEN-004", "GEN-004", "P:docs/review.md#logging", "P:docs/review.md#logging"])
+        prepared = preparer.prepare([finding(rule_id=c) for c in ("[SAFE-001]", "`safe-001`", "docs/review.md#logging", "[P:docs/review.md#logging]")], 1)
+        self.assertEqual([f["rule_id"] for f in prepared.ok], ["SAFE-001", "SAFE-001", "P:docs/review.md#logging", "P:docs/review.md#logging"])
         self.assertEqual((prepared.rule_repaired, prepared.rule_unknown), (4, 0))
         self.assertTrue(all("rule_citation" not in f for f in prepared.ok))
 
@@ -145,30 +145,30 @@ class GroundingTests(TempDirTestMixin, unittest.TestCase):
 
 
 class ResolveRuleIdTests(unittest.TestCase):
-    RULES = {"GEN-010": {}, "P:docs/style.md#43-pull-request-checks": {}, "P:docs/ddd.md#aggregate": {}}
+    RULES = {"TEST-002": {}, "P:docs/style.md#43-pull-request-checks": {}, "P:docs/ddd.md#aggregate": {}}
 
     def resolve(self, raw):
         return resolve_rule_id(raw, self.RULES)
 
     def test_exact_and_none(self):
-        self.assertEqual(self.resolve("GEN-010"), ("GEN-010", "exact"))
+        self.assertEqual(self.resolve("TEST-002"), ("TEST-002", "exact"))
         for nothing in ("none", "None", "", "  ", None):
             self.assertEqual(self.resolve(nothing), ("none", "none"))
 
     def test_the_formats_seen_in_a_real_run_are_repaired(self):
-        self.assertEqual(self.resolve("[GEN-010]"), ("GEN-010", "repaired"))
+        self.assertEqual(self.resolve("[TEST-002]"), ("TEST-002", "repaired"))
         self.assertEqual(self.resolve("[P:docs/style.md#43-pull-request-checks]"),
                          ("P:docs/style.md#43-pull-request-checks", "repaired"))
         self.assertEqual(self.resolve("docs/style.md#43-pull-request-checks"),
                          ("P:docs/style.md#43-pull-request-checks", "repaired"))
 
     def test_other_cosmetic_variants(self):
-        for raw in ("`GEN-010`", "gen-010", "(GEN-010)", "GEN-010 (default)", "GEN-010.", "'GEN-010'"):
-            self.assertEqual(self.resolve(raw), ("GEN-010", "repaired"), raw)
+        for raw in ("`TEST-002`", "test-002", "(TEST-002)", "TEST-002 (default)", "TEST-002.", "'TEST-002'"):
+            self.assertEqual(self.resolve(raw), ("TEST-002", "repaired"), raw)
         self.assertEqual(self.resolve("p:docs/ddd.md#Aggregate"), ("P:docs/ddd.md#aggregate", "repaired"))
 
     def test_text_that_names_no_rule_is_unknown(self):
-        for raw in ("Style Guide 4.3 (Requirements Match)", "GEN-999", "P:docs/ddd.md#missing", "see the style guide"):
+        for raw in ("Style Guide 4.3 (Requirements Match)", "UNKNOWN-999", "P:docs/ddd.md#missing", "see the style guide"):
             self.assertEqual(self.resolve(raw), ("none", "unknown"), raw)
 
 

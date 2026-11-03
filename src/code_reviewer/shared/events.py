@@ -25,11 +25,11 @@ def display_text(value: str, limit: int = 240) -> str:
                    for c in value[:limit])
 
 
-def round_preview(mode, number, master, previous, completed, failed):
+def round_preview(number, master, previous, completed, failed):
     """Preview only accepted sightings, after consolidation; never self-rejected claims."""
     items = master.scored()
     new = [item for item in items if item['id'] not in previous]
-    return dict(mode=mode, round=number, completed=completed, failed=failed, total=len(items), new=len(new),
+    return dict(round=number, completed=completed, failed=failed, total=len(items), new=len(new),
                 findings=[dict(id=item['id'], title=display_text(item['canonical']['title']),
                                severity=item['canonical']['severity'], file=display_text(item['canonical']['file']),
                                line=item['canonical']['line']) for item in new[:10]])

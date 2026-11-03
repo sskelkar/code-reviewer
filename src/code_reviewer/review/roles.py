@@ -1,15 +1,15 @@
 """Fresh persona Reviewer sessions, classification, consolidation and targeted verification."""
 from __future__ import annotations
-from ...tracing import traced
+from ..tracing import traced
 
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from ...shared.criteria import render_criteria_block
-from ...shared.llm import CallSpec, requires_lists
-from ...shared.models import PassFailed
-from ...shared.run_store import dump_json
-from ...shared.templates import render
+from ..shared.criteria import render_criteria_block
+from ..shared.llm import CallSpec, requires_lists
+from ..shared.models import PassFailed
+from ..shared.run_store import dump_json
+from ..shared.templates import render
 from .contracts import validate_annotation, validate_comparison
 from .criteria import PERSONAS, routes, validate_routes
 from .prompt_contract import digest, json_data, protect

@@ -164,7 +164,7 @@ class HTTPErrorTests(unittest.TestCase):
         self.assertEqual(transport.call_count, 3)
         self.assertEqual(len(stats.calls), 2)
 
-    def test_both_flows_recover_with_http_retries_between_tool_turns(self):
+    def test_review_pipeline_recover_with_http_retries_between_tool_turns(self):
         from code_reviewer.sandbox import openai_smoke
         original = openai_smoke.offline_response
         count = [0]
@@ -176,8 +176,8 @@ class HTTPErrorTests(unittest.TestCase):
         with patch.object(openai_smoke, 'offline_response', side_effect=transport), \
              patch.object(openai.time, 'sleep'), patch.object(openai.random, 'uniform', return_value=0):
             result = openai_smoke.run_offline()
-        self.assertEqual(result['flows']['single-agent']['completed'], 2)
-        self.assertEqual(result['flows']['agent-personas']['completed'], 4)
+        self.assertEqual(result['review']['completed'], 4)
+        self.assertEqual(result['review']['completed'], 4)
 
     def test_expired_deadline_after_wait_does_not_restart_outer_call(self):
         transport=Mock(side_effect=openai.ProviderHTTPError(details()))

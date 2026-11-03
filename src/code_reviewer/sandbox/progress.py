@@ -10,7 +10,7 @@ from .wire import receive_json, send_json
 MAX_FRAME = 32 * 1024
 MAX_EVENTS = 512
 MAX_BYTES = 512 * 1024
-PERSONAS = ('single-agent', 'correctness', 'code-quality', 'test-quality', 'production-safety')
+PERSONAS = ('correctness', 'code-quality', 'test-quality', 'production-safety')
 STAGES = {
     'staging': 'staging trusted runtime inputs',
     'starting_worker': 'starting dedicated Lima worker',
@@ -76,9 +76,8 @@ def validate(frame, *, allow_preview=False, secret=''):
                      and data['self_rejected'] <= data['raised'] and valid_rows(data['findings'], 3)
                      and len(data['findings']) <= data['raised'] - data['self_rejected'])
     elif event == 'round_preview' and allow_preview:
-        keys = {'mode', 'round', 'completed', 'failed', 'total', 'new', 'findings'}
-        valid = (set(data) == keys and data['mode'] in ('single-agent', 'agent-personas')
-                 and all(integer(data[k]) for k in ('round', 'completed', 'failed', 'total', 'new'))
+        keys = {'round', 'completed', 'failed', 'total', 'new', 'findings'}
+        valid = (set(data) == keys and all(integer(data[k]) for k in ('round', 'completed', 'failed', 'total', 'new'))
                  and valid_rows(data['findings'], 10, identified=True)
                  and len(data['findings']) <= data['new'] <= data['total'])
     if not valid:
@@ -117,8 +116,8 @@ class Stream:
 
 
 class GuestProgress:
-    def __init__(self, sock, mode):
-        self.sock, self.mode, self.secret = sock, mode, ''
+    def __init__(self, sock):
+        self.sock, self.secret = sock, ''
         self.count = self.bytes = 0
 
     def send(self, event, **data):
@@ -151,14 +150,7 @@ class GuestProgress:
             self.send('review_finished', persona=d['persona'], round=d['round_no'], ok=d['ok'],
                       **{k: d[k] for k in ('raised', 'self_rejected', 'findings') if k in d})
         elif kind == 'comparator_started':
-            self.send('comparison_started', persona=d.get('persona', 'single-agent'),
+            self.send('comparison_started', persona=d['persona'],
                       round=d.get('round_no', d.get('pass_no', 1)))
-        elif kind == 'pass_started' and self.mode == 'single-agent':
-            self.send('review_started', persona='single-agent', round=d['pass_no'])
-        elif kind == 'reviewer_returned' and self.mode == 'single-agent':
-            self.send('review_finished', persona='single-agent', round=d['pass_no'], ok=True,
-                      **{k: d[k] for k in ('raised', 'self_rejected', 'findings')})
-        elif kind == 'pass_failed' and self.mode == 'single-agent':
-            self.send('review_finished', persona='single-agent', round=d['pass_no'], ok=False)
         elif kind == 'round_preview':
-            self.send(kind, **d)
+            self.send('round_preview', **d)

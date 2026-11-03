@@ -3,7 +3,7 @@ import json
 import unittest
 
 from code_reviewer.config import Config
-from code_reviewer.flows.single_agent.dry_run import render_dry_run
+from code_reviewer.presentation import render_dry_run
 from code_reviewer.engine import Engine
 from code_reviewer.shared.redact import PLACEHOLDER, redact_emails
 
@@ -47,7 +47,7 @@ class EngineRedactionTests(TempDirTestMixin, unittest.TestCase):
 
     def engine(self, runner, **cfg):
         events = []
-        return Engine(Config(runs_dir=str(self.tmp / "runs"), max_passes=1, min_passes=1, **cfg), runner, emit=events.append), events
+        return Engine(Config(runs_dir=str(self.tmp / "runs"), **cfg), runner, emit=events.append), events
 
     def test_no_email_reaches_the_model_or_disk(self):
         runner = FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER)
@@ -80,7 +80,7 @@ class EngineRedactionTests(TempDirTestMixin, unittest.TestCase):
         self.assertNotIn(self.EMAIL, text)
         self.assertIn("replaced with [email]: 3 replaced above", text)
         off, _ = self.engine(runner, redact_emails=False)
-        self.assertIn("Email redaction is OFF", render_dry_run(off.dry_run(self.ctx)))
+        self.assertIn("email redaction is OFF", render_dry_run(off.dry_run(self.ctx)))
         self.assertEqual(runner.calls, [])
 
     def test_diff_and_code_are_not_redacted(self):

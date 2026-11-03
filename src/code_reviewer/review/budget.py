@@ -5,7 +5,7 @@ import math
 import threading
 from typing import Any
 
-from ...shared.stats import Stats
+from ..shared.stats import Stats
 from .criteria import PERSONAS
 
 

@@ -1,4 +1,4 @@
-"""Project-criteria discovery reused by review flows."""
+"""Project-criteria discovery reused by the review pipeline."""
 from __future__ import annotations
 
 from pathlib import Path

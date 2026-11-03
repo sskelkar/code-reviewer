@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -57,12 +58,16 @@ def make_repo(root: Path) -> PRContext:
 def finding(**overrides: Any) -> Dict[str, Any]:
     data = {
         "title": "SQL built by concatenation", "description": "user_id is concatenated into SQL, allowing injection.",
-        "severity": "high", "kind": "present", "rule_id": "GEN-004", "file": "app.py", "line": 2,
+        "severity": "high", "kind": "present", "rule_id": "SAFE-001", "file": "app.py", "line": 2,
         "quote": 'query = "SELECT * FROM t WHERE id=" + user_id', "suggestion": "Use a parameterized query.",
         "self_check": {"verdict": "confirmed", "reason": "no validation upstream"},
     }
     data.update(overrides)
     return data
+
+
+def block(text, name):
+    return json.loads(re.search('<' + name + r'>\n(.*?)\n</' + name + '>', text, re.S).group(1))
 
 
 class FakeRunner:
@@ -76,7 +81,7 @@ class FakeRunner:
         self.resolver = resolver or {"criteria_files": [], "inline_sections": [], "organization_notes": "none stated", "ignored_references": []}
         self.cost = cost
         self.calls: List[Dict[str, Any]] = []
-        self.counts = {"reviewer": 0, "comparator": 0, "resolver": 0}
+        self.counts = {role: 0 for role in ("reviewer", "comparator", "resolver", "classifier", "verifier")}
 
     def version(self) -> str:
         return "fake-1.0"
@@ -90,8 +95,21 @@ class FakeRunner:
         system = kwargs["system_prompt"]
         if "identify which files" in system:
             role, payload = "resolver", self._next("resolver", [self.resolver])
-        elif "deduplicate code-review findings" in system:
-            role, payload = "comparator", self._next("comparator", self.comparator)
+        elif "distribute project review" in system:
+            role = 'classifier'
+            self.counts[role] += 1
+            payload = {'assignments': [{'rule_id': rule['rule_id'], 'personas': ['correctness'], 'reason': 'Synthetic routing'}
+                for rule in block(kwargs['user_prompt'], 'project_rules')]}
+        elif "consolidate persona" in system:
+            role = 'comparator'
+            if self.comparator:
+                payload = self._next(role, self.comparator)
+            else:
+                master = block(kwargs['user_prompt'], 'candidate_findings')
+                payload = {'decisions': [{'local_id': item['local_id'], 'match': master[0]['id'] if master else 'new',
+                    'same_as': None, 'categories': ['production-safety']}
+                    for item in block(kwargs['user_prompt'], 'new_findings')], 'conflicts': []}
+                self.counts[role] += 1
         else:
             role, payload = "reviewer", self._next("reviewer", self.reviewer)
         self.calls.append({"role": role, **kwargs})
@@ -118,7 +136,7 @@ def synthetic_frontend(test):
     """Isolate presentation tests from execution dispatch using only fake runners.
 
     Production refusal is exercised without this mock in test_security_boundary.
-    Direct Engine regressions continue to exercise both real flow algorithms.
+    Direct Engine regressions continue to exercise the actual review algorithm.
     """
     from unittest.mock import patch
     from code_reviewer.engine import Engine

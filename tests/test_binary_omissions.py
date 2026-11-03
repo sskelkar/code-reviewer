@@ -93,13 +93,13 @@ class BinaryOmissionTests(unittest.TestCase):
         self.assertEqual(items['added.txt']['status'],'added')
         self.assertIsNone(git_ops.git_show(self.repo,self.ctx.head_sha,'added.txt'))
 
-    def test_both_flows_report_omissions_and_do_not_send_forced_text_binary_hunks(self):
+    def test_review_pipeline_report_omissions_and_do_not_send_forced_text_binary_hunks(self):
         (self.repo/'asset.bin').write_bytes(b'\0must-never-reach-the-model')
         (self.repo/'.gitattributes').write_text('asset.bin diff\n')
         self.commit()
-        for mode,runner in [('single-agent',FakeRunner([{'findings':[]}])), ('agent-personas',PersonaRunner())]:
-            cfg = Config(review_mode=mode,criteria_mode='defaults_only',runs_dir=str(self.root/mode),
-                         min_passes=1,max_passes=1,persona_passes=1,persona_parallel=1)
+        for mode,runner in [('agent-personas',PersonaRunner())]:
+            cfg = Config(criteria_mode='defaults_only',runs_dir=str(self.root/mode),
+                         persona_passes=1,persona_parallel=1)
             result = Engine(cfg,runner).review(self.ctx)
             self.assertIn('Binary contents omitted',result.report_path.read_text())
             self.assertIn('asset.bin',result.report_path.read_text())

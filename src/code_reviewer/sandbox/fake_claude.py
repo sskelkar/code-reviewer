@@ -26,11 +26,9 @@ def answer(schema, text):
         match = candidates[0]['id'] if candidates else 'new'
         decisions = [{'local_id': f['local_id'], 'match': match, 'same_as': None}
                      for f in block(text, 'new_findings')]
-        if 'conflicts' in required:
-            for decision in decisions:
-                decision['categories'] = ['correctness']
-            return {'decisions': decisions, 'conflicts': []}
-        return {'decisions': decisions}
+        for decision in decisions:
+            decision['categories'] = ['correctness']
+        return {'decisions': decisions, 'conflicts': []}
     raise ValueError('the offline smoke test supports Reviewer/Comparator only')
 
 

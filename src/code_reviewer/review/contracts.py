@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from ...shared.findings import FileCache, find_quote
+from ..shared.findings import FileCache, find_quote
 from .criteria import PERSONAS
 
 
