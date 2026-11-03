@@ -1,0 +1,56 @@
+src/code_reviewer/flows/single_agent/roles.py
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 20
+tests/test_options.py
+  s_68cd0db0a8fc3a::t_3d0e5002ca8129 82-95
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 70
+docs/prompts.md
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 80
+src/code_reviewer/flows/single_agent/master.py
+  s_68cd0db0a8fc3a::t_99e2870462f03c 153-154,161,167
+tests/test_engine.py
+  s_68cd0db0a8fc3a::t_3d0e5002ca8129 160-174
+docs/usage.md
+  s_68cd0db0a8fc3a::t_156479be880472 39
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 226
+  s_68cd0db0a8fc3a::t_7199e4ce9d1723 41
+src/code_reviewer/shared/run_store.py
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 1,48
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 56
+  s_68cd0db0a8fc3a::t_b5f8f9b5021763 8,48-50,91-92,113
+tests/test_master.py
+  s_68cd0db0a8fc3a::t_99e2870462f03c 100-113
+docs/development.md
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 67-68,102
+src/code_reviewer/shared/findings.py
+  s_68cd0db0a8fc3a::t_99e2870462f03c 83
+tests/test_findings.py
+  s_68cd0db0a8fc3a::t_3d0e5002ca8129 38-48
+src/code_reviewer/progress.py
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 44
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_156479be880472 11-12,17,31-32
+src/code_reviewer/flows/single_agent/flow.py
+  s_68cd0db0a8fc3a::t_2b8f66c723aec3 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "71dd98fd4c66a49aac4a9f63a9064c30c76af31c",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
