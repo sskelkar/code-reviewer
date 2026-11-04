@@ -49,6 +49,8 @@ class VerificationTests(TempDirTestMixin, unittest.TestCase):
         data = json.loads((result.run_dir / 'findings.json').read_text())
         self.assertEqual(data['head_sha'], self.ctx.head_sha)
         self.assertEqual(data['criteria'], result.criteria.index())
+        self.assertIn(self.ctx.head_sha, result.report_path.read_text())
+        self.assertIn(self.ctx.base_sha, (result.run_dir / 'summary.md').read_text())
         self.assertEqual(len(data['findings']), 1)
         self.assertIsNone(data['findings'][0]['candidate']['suggestion'])
         self.assertIn('Use a parameterized query.', json.dumps(data['audit']))
@@ -195,7 +197,8 @@ class VerificationTests(TempDirTestMixin, unittest.TestCase):
     def test_self_rejected_candidates_never_enter_reports_or_verification(self):
         candidate = finding(self_check=dict(verdict='rejected', reason='Synthetic caller guarantee defeats the claim.'))
         result = self.run_flow(candidate=candidate)
-        self.assertEqual(len(result.master.rejected_only()), 1)
+        self.assertEqual(len(result.master.items), 1)
+        self.assertEqual(result.master.scored(), [])
         self.assertNotIn('verifier', self.runner.counts)
         self.assertNotIn(candidate['title'], result.report_path.read_text())
         self.assertIn(candidate['title'], json.dumps(artifact(result)['audit']))
@@ -222,3 +225,39 @@ class VerificationTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(verify['attributes']['accepted'], 1)
         self.assertNotIn(finding()['title'], json.dumps(rows))
         self.assertTrue(publishable(result.master.items['F-001']))
+
+    def test_absence_evidence_must_be_cited_not_merely_present(self):
+        candidate = finding(kind='absent', anchor=dict(file='app.py', line_start=2, line_end=2),
+            expected='Validate the input.', evidence=[dict(id='S1', source='head', file='app.py', line=2,
+                rule_id=None, quote=finding()['quote'], establishes='The input reaches query construction.')])
+        master = MasterList()
+        master.items['F-001'] = {'canonical': candidate}
+        response = verification_response({'user_prompt': '<conflict_claims>\n[{"id":"F-001"}]\n</conflict_claims>'})
+        validate = lambda: validate_assessments(response, self.prompts['verifier'].schema, ['F-001'], master,
+                                               FileCache(self.ctx.git_dir), {})
+        self.assertTrue(validate())
+        claim = response['assessments'][0]
+        claim['evidence_refs'] = ['primary', 'S1']
+        self.assertEqual(validate(), [])
+        claim['remedy'] = dict(status='supported', explanation='Synthetic fix support.', evidence_refs=['primary'])
+        self.assertTrue(validate())
+        claim['remedy']['evidence_refs'].append('S1')
+        self.assertEqual(validate(), [])
+
+    def test_conflict_chain_allows_nonopposing_supported_endpoints(self):
+        result = self.run_flow()
+        master = result.master
+        for ident in ('F-002', 'F-003'):
+            master.items[ident] = copy.deepcopy(master.items['F-001'])
+            master.items[ident]['id'] = ident
+        master.conflicts = {'C-001': {'findings': ['F-001', 'F-002']},
+                            'C-002': {'findings': ['F-002', 'F-003']}}
+        inputs = '<conflict_claims>\n' + json.dumps([{'id': i} for i in master.items]) + '\n</conflict_claims>'
+        response = verification_response({'user_prompt': inputs})
+        response['relationship'] = 'contradictory'
+        response['assessments'][1]['status'] = 'refuted'
+        validate = lambda: validate_assessments(response, self.prompts['verifier'].schema, list(master.items),
+                                               master, FileCache(self.ctx.git_dir), {})
+        self.assertEqual(validate(), [])
+        response['assessments'][1]['status'] = 'supported'
+        self.assertTrue(validate())

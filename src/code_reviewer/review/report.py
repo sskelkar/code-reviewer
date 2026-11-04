@@ -87,6 +87,8 @@ def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
     totals = counts(result.master)
     lines = ['## AI-generated persona review: %s' % result.ctx.label, '', run_line(result),
              'Model: %s. Agreement measures repeated sightings, not correctness. Only independently supported candidates are published; support is an evidence-based judgment, not a correctness guarantee.' % result.cfg.model_reviewer,
+             'Reviewed head: `%s` · base: `%s` · merge base: `%s`' % (
+                 result.ctx.head_sha, result.ctx.base_sha, result.ctx.merge_base),
              '', 'Completed passes: ' + ', '.join('%s %d/%d' % (CATEGORY_TITLES[p], result.completed_by_persona[p], result.cfg.persona_passes) for p in CATEGORY_TITLES),
              '', ('**No review completed.** Findings could not be finalized; this does not mean the change is issue-free. '
                   'Inspect the full report for failures and skipped work.' if result.passes_completed == 0 else

@@ -63,6 +63,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 | `review/roles.py`, `prompt_contract.py`, `prompts/` | Role-specific prompt assembly and contracts |
 | `review/budget.py`, `caller.py`, `runner.py` | Locked pools, per-attempt reservations, validation/request logs and cancellation |
 | `review/contracts.py`, `master.py` | Validated duplicate/conflict proposals, immutable candidate arguments, sightings and agreement |
+| `review/evidence.py`, `verification.py` | Shared bounded schema validation, citation grounding, conflict components, assessments and publication allowlist |
 | `review/report.py` | Category-grouped summaries, full reports and dry-run presentation |
 | `shared/review_inputs.py`, `criteria.py`, `resolver.py` | Diff and criteria preparation |
 | `shared/findings.py`, `diffview.py` | Deterministic normalization, evidence and scope checks |

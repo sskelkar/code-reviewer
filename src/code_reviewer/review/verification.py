@@ -40,8 +40,11 @@ def validate_assessments(payload, schema, ids, master, cache, criteria):
     relation = payload['relationship']
     if (len(ids) == 1) != (relation == 'independent'):
         return ['singleton investigations require independent; conflict groups require a group relationship']
-    if relation == 'contradictory' and sum(c['status'] == 'supported' for c in claims) > 1:
-        return ['contradictory claims cannot both be supported under the same conditions']
+    supported_ids = {c['candidate_id'] for c in claims if c['status'] == 'supported'}
+    conflict_sets = [set(group['findings']) & set(ids) for group in master.conflicts.values()
+                     if set(group['findings']) <= set(ids)]
+    if relation == 'contradictory' and any(len(supported_ids & edge) > 1 for edge in conflict_sets or [set(ids)]):
+        return ['opposing claims within a flagged conflict cannot both be supported under the same conditions']
     if relation == 'different_conditions':
         supported = [master.items[c['candidate_id']]['canonical']['conditions'] for c in claims if c['status'] == 'supported']
         if any(not conditions for conditions in supported) or len({tuple(c) for c in supported}) != len(supported):
@@ -58,8 +61,8 @@ def validate_assessments(payload, schema, ids, master, cache, criteria):
             return ['supported/refuted claims require grounded evidence references']
         if claim['status'] == 'supported' and (candidate['assumptions'] or claim['remaining_uncertainties']):
             return ['material assumptions or remaining uncertainties require unresolved status']
-        if claim['status'] == 'supported' and candidate['kind'] == 'absent' and not (candidate['evidence'] or claim['additional_evidence']):
-            return ['an absence anchor alone cannot support a missing-behavior claim']
+        if claim['status'] == 'supported' and candidate['kind'] == 'absent' and not set(claim['evidence_refs']) - {'primary'}:
+            return ['an absence claim must cite supporting evidence beyond its anchor']
         remedy = claim['remedy']
         if remedy['status'] == 'not_assessed':
             if remedy['explanation'] is not None or remedy['evidence_refs']:
@@ -68,6 +71,8 @@ def validate_assessments(payload, schema, ids, master, cache, criteria):
             return ['assessed remedies require explanation and supported/refuted remedies require evidence']
         if not candidate.get('suggestion') and remedy['status'] != 'not_assessed':
             return ['a missing suggestion cannot receive a remedy assessment']
+        if remedy['status'] == 'supported' and candidate['kind'] == 'absent' and not set(remedy['evidence_refs']) - {'primary'}:
+            return ['an absence remedy must cite supporting evidence beyond its anchor']
     return []
 
 

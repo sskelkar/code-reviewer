@@ -18,9 +18,6 @@ class MasterList:
     def scored(self) -> List[Any]:
         return [i for i in self.items.values() if i['seen_in_passes']]
 
-    def rejected_only(self) -> List[Any]:
-        return [i for i in self.items.values() if not i['seen_in_passes']]
-
     def apply(self, slot: Any, findings: List[Any], proposal: Any) -> Dict[str, str]:
         assigned: Dict[str, str] = {}
         for finding, decision in zip(findings, proposal['decisions']):

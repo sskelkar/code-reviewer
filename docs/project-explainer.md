@@ -129,7 +129,8 @@ flowchart TD
     APPLY --> NEXT{"More configured rounds?"}
     NEXT -->|Yes| ROUND
     NEXT -->|No| JOIN["finally: cancel + executor.shutdown(wait=True)"]
-    JOIN --> VERIFY["LLM for each candidate/conflict group: _verify()<br/>Roles.verify() → Roles.call('verifier')"]
+    JOIN --> JOBS["_verify() → verification.groups()<br/>connected conflicts + singleton candidates"]
+    JOBS --> VERIFY["candidate_inputs(): immutable claim data<br/>LLM: Roles.verify() → Roles.call('verifier')"]
     VERIFY --> GATE["validate_assessments() → accepted assessment<br/>publishable() selects supported findings"]
     GATE --> REPORT["RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()<br/>artifact() → findings.json"]
     REPORT --> CLEAN["finally: cleanup_checkout()<br/>unless explicitly kept on host"]

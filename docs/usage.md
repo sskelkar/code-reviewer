@@ -50,7 +50,7 @@ Options override the settings file for that run only. Everything else (budgets, 
 
 ### Posting a comment
 
-`--post` writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting), labeled as AI-generated, with the commit reviewed and the pass count. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
+`--post` writes a single comment containing exactly the review summary the tool printed (what you see is what gets posted), at the chosen confidence levels (default: High, Medium and Low; change it with the `post_tiers` setting), labeled as AI-generated, with the pinned commits reviewed and the pass count. Comments exceeding the posting limit are explicitly marked as truncated; the full local summary remains available. It only ever creates or updates one comment per PR from this tool (it recognizes its own hidden marker), so re-running replaces the earlier comment instead of adding more. Inline per-line comments are not supported yet.
 
 ## Live progress and candidate counts
 
@@ -76,12 +76,14 @@ The review summary printed at the end is also saved as `summary.md` in the run d
 
 | Section | What it tells you |
 |---|---|
-| Header | PR, commits reviewed, models, passes completed, why it stopped, diff size, estimated cost |
-| Criteria applied | Default and project rules used, project criteria files, references that were ignored (for example a wiki link), warnings (for example "this PR modifies the criteria files") |
-| Overview | Finding counts by confidence tier and severity |
-| Findings | Category-grouped findings with file/line, criterion, evidence, suggestion and per-persona agreement. One completed pass per persona is unrated |
-| Rejected by self-check | Findings the model raised and then refuted itself. Not scored, shown for transparency |
-| Appendix | New findings per pass (the discovery curve), pass-to-pass overlap, per-role and per-pass tokens and cost, and counters for findings dropped because their evidence could not be verified, and for rule citations that were repaired or unknown |
+| Header | PR, pinned head/base/merge-base commits, reviewer model, completed passes, stop reason and estimated cost |
+| Verification | Candidate counts by supported/refuted/unresolved/pending status and a warning when investigation is incomplete |
+| Findings | Supported findings grouped by category, with primary location/evidence, applicable criterion, conditions, impact, assessment and per-persona agreement; suggestions appear only with separate support |
+| Criteria assigned to each persona | Accepted rule headings, sources and paths; discovery details and ignored references are retained in host input artifacts |
+| Scheduled passes | Every slot's persona, round, completion/error status and raised/usable/ungrounded/malformed/out-of-scope counts |
+| Budget pools; usage and validation | Role/pool accounting, call usage, validation diagnostics and normalization counters |
+
+Self-rejected, refuted and unresolved candidate text is retained only in the private audit. `findings.json` contains both that audit and a distinct supported-only `findings` array; automation consumers must select the latter. Frozen inputs, raw requests/replies and pass findings are retained by host runs; VM exports retain the bounded audit but not these internal files.
 
 The report groups findings under **Correctness → Production safety → Test quality → Code quality**, omitting empty sections. Within each section, findings appear by severity, then file/line/title for stable ordering. A finding assigned to several categories appears once under the first applicable section, with every category still listed. Descriptive titles replace internal IDs in finding headings; supported assessments and their evidence appear beside findings. Internal IDs remain in structured state and diagnostic artifacts. This display order does not change reviewer scheduling, category assignments, votes or confidence.
 
@@ -91,9 +93,9 @@ A run with no completed review says **No review completed**, rather than present
 
 How to read the report:
 
-- A finding that every pass found has high agreement; repetition alone does not establish correctness. **Overlap near 1.00** means the passes behaved almost identically, so confidence tells you little.
-- **Mostly Low findings does not mean they are wrong.** Passes explore different code paths, so independent passes complement each other. Low agreement does not bypass verification. Review the supported findings and evidence; the appendix shows how many findings each pass raised, and host runs also retain per-pass notes in `pass-NN/findings.json`. Verifier decisions control publication independently from agreement (see [verification](verification.md)).
-- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the "variants" in the report show the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. Every eligible unique candidate is independently investigated before publication. Repetition is not a substitute for evidence (see [verification](verification.md)).
+- A finding that every pass found has high agreement; repetition alone does not establish correctness. Identical repeated results do not provide independent proof; inspect the supporting evidence.
+- **Mostly Low findings does not mean they are wrong.** Passes explore different code paths, so independent passes complement each other. Low agreement does not bypass verification. Review the supported findings and evidence; the scheduled-pass table shows how many candidates each pass raised, and host runs also retain per-pass notes in `pass-NN/findings.json`. Verifier decisions control publication independently from agreement (see [verification](verification.md)).
+- **Duplicates are merged by a model, and merging is not checking.** The Comparator compares each pass's findings with the findings of earlier passes (and with each other) and merges those that report the same issue, so one problem is not listed several times. Borderline cases can go either way: one issue may still appear as two or three findings (the private audit's "variants" retain the other wordings), and occasionally two related issues are merged. The Comparator only decides whether findings are the *same*, never whether they are *true*. A wrong finding that several passes repeat is merged into one finding with high confidence. Every eligible unique candidate is independently investigated before publication. Repetition is not a substitute for evidence (see [verification](verification.md)).
 - **One pass cannot rate confidence.** After a single pass (for example `--passes 1`, or a run that stopped early) every finding was found by "1 of 1" passes, which would score 100% and mean nothing. Those findings are shown as **unrated** and a posted comment labels them the same way. Run two or more passes to get High, Medium and Low.
 - Candidates first pass deterministic grounding: a whitespace-normalized quote that matches the code, or, for "something is missing", an anchor on a changed hunk. Ungrounded candidates are counted and excluded before merging. A grounded quote or anchor alone does not prove the claim; independent verification must also support it before publication.
 - Cost figures come from native CLI accounting or operator-supplied API token rates and may not match billing.

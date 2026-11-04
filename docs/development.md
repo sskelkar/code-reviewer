@@ -21,6 +21,7 @@ Tests use synthetic repositories, FakeRunners, fake native executables and simul
 | `test_security_boundary`, `test_vm_review`, `test_connected_sandbox`, `test_sandbox_acquisition` | Actual frontdoors/admission, credential gates, bounded private frames, fixed egress and no VM fallback |
 | `test_sandbox_prototype`, `test_sandbox_check`, `test_sandbox_preparation`, `test_vm_confinement` | Synthetic runtime/protocol checks, artifact fingerprints, clean image reuse, confinement and cleanup logic |
 | `test_tracing`, `test_live_progress` | Metadata privacy/parentage/usage, export failures, closed progress schemas, early count updates and terminal safety |
+| `test_verification` | Evidence references, absence/contradiction handling, remedy support, private audit and supported-only publication |
 | `test_options`, `test_review_banner`, `test_welcome`, `test_stats`, `test_llm_interface` | CLI/configuration, retained parked frontend, accounting and provider-neutral ownership |
 
 Boundary tests must exercise real admission rather than use `tests.helpers.synthetic_frontend`, which is only for presentation tests. Preserving coverage means porting shared behavior when implementation ownership changes, not replacing boundary assertions with test-only success paths.
