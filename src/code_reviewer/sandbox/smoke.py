@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ..config import Config
 from ..engine import Engine
+from ..review.verification import publishable
 from ..backends.claude import ClaudeRunner
 from ..shared.models import PRContext
 
@@ -45,11 +46,11 @@ def run_smoke(runner=None, *, model="haiku", expected_findings=1, provider="clau
                      criteria_mode='defaults_only', persona_passes=1, claude_bin=str(fake), runs_dir=str(root / 'run'))
         result = Engine(cfg, runner if runner is not None else ClaudeRunner(str(fake))).review(ctx)
         if (result.passes_completed != 4
-                or (expected_findings is not None and len(result.master.scored()) != expected_findings)):
+                or (expected_findings is not None and sum(publishable(item) for item in result.master.scored()) != expected_findings)):
             raise RuntimeError('review/consolidation did not complete')
         if result.stats.retries_and_failures()['failed_calls'] or not result.report_path.is_file():
             raise RuntimeError('failed calls or report missing')
-        review = {'completed': result.passes_completed, 'findings': len(result.master.scored()),
+        review = {'completed': result.passes_completed, 'findings': sum(publishable(item) for item in result.master.scored()),
                   'calls': len(result.stats.calls), 'stop_reason': result.stop_reason}
     return {'format': 1, 'synthetic': True, 'review': review}
 

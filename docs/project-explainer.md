@@ -87,11 +87,11 @@ sequenceDiagram
             Provider-->>Core: Model output, tool requests and usage
         end
     and Progress while the review runs
-        loop Stage changes, reviewer glimpses and consolidated round previews
+        loop Stage changes, reviewer return counts and consolidated round counts
             Core-->>VM: Event sink → GuestProgress projection
             VM-->>Worker: Bounded advisory progress frame over vsock
             Worker-->>CLI: Stream validates → private SSH relay → Stream validates
-            CLI->>CLI: LiveProgress renders provisional output and inactivity heartbeats
+            CLI->>CLI: LiveProgress renders counts and inactivity heartbeats
         end
     end
     Core-->>VM: RunResult with report, summary and stats
@@ -106,7 +106,7 @@ sequenceDiagram
     CLI->>CLI: export_result() → ExportedReview
 ```
 
-`sandbox.progress.Stream.receive()` consumes progress frames while waiting for the next acquisition/readiness/result envelope. `review.converse()` keeps credential requests separate and still requires the exact finished/cleanup envelope. `LiveProgress` owns a joined host heartbeat thread around VM execution; it never reads credentials or reviewed files. `shared.events.reviewer_preview()` projects at most three raw candidate titles/locations as each reviewer returns, before grounding and the persona barrier. `shared.events.round_preview()` selects only new actionable master entries after consolidation. The TTY-only activity line clears before output and on exit; non-interactive output stays plain. Previews are advisory and do not enter prompts or Langfuse.
+`sandbox.progress.Stream.receive()` consumes progress frames while waiting for the next acquisition/readiness/result envelope. `review.converse()` keeps credential requests separate and still requires the exact finished/cleanup envelope. `LiveProgress` owns a joined host heartbeat thread around VM execution; it never reads credentials or reviewed files. `shared.events.reviewer_preview()` projects proposed/self-rejected counts as each reviewer returns, before grounding and the round barrier. `shared.events.round_preview()` reports new and cumulative grounded candidate counts after consolidation. Neither exposes candidate titles or locations. The TTY-only activity line clears before output and on exit; non-interactive output stays plain. These counts are advisory and do not enter prompts or authorize publication.
 
 The guest receives an already pinned `PRContext` from acquisition and calls `Engine.review()` directly: it does **not** call host `Engine.prepare()` again. Code acquisition uses temporary source-network access; model work uses the inference-only policy. The guest adapter shares the same review implementation as the host adapter. See [sandbox architecture](sandbox-architecture.md) for enforcement details and failure/cleanup boundaries.
 
@@ -129,14 +129,15 @@ flowchart TD
     APPLY --> NEXT{"More configured rounds?"}
     NEXT -->|Yes| ROUND
     NEXT -->|No| JOIN["finally: cancel + executor.shutdown(wait=True)"]
-    JOIN --> VERIFY["LLM for flagged groups: _verify()<br/>Roles.verify() → Roles.call('verifier')"]
-    VERIFY --> REPORT["RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()"]
+    JOIN --> VERIFY["LLM for each candidate/conflict group: _verify()<br/>Roles.verify() → Roles.call('verifier')"]
+    VERIFY --> GATE["validate_assessments() → accepted assessment<br/>publishable() selects supported findings"]
+    GATE --> REPORT["RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()<br/>artifact() → findings.json"]
     REPORT --> CLEAN["finally: cleanup_checkout()<br/>unless explicitly kept on host"]
     classDef llm fill:#fff1d6,stroke:#b76b00,color:#171717
     class RES,CLASS,ROUND,MERGE,VERIFY llm
 ```
 
-Each persona has frozen instructions, caller/log state and an independent pool. Pool exhaustion or repeated failures disable that persona; the others continue. Shared-role exhaustion, global cancellation or terminal failure prevents further calls. Workers are joined before checkout cleanup. Verifier annotations never suppress findings or change votes/severity.
+Each persona has frozen instructions, caller/log state and an independent pool. Pool exhaustion or repeated failures disable that persona; the others continue. Shared-role exhaustion, global cancellation or terminal failure prevents further calls. Workers are joined before checkout cleanup. Validated Verifier assessments gate publication. Refuted, unresolved and unfinished candidates remain private; severity and votes are unchanged. `review/verification.py` owns conflict components, assessment validation and the publication predicate shared by reporting and structured output.
 
 `report._groups()` places each finding once under correctness, production safety, test quality or code quality. Display order is independent of scheduling order and never mutates the master.
 
@@ -239,7 +240,7 @@ The exporter is optional, host-only and deadline-bounded. It has no provider cre
 |---|---|
 | `cli.py`, `review_options.py` | Which commands/options exist and how are overrides applied? |
 | `config.py`, `security.py`, `review_flow.py` | What is trusted configuration and when can target/credential activity begin? |
-| `review/flow.py` | How do concurrent rounds, fixed-order merges and advisory verification work? |
+| `review/flow.py` | How do concurrent rounds, fixed-order merges and publication verification work? |
 | `shared/review_inputs.py`, `criteria.py`, `resolver.py` | How are PR input and project rules assembled? |
 | `shared/diffview.py`, `findings.py` | How is a diff represented and evidence checked? |
 | `backends/contract.py`, `factory.py` | What does any LLM adapter promise and how is it selected? |

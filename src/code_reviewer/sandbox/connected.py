@@ -42,7 +42,7 @@ def export_result(value, output, key, probe_only):
         raise ValueError('guest returned no validated job result')
     ready({'kind': 'ready', 'checks': value.get('checks')})
     encoded = value.get('files')
-    expected = {'boundary-report.json'} if probe_only else {'report.md', 'summary.md', 'stats.json'}
+    expected = {'boundary-report.json'} if probe_only else {'report.md', 'summary.md', 'stats.json', 'findings.json'}
     if not isinstance(encoded, dict) or set(encoded) != expected:
         raise ValueError('unexpected report artifact names')
     decoded, total = {}, 0

@@ -26,33 +26,17 @@ def display_text(value: str, limit: int = 240) -> str:
 
 
 def round_preview(number, master, previous, completed, failed):
-    """Preview only accepted sightings, after consolidation; never self-rejected claims."""
+    """Count grounded sightings after consolidation without exposing unverified claims."""
     items = master.scored()
     new = [item for item in items if item['id'] not in previous]
-    return dict(round=number, completed=completed, failed=failed, total=len(items), new=len(new),
-                findings=[dict(id=item['id'], title=display_text(item['canonical']['title']),
-                               severity=item['canonical']['severity'], file=display_text(item['canonical']['file']),
-                               line=item['canonical']['line']) for item in new[:10]])
+    return dict(round=number, completed=completed, failed=failed, total=len(items), new=len(new), findings=[])
 
 
 def reviewer_preview(payload):
-    """Small raw-output glimpse; this is not evidence validation or consolidation."""
+    """Count returned proposals without exposing their unverified titles or locations."""
     findings = payload.get('findings', []) if isinstance(payload, dict) else []
     if not isinstance(findings, list):
         findings = []
-    rows, rejected = [], 0
-    for finding in findings:
-        if not isinstance(finding, dict):
-            continue
-        check = finding.get('self_check')
-        if isinstance(check, dict) and check.get('verdict') == 'rejected':
-            rejected += 1
-            continue
-        if (finding.get('severity') not in ('high', 'medium', 'low', 'nit')
-                or type(finding.get('line')) is not int or not 1 <= finding['line'] <= 10**9
-                or any(not isinstance(finding.get(k), str) or not finding[k] for k in ('title', 'file'))):
-            continue
-        if len(rows) < 3:
-            rows.append(dict(title=display_text(finding['title']), severity=finding['severity'],
-                             file=display_text(finding['file']), line=finding['line']))
-    return dict(raised=len(findings), self_rejected=rejected, findings=rows)
+    rejected = sum(isinstance(finding, dict) and isinstance(finding.get('self_check'), dict)
+                   and finding['self_check'].get('verdict') == 'rejected' for finding in findings)
+    return dict(raised=len(findings), self_rejected=rejected, findings=[])

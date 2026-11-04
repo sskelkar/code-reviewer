@@ -254,7 +254,7 @@ class TracingTests(unittest.TestCase):
                 side_effect=[archive.read_bytes(), b'CREDENTIAL_CANARY']), patch.object(guest, 'send_json'), \
                 patch('code_reviewer.backends.openai.request_response', return_value=response(final({'findings': []}))):
             result = guest.run_job(None, directory, probe_network=lambda: {k: True for k in connected.NETWORK_CHECKS})
-        self.assertEqual(set(result['files']), {'report.md', 'summary.md', 'stats.json'})
+        self.assertEqual(set(result['files']), {'report.md', 'summary.md', 'stats.json', 'findings.json'})
         data = base64.b64decode(result['files']['stats.json'])
         self.assertNotIn(b'CREDENTIAL_CANARY', data)
         trace = json.loads(data)['trace']

@@ -1,6 +1,6 @@
 # Architecture
 
-The product has one review pipeline: independent reviewers apply four perspectives, then consolidate findings and verify flagged conflicts. Provider, authentication and execution location are independent operator choices. The [README](../README.md#review-flow) shows the overall flow; [the walkthrough](project-explainer.md) expands actual method calls.
+The product has one review pipeline: independent reviewers apply four perspectives, then consolidate candidates, investigate each one and publish only independently supported findings. Provider, authentication and execution location are independent operator choices. The [README](../README.md#review-flow) shows the overall flow; [the walkthrough](project-explainer.md) expands actual method calls.
 
 ## Ownership
 
@@ -49,7 +49,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 3. Validate complete project-rule coverage. Unresolved assignments visibly fall back to all personas. Freeze each reviewer's complete system/user input and assigned criteria.
 4. For each configured round, submit active reviewers to a bounded `ThreadPoolExecutor`. Each starts fresh, without previous findings. Wait for all reviewers in that round.
 5. In fixed scheduling order—correctness, code quality, test quality, production safety—ground evidence and consolidate each usable batch serially. The Comparator proposes duplicates, categories and conflicts; Python validates and applies a staged master copy. Incomplete slots create no votes.
-6. Join/cancel workers before cleanup. A fresh Verifier investigates each distinct flagged conflict while budget and run status allow calls. Grounded annotations may update categories but never suppress findings or alter severity/votes.
+6. Join/cancel workers before cleanup. A fresh Verifier investigates every eligible unique candidate, joining overlapping conflicts. Python validates complete assessments and evidence before admitting supported findings to publication. Unresolved/failed investigations are withheld and counted; original candidates, severity and votes remain in private artifacts.
 7. Save reports and stats. Display order is correctness, production safety, test quality, code quality. Multi-category findings appear once under the first applicable section; rendering does not mutate state.
 
 `--passes N` specifies rounds, default three. `--parallel N` controls reviewer concurrency, default four. There is no convergence stopping. A persona's failures or exhausted pool disable that persona while others continue; global cancellation and shared-role exhaustion stop further work. Comparator exhaustion leaves the slot unconsolidated. Verifier exhaustion leaves pending groups unresolved.
@@ -62,7 +62,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 | `review/criteria.py`, `personas.json`, `criteria/` | Default catalog, static assignments and project routing validation |
 | `review/roles.py`, `prompt_contract.py`, `prompts/` | Role-specific prompt assembly and contracts |
 | `review/budget.py`, `caller.py`, `runner.py` | Locked pools, per-attempt reservations, validation/request logs and cancellation |
-| `review/contracts.py`, `master.py` | Validated duplicate/conflict/annotation proposals, sightings and agreement |
+| `review/contracts.py`, `master.py` | Validated duplicate/conflict proposals, immutable candidate arguments, sightings and agreement |
 | `review/report.py` | Category-grouped summaries, full reports and dry-run presentation |
 | `shared/review_inputs.py`, `criteria.py`, `resolver.py` | Diff and criteria preparation |
 | `shared/findings.py`, `diffview.py` | Deterministic normalization, evidence and scope checks |

@@ -6,7 +6,8 @@ from typing import Any, Dict, List
 
 from ..shared.findings import SEVERITY_RANK
 
-FIELDS = ('title', 'description', 'severity', 'kind', 'rule_id', 'file', 'line', 'quote', 'anchor', 'expected', 'suggestion')
+FIELDS = ('title', 'description', 'severity', 'kind', 'rule_id', 'file', 'line', 'quote', 'anchor', 'expected', 'suggestion',
+          'consequence', 'conditions', 'reasoning', 'assumptions', 'evidence')
 
 
 class MasterList:
@@ -32,6 +33,7 @@ class MasterList:
                     'id': ident, 'canonical': {k: copy.deepcopy(finding.get(k)) for k in FIELDS},
                     'seen_in_passes': [], 'rejected_in_passes': [], 'sightings': {}, 'rejected_sightings': {},
                     'categories': [], 'variants': [], 'canonical_from_rejected': finding['verdict'] != 'confirmed',
+                    'verification': None, 'verification_relationship': None, 'verification_error': '',
                 }
             item = self.items[ident]
             confirmed = finding['verdict'] == 'confirmed'

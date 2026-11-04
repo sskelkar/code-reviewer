@@ -1,4 +1,5 @@
 """ClaudeRunner against a fake `claude` executable: checks stdin, arguments, working directory, timeouts and exit codes."""
+from __future__ import annotations
 import json
 import os
 import stat
@@ -80,16 +81,18 @@ class RunnerPlumbingTests(TempDirTestMixin, unittest.TestCase):
     def test_single_call_timeout_also_terminates_native_child_processes(self):
         ready=self.tmp/'child-started'
         canary=self.tmp/'child-survived'
-        child="import time;from pathlib import Path;time.sleep(2);Path(%r).write_text('alive')" % str(canary)
+        child="import time;from pathlib import Path;time.sleep(4);Path(%r).write_text('alive')" % str(canary)
         script='#!'+sys.executable+'\nimport subprocess,sys,time\nfrom pathlib import Path\n'
         script+='subprocess.Popen([sys.executable,"-c",%r])\nPath(%r).write_text("ready")\ntime.sleep(10)\n' % (child,str(ready))
         binary=self.tmp/'spawning-claude'
         binary.write_text(script)
         binary.chmod(0o700)
-        result,_=self.run_runner(str(binary),timeout_s=.5)
+        # Leave enough startup time on busy hosts; the child still outlives the
+        # deadline unless process-group cleanup actually terminates it.
+        result,_=self.run_runner(str(binary),timeout_s=2)
         self.assertTrue(ready.exists())
         self.assertTrue(result.timed_out)
-        time.sleep(1.8)
+        time.sleep(2.3)
         self.assertFalse(canary.exists(),'native helper outlived timeout and continued executing')
 
     def test_missing_binary_raises(self):

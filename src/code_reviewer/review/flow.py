@@ -1,4 +1,4 @@
-"""Configured round-robin persona review, then advisory verification of flagged groups."""
+"""Concurrent persona rounds, grounded candidates and supported-only publication."""
 from __future__ import annotations
 
 from ..shared.git_content import omission_section
@@ -21,13 +21,15 @@ from ..shared.models import PassFailed
 from ..shared.pr_source import load_pr_context
 from ..shared.review_inputs import InputBuilder
 from ..shared.run_store import RunStore, dump_json
-from ..tracing import traced, event as trace_event
+from ..tracing import traced, event as trace_event, annotate
 from .caller import PersonaCaller, RunStopped
 from .budget import Budget, ConcurrentStats
 from .runner import ParallelRunner
 from .criteria import Catalog, PERSONAS
 from .master import MasterList
 from .models import DryRun, PersonaPass, RunResult
+from .evidence import evidence_errors
+from .verification import groups, artifact, counts
 from .prompt_contract import digest, load_prompts
 from .roles import Roles, freeze, save_frozen
 
@@ -117,7 +119,7 @@ class ReviewFlow:
                 slot.prompt_hashes = frozen[slot.persona][1]
             cache = FileCache(checkout)
             result.stop_reason = self._passes(result, roles, files, frozen, checkout, cache, store)
-            if result.stop_reason in ('completed', 'incomplete'):
+            if result.stop_reason != 'cancelled':
                 self._verify(result, roles, files, checkout, cache, store)
         except RunStopped as exc:
             result.warnings.append(str(exc))
@@ -142,6 +144,7 @@ class ReviewFlow:
                 result.budget_pools = budget.snapshot()
                 store.report_path.write_text(render_report(result) + omission_section(ctx), encoding='utf-8')
                 store.summary_path.write_text(render_summary(result, cfg.post_tiers, []), encoding='utf-8')
+                store.dump('findings.json', artifact(result))
                 store.save_binary_omissions(ctx)
                 self.emit('report_ready', path=str(store.report_path), stop_reason=result.stop_reason)
             finally:
@@ -251,6 +254,12 @@ class ReviewFlow:
             preparer = FindingsPreparer({r.rule_id: r.__dict__ for r in result.assignments[slot.persona]}, self.cfg.self_check,
                 cache, DiffIndex(files), self.cfg.grounding_line_window, self.cfg.all_exclude_patterns())
             prepared = preparer.prepare(payload.get('findings'), slot.pass_no)
+            for finding in list(prepared.ok):
+                errors = evidence_errors(finding['evidence'], 'S', cache, result.criteria.index())
+                if errors:
+                    finding.update(status='ungrounded', reason='; '.join(errors))
+                    prepared.ok.remove(finding)
+                    prepared.ungrounded.append(finding)
             dump_json(directory / 'findings.json', {'notes': payload.get('notes', ''), 'findings': prepared.all_records()})
             slot.raised, slot.usable = len(prepared.all_records()), len(prepared.ok)
             for key in ('rule_repaired', 'rule_unknown', 'malformed', 'self_check_missing', 'line_corrected', 'ungrounded', 'out_of_scope'):
@@ -290,16 +299,33 @@ class ReviewFlow:
     @traced('review.verify')
     def _verify(self, result: Any, roles: Any, files: Any, checkout: Any, cache: Any, store: Any) -> None:
         diff = self.inputs.review_input(result.ctx, files, result.criteria, checkout).diff_block
-        for group in result.master.conflicts.values():
-            directory = store.root / 'verification' / group['id']
+        for number, ids in enumerate(groups(result.master), 1):
+            directory = store.root / 'verification' / ('V-%03d' % number)
             directory.mkdir(parents=True, exist_ok=True)
-            self.emit('verification_started', conflict=group['id'])
+            self.emit('verification_started', conflict='V-%03d' % number)
             try:
-                annotation = roles.verify(group, result.master, result.criteria, diff, checkout, cache, directory / 'verifier.raw.json')
-            except PassFailed as exc:
-                group['status'], group['error'] = 'unresolved', str(exc)
-            else:
-                group['annotation'] = annotation
-                group['status'] = 'unresolved' if annotation['outcome'] == 'unresolved' else 'annotated'
-                for claim in annotation['claims']:
-                    result.master.items[claim['finding_id']]['categories'] = list(claim['categories'])
+                if len(ids) > 40:
+                    raise PassFailed('conflict group exceeds the verification candidate limit; not truncated')
+                response = roles.verify(ids, result.master, result.criteria, diff, checkout, cache, directory / 'verifier.raw.json')
+            except (PassFailed, RunStopped) as exc:
+                for ident in ids:
+                    result.master.items[ident]['verification_error'] = str(exc)
+                result.warnings.append('candidate investigation incomplete: %s' % exc)
+                response = None
+            if response is not None:
+                for claim in response['assessments']:
+                    item = result.master.items[claim['candidate_id']]
+                    item['verification'] = claim
+                    item['verification_relationship'] = response['relationship']
+                    item['categories'] = list(claim['categories'])
+            for group in result.master.conflicts.values():
+                if set(group['findings']) <= set(ids):
+                    group['status'] = 'unresolved' if response is None or response['relationship'] == 'unresolved' else 'annotated'
+                    group['annotation'] = None if response is None else {
+                        'relationship': response['relationship'], 'explanation': response['explanation']}
+                    group['error'] = '' if response is not None else 'candidate investigation incomplete'
+        totals = counts(result.master)
+        annotate(proposed=totals['candidates'], accepted=totals['published'], rejected=totals['refuted'])
+        if totals['pending'] or totals['unresolved'] or totals['supported'] > totals['published']:
+            if result.stop_reason == 'completed':
+                result.stop_reason = 'incomplete'

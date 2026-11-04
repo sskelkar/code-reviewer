@@ -9,6 +9,7 @@ from typing import Any
 
 from ..shared.findings import SEVERITY_RANK
 from .master import agreement
+from .verification import publishable, counts
 
 
 # Display order only: scheduling, budgets and finding authority are unchanged.
@@ -55,8 +56,19 @@ def render_finding(result: Any, item: Any) -> str:
         lines += ['', fence(c['quote'])]
     if c.get('anchor'):
         lines += ['', 'Anchor: %s; expected: %s' % (c['anchor'], c.get('expected', ''))]
-    if c.get('suggestion'):
-        lines += ['', 'Suggestion: ' + c['suggestion']]
+    assessment = item['verification']
+    lines += ['', 'Verification: supported. ' + assessment['explanation']]
+    if c.get('conditions'):
+        lines += ['Conditions: ' + '; '.join(c['conditions'])]
+    lines += ['Impact: ' + c.get('consequence', '')]
+    evidence = {entry['id']: entry for entry in c.get('evidence', []) + assessment['additional_evidence']}
+    for ref in assessment['evidence_refs']:
+        if ref != 'primary':
+            entry = evidence[ref]
+            location = ('%s:%s' % (entry['file'], entry['line'])) if entry['source'] == 'head' else entry['rule_id']
+            lines += ['Evidence `%s`: %s' % (location, entry['establishes']), fence(entry['quote'])]
+    if c.get('suggestion') and assessment['remedy']['status'] == 'supported':
+        lines += ['', 'Suggestion (supported, not an executed/tested patch): ' + c['suggestion']]
     if item['rejected_sightings']:
         lines += ['', 'Self-check rejections (not votes): ' + str(item['rejected_sightings'])]
     return '\n'.join(lines)
@@ -68,49 +80,24 @@ def run_line(result: Any) -> str:
         'subscription (no API charge)' if result.cfg.auth_mode == 'subscription' else '$%.4f estimated' % result.stats.total_cost())
 
 
-def conflict_text(group: Any, visible: Any, items: Any) -> str:
-    if not set(group['findings']) & visible:
-        return ''
-    def reference(ident):
-        finding = items[ident]['canonical']
-        return '%s (`%s:%s`)' % (finding['title'], finding['file'], finding['line'])
-
-    def explain(text):
-        return re.sub(r'\bF-\d+\b', lambda match: reference(match[0])
-                      if match[0] in group['findings'] else match[0], text)
-
-    lines = ['### Conflict review (%s)' % group['status'], '', explain(group['reason'])]
-    if set(group['findings']) <= visible:
-        lines += ['', 'Related findings: ' + ', '.join(reference(ident) for ident in group['findings'])]
-    if not set(group['findings']) <= visible:
-        return lines[0] + '\n\nSome claims are manually omitted or filtered; consult the full report for context.'
-    annotation = group['annotation']
-    if annotation:
-        lines += ['', 'Verification: %s. %s' % (annotation['outcome'], explain(annotation['explanation']))]
-        for claim in annotation['claims']:
-            lines += ['- %s: %s — %s' % (reference(claim['finding_id']), claim['status'], explain(claim['explanation']))]
-            for evidence in claim['evidence']:
-                lines += ['  Evidence `%s:%d`: %s' % (evidence['file'], evidence['line'], evidence['quote'])]
-    elif group['error']:
-        lines += ['', 'Unresolved: ' + group['error']]
-    return '\n'.join(lines)
-
-
 def render_summary(result: Any, tiers: Any, dropped: Any) -> str:
-    items = [i for i in result.master.scored() if i['id'] not in dropped and any(
+    items = [i for i in result.master.scored() if publishable(i) and i['id'] not in dropped and any(
         a['tier'] in tiers or a['tier'] == 'Unrated'
         for a in agreement(i, result.completed_by_persona, result.cfg).values())]
-    visible = {i['id'] for i in items}
+    totals = counts(result.master)
     lines = ['## AI-generated persona review: %s' % result.ctx.label, '', run_line(result),
-             'Model: %s. Agreement measures repeated sightings, not correctness. Verification annotates without suppressing findings.' % result.cfg.model_reviewer,
+             'Model: %s. Agreement measures repeated sightings, not correctness. Only independently supported candidates are published; support is an evidence-based judgment, not a correctness guarantee.' % result.cfg.model_reviewer,
              '', 'Completed passes: ' + ', '.join('%s %d/%d' % (CATEGORY_TITLES[p], result.completed_by_persona[p], result.cfg.persona_passes) for p in CATEGORY_TITLES),
              '', ('**No review completed.** Findings could not be finalized; this does not mean the change is issue-free. '
                   'Inspect the full report for failures and skipped work.' if result.passes_completed == 0 else
-                  '%d finding%s shown.' % (len(items), '' if len(items) == 1 else 's'))]
+                  '%d supported finding%s shown.' % (len(items), '' if len(items) == 1 else 's')),
+             'Verification: %d candidates; %d supported, %d refuted, %d unresolved, %d not completed.' % (
+                 totals['candidates'], totals['supported'], totals['refuted'], totals['unresolved'], totals['pending'])]
+    if totals['pending'] or totals['unresolved'] or totals['supported'] > totals['published']:
+        lines += ['**Verification incomplete.** Withheld candidates are not a clean-review result.']
     for title, findings in _groups(items):
         lines += ['### %s (%d)' % (title, len(findings))]
         lines.extend(render_finding(result, item) for item in findings)
-    lines.extend(text for text in (conflict_text(g, visible, result.master.items) for g in result.master.conflicts.values()) if text)
     if result.warnings:
         lines += ['', 'Warnings:'] + ['- ' + w for w in result.warnings]
     if omission_notice(result.ctx):
@@ -132,14 +119,12 @@ def render_report(result: Any) -> str:
             s.pass_no, s.persona, s.round_no, s.status, s.raised, s.usable, s.ungrounded, s.malformed, s.out_of_scope,
             ' '.join(s.error.replace('|', '/').splitlines()))]
     lines += ['## Scheduled passes', '\n'.join(table)]
-    lines += ['## Rejected by self-check (not scored)']
-    lines.extend(render_finding(result, i) for i in result.master.rejected_only())
     lines += ['## Budget pools', fence(json.dumps(result.budget_pools, indent=2)), '## Usage and validation', fence(json.dumps(result.stats.to_dict(), indent=2)),
               'Model reply validation errors: ' + str(result.diagnostics),
               'Other counted normalization checks: ' + str({key: sum(getattr(s, key) for s in result.passes) for key in (
                   'rule_repaired', 'rule_unknown', 'self_check_missing', 'line_corrected', 'rejected_by_self_check')}),
               'Run artifacts: input/personas/ (frozen prompts/settings), input/classifier*, pass-*/ (requests, replies, findings, mapping, slot), '
-              'verification/C-*/ (requests/replies), master.json, stats.json. Actual request logs include validation-retry feedback.']
+              'verification/V-*/ (requests/replies), master.json, findings.json (private audit and supported-only findings), stats.json. Actual request logs include validation-retry feedback.']
     return '\n\n'.join(lines) + '\n'
 
 

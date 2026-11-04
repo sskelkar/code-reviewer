@@ -1,10 +1,10 @@
 Allowed categories: {{categories_json}}
-Flagged claims:
+Candidates to investigate (one immutable argument per ID):
 <conflict_claims>
 {{claims_json}}
 </conflict_claims>
-Apparent conflict: {{reason}}
-Applicable criteria:
+Task: {{reason}}
+Complete accepted criteria, including repository guidance:
 <review_criteria>
 {{criteria_block}}
 </review_criteria>

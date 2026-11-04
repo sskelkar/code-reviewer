@@ -35,7 +35,7 @@ def boundary():
 
 
 def offline():
-    return {'format': 1, 'synthetic': True, 'provider': 'openai', 'live': False, 'review': dict(calls=8, completed=4, findings=1, stop_reason='completed')}
+    return {'format': 1, 'synthetic': True, 'provider': 'openai', 'live': False, 'review': dict(calls=9, completed=4, findings=1, stop_reason='completed')}
 
 
 class SandboxCheckTests(unittest.TestCase):

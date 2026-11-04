@@ -26,7 +26,7 @@ A compromised guest can corrupt its findings/accounting and expose a credential 
 
 ## Advisory progress
 
-VM status and explicitly provisional finding titles/locations travel over the existing private channel. Closed schemas, per-frame/stream limits, terminal sanitization and credential checks constrain this output. Progress is untrusted diagnostic presentation: it cannot authorize credential release, change infrastructure, publish a final result or bypass cleanup checks. Final reports/posting remain gated on the validated completed job. Unlike metadata-only traces, local terminal previews can identify private files and findings; protect console logs accordingly. See [progress limits and semantics](usage.md#live-progress-and-provisional-findings).
+VM stage status and candidate counts travel over the existing private channel; unverified titles and locations are not displayed. Closed schemas, per-frame/stream limits, terminal sanitization and credential checks constrain output. Progress cannot authorize credential release, change infrastructure, publish a final result or bypass cleanup checks. Final reports/posting require supported-only publication and the validated completed VM job. Private findings.json preserves candidate evidence and assessments under the normal bounded artifact controls. See [progress limits and semantics](usage.md#live-progress-and-candidate-counts).
 
 ## Optional tracing
 

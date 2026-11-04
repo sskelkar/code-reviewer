@@ -192,12 +192,30 @@ class ConnectedTests(unittest.TestCase):
         metadata = next((root / 'runs').glob('*/config.json'))
         self.assertEqual(json.loads(metadata.read_text())['config']['provider'], 'openai')
         self.assertEqual(ready_message.call_args.args[1]['kind'], 'ready')
-        self.assertEqual(set(value['files']), {'report.md', 'summary.md', 'stats.json'})
+        self.assertEqual(set(value['files']), {'report.md', 'summary.md', 'stats.json', 'findings.json'})
         for encoded in value['files'].values():
             self.assertNotIn(b'disposable-unit-test-key',base64.b64decode(encoded))
         output = self.root / ('agent-personas' + '-export')
         result = connected.export_result(value,output,'disposable-unit-test-key',False)
         self.assertIn(result['stop_reason'],('completed',))
+        audit = json.loads((output / 'findings.json').read_text())
+        self.assertEqual(audit['findings'], [])
+        self.assertEqual(audit['version'], 1)
+        self.assertEqual(len(audit['head_sha']), 40)
+
+    def test_private_findings_export_obeys_json_credential_and_size_limits(self):
+        files = {name: base64.b64encode(b'{}' if name.endswith('.json') else b'report').decode()
+                 for name in ('report.md', 'summary.md', 'stats.json', 'findings.json')}
+        value = dict(kind='result', stop_reason='completed', checks=self.checks(), files=files)
+        cases = [('invalid-json', b'not json', '', 100),
+                 ('credential', b'{"secret":"SYNTHETIC-KEY"}', 'SYNTHETIC-KEY', 100),
+                 ('oversized', b'{"content":"' + b'x' * 100 + b'"}', '', 50)]
+        for label, body, key, limit in cases:
+            with self.subTest(label=label), patch.object(connected, 'MAX_ARTIFACT', limit):
+                bad = dict(value, files=dict(files, **{'findings.json': base64.b64encode(body).decode()}))
+                with self.assertRaises(ValueError):
+                    connected.export_result(bad, self.root / label, key, False)
+                self.assertFalse((self.root / label).exists())
 
     def test_failed_reviews_preserve_reports_and_failure_accounting(self):
         source, _ = self.capsule()

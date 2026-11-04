@@ -246,7 +246,7 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertEqual(result['review']['completed'], 4)
         self.assertEqual(result['review']['completed'], 4)
         self.assertEqual(result['review']['findings'], 1)
-        self.assertEqual(result['review']['calls'], 8)
+        self.assertEqual(result['review']['calls'], 9)
 
 
 @unittest.skipUnless(os.name == 'posix', 'descriptor-relative POSIX file tools')

@@ -11,7 +11,7 @@
 
 **One pull request. Four independent review perspectives.**
 
-code-reviewer examines changes through the lenses of **correctness, production safety, test quality and code quality**. Each reviewer starts with its own focus and criteria, without seeing earlier findings. The harness checks repository evidence, consolidates duplicates and asks a Verifier to investigate flagged conflicts.
+code-reviewer examines changes through the lenses of **correctness, production safety, test quality and code quality**. Each reviewer starts with its own focus and criteria, without seeing earlier findings. The harness checks repository evidence, consolidates duplicates and asks an independent Verifier to investigate every unique candidate before publication.
 
 Choose Claude or OpenAI at runtime. Reviews run inside one jailed Firecracker VM by default; trusted use can explicitly select direct-host execution. Reports and metadata-only traces stay local unless you opt to post a PR summary.
 
@@ -34,11 +34,12 @@ flowchart TD
     WAIT --> MERGE["Check evidence and consolidate serially"]
     MERGE --> MORE{"More configured rounds?"}
     MORE -->|Yes| ROUND
-    MORE -->|No| VERIFY["Verify flagged conflicts"]
-    VERIFY --> REPORT["Category-grouped findings, agreement, usage and omissions"]
+    MORE -->|No| VERIFY["Investigate every candidate<br/>and connected conflicts"]
+    VERIFY --> GATE["Validate assessments; publish supported candidates only"]
+    GATE --> REPORT["Category-grouped findings, agreement, usage and omissions"]
 ```
 
-The default is **three passes per persona**, with up to four concurrent reviewers. `--passes N` sets rounds; `--parallel N` sets concurrency from 1 to 4. Each persona has its own budget. Exhausting one persona's pool does not stop the others. Agreement records repeated sightings, not proof of correctness; verification annotates conflicts without changing votes or severity.
+The default is **three passes per persona**, with up to four concurrent reviewers. `--passes N` sets rounds; `--parallel N` sets concurrency from 1 to 4. Each persona has its own budget. Exhausting one persona's pool does not stop the others. Agreement records repeated sightings, not proof of correctness; verification filters publication without changing original candidates, votes or severity.
 
 Default criteria are assigned statically. Project rules come from the pinned base commit and are routed to every relevant persona. Reviewers and the Verifier have Read/Grep/Glob only: they cannot run tests, builds or arbitrary commands. Binary contents are omitted and reported. See [criteria](docs/persona-criteria.md) and [review contracts](docs/prompts.md).
 
@@ -92,9 +93,9 @@ reviewer review OWNER/REPO#123 --preflight
 reviewer review OWNER/REPO#123 --passes 1 --parallel 2
 ```
 
-The CLI shows timed progress and provisional findings, then prints the final summary and report path. Nothing is posted unless `--post` is supplied. Findings appear under **Correctness → Production safety → Test quality → Code quality**, sorted by severity within each section. Multi-category findings appear once and retain all labels.
+The CLI shows timed progress and verification-pending candidate counts, then prints the final summary and report path. Nothing is posted unless `--post` is supplied. Findings appear under **Correctness → Production safety → Test quality → Code quality**, sorted by severity within each section. Multi-category findings appear once and retain all labels.
 
-`summary.md`, `report.md` and `stats.json` contain the review and usage. VM runs export only these bounded files; host runs also retain prompts and per-call artifacts. See [report interpretation](docs/usage.md#reading-the-report).
+`summary.md` and `report.md` show supported findings; `stats.json` records usage. Private `findings.json` contains the supported-only automation view and the full candidate audit, with pinned commits. VM runs export these four bounded files; host runs also retain prompts and per-call artifacts. See [report interpretation](docs/usage.md#reading-the-report).
 
 Operator settings live outside Git, normally `~/.code-reviewer/review.toml`. See [example settings](review.example.toml) and [configuration](docs/usage.md#configuration). Preflight validates configuration, not deployment or account eligibility. Qualification evidence lives in [the roadmap](docs/proposal.md#qualification-evidence).
 

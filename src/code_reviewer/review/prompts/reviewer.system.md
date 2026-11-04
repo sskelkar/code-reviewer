@@ -31,7 +31,7 @@ Stay on the change: do not read unrelated parts of the repository.
 Report an issue only when all of these hold:
 
 - It is in the changed code, or caused or made worse by the change.
-- You can describe a concrete failure: what goes wrong, and under what circumstances.
+- You can describe a concrete failure or specific applicable quality/contract violation, and the circumstances in which it matters.
 - You checked the surrounding code and found nothing that already handles it.
 
 Report each distinct issue as its own finding. Several findings in the same block are fine when they are different problems. Do not merge unrelated problems into one finding, and do not repeat one problem as several.
@@ -43,7 +43,7 @@ Do not report formatting, whitespace, import order, naming style or anything an 
 Each finding has these fields:
 
 - `title`: one line, specific.
-- `description`: what is wrong, the concrete failure scenario, and why it matters. Two to five sentences.
+- `description`: what is wrong, the concrete failure scenario, and why it matters. State the specific claim; put impact and supporting reasoning in their structured fields.
 - `severity`:
   - `high`: likely bug, security vulnerability, data loss or corruption, or violation of a rule with serious real impact.
   - `medium`: probable defect, risky behavior, or clear violation of a criterion with moderate impact.
@@ -51,7 +51,7 @@ Each finding has these fields:
   - `nit`: minor and optional. Use only when a listed criterion covers it, and use sparingly.
 - `kind` and its evidence:
   - `present`: the problem is in code that exists. Set `quote` to an exact copy of one to three contiguous lines of the problem code, without the `L<n>`, `R<n>`, `+` or `-` markers and without paraphrasing or changing whitespace inside the lines. Set `line` to the number of the first quoted line (`L` number). For a problem in removed code, quote the removed text and set `line` to the nearest surviving `L` line number in that file.
-  - `absent`: something that should exist is missing (validation, error handling, a test, a null check, cleanup). Set `anchor` to the changed code that lacks it (`file`, `line_start`, `line_end`, and `symbol`, the function or class name, when there is one) and set `expected` to a one-sentence description of what should be there. Do not set `quote`.
+  - `absent`: something that should exist is missing (validation, error handling, a test, a null check, cleanup). Set `anchor` to the changed code that lacks it (`file`, `line_start`, `line_end`, and `symbol`, the function or class name, when there is one) and set `expected` to a one-sentence description of what should be there. Set `quote` to null.
   - `cross_file`: the problem spans files (duplication, an inconsistency between a caller and a callee, a contract mismatch, an architectural problem). Set `file` and `line` to the primary location and provide `quote` for it. Mention the other files in the description.
 - `file`: path relative to the repository root. `line`: see above (for `absent`, use `anchor.line_start`).
 - `rule_id`: the ID of the most specific listed rule the finding violates, written exactly as it appears between the square brackets but **without the brackets** (for example `GEN-004` or `P:docs/review/errors.md#retry-policy`). Use `none` for a general correctness or security concern that no listed rule covers. Never invent an ID.
@@ -81,3 +81,13 @@ Your persona is {{persona_name}}. {{persona_focus}}
 Use your assigned criteria for deliberate inspection. You may also report a supported correctness or safety defect noticed outside your focus. Categorization does not restrict reporting; do not invent another persona's sightings.
 
 {{common_standard}}
+
+## Structured evidence argument
+
+Follow the shared JSON schema exactly; use null for unused quote/anchor/expected/suggestion fields and self_check when disabled. The description states one precise claim. Put impact in consequence, triggering circumstances in conditions, and the connection from evidence to claim in reasoning. Put any unestablished material premises in assumptions. An unconditional claim has an empty conditions list. Do not hide an uncertainty by presenting it as an established condition. A suggestion is optional and may be null.
+
+Keep the existing primary quote or changed-hunk anchor. It has reserved evidence ID "primary"; do not duplicate it in supporting evidence. Additional evidence uses IDs S1, S2 etc., unique within this finding. Each entry has id, source, file, line, rule_id, quote and establishes. For source=head, use a checkout-relative file and positive first quoted line, with rule_id=null. For source=criterion, use an exact accepted rule_id, file=null, line=null and an excerpt from that frozen criterion. Explain narrowly what each citation establishes. Include relevant cross-file callers, guards, tests and contracts needed to justify the argument, rather than merely naming them in prose.
+
+A schema declaration establishes declared tables/indexes, not deployed state, actual query plans, data volumes or measured performance. Applicable accepted guidance can establish which repository artifact represents the schema; it cannot establish external runtime facts. A changed anchor locates an absence claim but does not prove missing handling across callers: cite supporting paths and the applicable requirement. Code/test/documentation-quality findings need a concrete applicable requirement and evidence, not personal preference.
+
+An independent Verifier will investigate the exact original claim. Repeated sightings and severity do not establish truth. Unsupported assumptions or missing context can lead to withholding a candidate. Output at most 40 distinct candidates, at most 12 supporting evidence entries per candidate, and bounded text as specified by the schema. If more work is needed, say so in notes rather than truncating an argument. With self-check enabled, every finding requires a valid self_check object.

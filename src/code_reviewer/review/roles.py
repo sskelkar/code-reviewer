@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from ..shared.criteria import render_criteria_block
-from ..shared.llm import CallSpec, requires_lists
+from ..shared.llm import CallSpec
 from ..shared.models import PassFailed
 from ..shared.run_store import dump_json
 from ..shared.templates import render
-from .contracts import validate_annotation, validate_comparison
+from .contracts import validate_comparison
+from .evidence import reviewer_errors
+from .verification import candidate_inputs, validate_assessments
 from .criteria import PERSONAS, routes, validate_routes
 from .prompt_contract import digest, json_data, protect
 
@@ -91,18 +93,22 @@ class Roles:
         return assigned
 
     def review(self, slot: Any, texts: Any, checkout: Path, raw: Path) -> Any:
-        return self.call('reviewer', {}, requires_lists('findings'), raw, slot.pass_no, checkout, texts)
+        return self.call('reviewer', {}, lambda p: reviewer_errors(p, self.prompts['reviewer'].schema, self.cfg.self_check),
+                         raw, slot.pass_no, checkout, texts)
 
     def compare(self, slot: Any, findings: Any, master: Any, raw: Path) -> Any:
         return self.call('comparator', {'categories_json': json_data(PERSONAS),
             'master_json': json_data(list(master.items.values())), 'findings_json': json_data(findings)},
             lambda p: validate_comparison(p, findings, master), raw, slot.pass_no)
 
-    def verify(self, group: Any, master: Any, criteria: Any, diff: str, checkout: Path, cache: Any, raw: Path) -> Any:
-        claims = [master.items[i] for i in group['findings']]
+    def verify(self, ids: Any, master: Any, criteria: Any, diff: str, checkout: Path, cache: Any, raw: Path) -> Any:
+        claims = candidate_inputs(master, ids)
         # A finding's citation can itself miss the rule that resolves the conflict.
         # Preserve the accepted base-commit rules rather than narrowing by model citations.
         relevant = criteria.rules
         return self.call('verifier', {'categories_json': json_data(PERSONAS), 'claims_json': json_data(claims),
-            'reason': protect(group['reason']), 'criteria_block': protect(render_criteria_block(relevant)),
-            'diff_block': protect(diff)}, lambda p: validate_annotation(p, group, cache), raw, checkout=checkout)
+            'reason': 'Investigate each claim and any incompatibility between these claims.',
+            'criteria_block': protect(render_criteria_block(relevant)),
+            'diff_block': protect(diff)},
+            lambda p: validate_assessments(p, self.prompts['verifier'].schema, ids, master, cache, criteria.index()),
+            raw, checkout=checkout)

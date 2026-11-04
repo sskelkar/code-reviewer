@@ -7,13 +7,16 @@ import unittest
 
 from code_reviewer.config import Config
 from code_reviewer.engine import Engine
-from code_reviewer.review.contracts import validate_annotation, validate_comparison
+from code_reviewer.review.contracts import validate_comparison
+from code_reviewer.review.verification import validate_assessments, publishable
+from code_reviewer.review.prompt_contract import load_prompts
+from code_reviewer.config import PROMPTS_DIR
 from code_reviewer.review.criteria import PERSONAS
 from code_reviewer.review.master import MasterList, agreement
 from code_reviewer.review.report import CATEGORY_TITLES, render_summary
 from code_reviewer.backends.contract import LLMResult
 from code_reviewer.shared.findings import FileCache
-from .helpers import TempDirTestMixin, finding, make_repo
+from .helpers import TempDirTestMixin, finding, make_repo, verification_response
 
 
 def block(text, name):
@@ -30,7 +33,7 @@ class PersonaRunner:
 
     def run(self, **kw):
         system = kw['system_prompt']
-        role = 'classifier' if 'distribute project review' in system else 'comparator' if 'consolidate persona' in system else 'verifier' if 'investigate one flagged group' in system else 'resolver' if 'identify which files' in system else 'reviewer'
+        role = 'classifier' if 'distribute project review' in system else 'comparator' if 'consolidate persona' in system else 'verifier' if 'investigate code-review candidates' in system else 'resolver' if 'identify which files' in system else 'reviewer'
         self.calls.append(dict(kw, role=role))
         index = self.counts.get(role, 0)
         self.counts[role] = index + 1
@@ -54,7 +57,7 @@ class PersonaRunner:
                 value = {'decisions': [{'local_id': f['local_id'], 'match': master[0]['id'] if master else 'new',
                                        'same_as': None, 'categories': ['production-safety']} for f in incoming], 'conflicts': []}
             else:
-                raise AssertionError('unexpected verifier call')
+                value = verification_response(kw)
         if isinstance(value, LLMResult):
             if value.cost_usd is None:
                 value.cost_usd = self.cost
@@ -96,7 +99,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 self.assertTrue(started.wait(2))
                 observed.append(not finished.is_set())
                 self.assertEqual(event.data['raised'], 1)
-                self.assertTrue(event.data['findings'])
+                self.assertEqual(event.data['findings'], [])
                 release.set()
         self.cfg.persona_passes, self.cfg.persona_parallel = 1, 4
         result = Engine(self.cfg, PersonaRunner(reviewer=[review]), emit=emit).review(self.ctx)
@@ -168,7 +171,8 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         summary = render_summary(result, ['High'], [])
         self.assertIn('Multi-perspective review: 1/20 completed', summary)
         self.assertIn('Correctness 1/5', summary)
-        self.assertIn('Correctness: 1/1 (Unrated)', summary)
+        self.assertIn('Verification incomplete', summary)
+        self.assertFalse(publishable(result.master.items['F-001']))
 
     def test_categories_never_transfer_votes_and_filtering_is_per_persona(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}, {'findings': []}, {'findings': []}, {'findings': []}])
@@ -197,6 +201,9 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 'categories': categories[item['title']]} for item in incoming], 'conflicts': []}
         runner = PersonaRunner(reviewer=[{'findings': [finding(title=title, severity=severity, rule_id='none')
             for title, severity, _ in subjects]}, {'findings': []}], comparator=[compare])
+        runner.scripts['verifier'] = [lambda kw: dict(verification_response(kw), assessments=[
+            dict(claim, categories=categories[item['candidate']['title']])
+            for claim, item in zip(verification_response(kw)['assessments'], block(kw['user_prompt'], 'conflict_claims'))])]
         result = self.run_flow(runner, persona_passes=1)
         before = json.dumps(result.master.to_dict(), sort_keys=True)
         calls = len(runner.calls)
@@ -268,14 +275,14 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(all(s.status == 'skipped' for s in result.passes[1:]))
         text = render_summary(result, self.cfg.post_tiers, [])
         self.assertIn('**No review completed.**', text)
-        self.assertNotIn('0 findings shown.', text)
+        self.assertNotIn('0 supported findings shown.', text)
 
     def test_completed_empty_review_is_distinct_from_a_failed_review(self):
         result = self.run_flow(PersonaRunner(), persona_passes=1)
         self.assertEqual(result.stop_reason, 'completed')
         self.assertEqual(result.passes_completed, 4)
         text = render_summary(result, self.cfg.post_tiers, [])
-        self.assertIn('0 findings shown.', text)
+        self.assertIn('0 supported findings shown.', text)
         self.assertNotIn('No review completed', text)
 
     def test_failures_have_fixed_slots_and_do_not_supply_confidence_votes(self):
@@ -374,28 +381,36 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
             {'findings': [finding(title='Opposing claim', rule_id='none')]}, {'findings': []}],
             comparator=[comparison], verifier=[verifier])
 
+    def annotation_master(self):
+        master = MasterList()
+        for ident in ('F-001', 'F-002'):
+            master.items[ident] = {'canonical': finding()}
+        return master
+
     def annotation(self, **changes):
-        evidence = {'file': 'app.py', 'line': 2, 'quote': finding()['quote']}
-        result = {'outcome': 'resolved', 'explanation': 'The visible behavior supports one claim and refutes the other.',
-                  'claims': [{'finding_id': ident, 'status': status, 'explanation': 'Repository evidence.',
-                              'categories': ['production-safety'], 'evidence': [dict(evidence)]}
-                             for ident, status in [('F-001', 'supported'), ('F-002', 'refuted')]]}
+        result = {'relationship': 'contradictory', 'explanation': 'One original claim is refuted.',
+                  'assessments': [{'candidate_id': ident, 'status': status, 'explanation': 'Repository evidence.',
+                      'categories': ['production-safety'], 'evidence_refs': ['V1'],
+                      'additional_evidence': [{'id': 'V1', 'source': 'head', 'file': 'app.py', 'line': 2,
+                          'rule_id': None, 'quote': finding()['quote'], 'establishes': 'The concatenation exists.'}],
+                      'remaining_uncertainties': [], 'remedy': {'status': 'not_assessed', 'explanation': None, 'evidence_refs': []}}
+                     for ident, status in [('F-001', 'supported'), ('F-002', 'refuted')]]}
         result.update(changes)
         return result
 
-    def test_conflict_annotations_use_titles_and_do_not_reveal_filtered_findings(self):
+    def test_reports_publish_supported_claim_and_keep_refuted_claim_private(self):
         annotation = self.annotation(explanation='F-001 is supported; F-002 is refuted.')
         result = self.run_flow(self.conflict_runner(annotation))
         text = render_summary(result, self.cfg.post_tiers, [])
-        self.assertIn('SQL built by concatenation (`app.py:', text)
-        self.assertIn('Opposing claim (`app.py:', text)
-        self.assertIn('refuted', text)
+        self.assertIn('SQL built by concatenation', text)
+        self.assertNotIn('Opposing claim', text)
+        self.assertIn('1 refuted', text)
         self.assertNotRegex(text, r'\b[FC]-\d{3}\b')
-        filtered = render_summary(result, self.cfg.post_tiers, ['F-002'])
+        filtered = render_summary(result, self.cfg.post_tiers, ['F-001'])
+        self.assertNotIn('SQL built by concatenation', filtered)
         self.assertNotIn('Opposing claim', filtered)
-        self.assertIn('Some claims are manually omitted or filtered', filtered)
 
-    def test_conflict_verification_annotates_without_hiding_or_changing_votes(self):
+    def test_conflict_verification_filters_publication_without_changing_votes(self):
         runner = self.conflict_runner(self.annotation())
         result = self.run_flow(runner, model_verifier='sonnet')
         self.assertEqual(len(result.master.conflicts), 1)
@@ -404,7 +419,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(result.master.items['F-002']['sightings'], {'code-quality': [2]})
         self.assertEqual(result.master.conflicts['C-001']['status'], 'annotated')
         text = result.report_path.read_text()
-        self.assertIn('Opposing claim', text)
+        self.assertNotIn('Opposing claim', text)
         self.assertIn('refuted', text)
         verifier = next(c for c in runner.calls if c['role'] == 'verifier')
         self.assertEqual(verifier['model'], 'sonnet')
@@ -413,7 +428,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
 
     def test_ungrounded_verifier_replies_retry_and_stay_unresolved(self):
         annotation = self.annotation()
-        annotation['claims'][0]['evidence'][0]['file'] = '../outside.txt'
+        annotation['assessments'][0]['additional_evidence'][0]['file'] = '../outside.txt'
         runner = self.conflict_runner(annotation)
         result = self.run_flow(runner)
         self.assertEqual(runner.counts['verifier'], 2)
@@ -439,7 +454,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         runner = self.conflict_runner(self.annotation())
         original = runner.run
         def run(**kw):
-            if 'investigate one flagged group' in kw['system_prompt']:
+            if 'investigate code-review candidates' in kw['system_prompt']:
                 raise KeyboardInterrupt
             return original(**kw)
         runner.run = run
@@ -462,7 +477,8 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
     def test_one_successful_completion_remains_unrated_under_filters(self):
         result = self.run_flow(PersonaRunner(reviewer=[{'findings': [finding(rule_id='none')]}], cost=0.01), run_budget_tokens=75)
         self.assertEqual(result.passes_completed, 1)
-        self.assertIn('Correctness: 1/1 (Unrated)', render_summary(result, ['High'], []))
+        self.assertEqual(agreement(result.master.items['F-001'], result.completed_by_persona, self.cfg)['correctness']['tier'], 'Unrated')
+        self.assertNotIn('SQL built by concatenation', render_summary(result, ['High'], []))
 
     def test_budget_exhaustion_after_reviews_leaves_conflict_pending(self):
         runner = self.conflict_runner(self.annotation())
@@ -475,9 +491,9 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         with patch('code_reviewer.review.flow.Budget', return_value=budget):
             result = self.run_flow(runner)
         self.assertEqual(result.passes_completed, 12)
-        self.assertEqual(result.stop_reason, 'budget_exceeded')
+        self.assertEqual(result.stop_reason, 'incomplete')
         self.assertNotIn('verifier', runner.counts)
-        self.assertEqual(result.master.conflicts['C-001']['status'], 'pending')
+        self.assertEqual(result.master.conflicts['C-001']['status'], 'unresolved')
         self.assertTrue(all(c['budget_usd'] >= 0.01 for c in runner.calls))
 
     def test_invalid_comparison_retries_without_committing_sightings(self):
@@ -584,19 +600,19 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(validate_comparison(payload, findings, MasterList()))
         annotation = self.annotation()
         cache = FileCache(self.ctx.git_dir)
-        self.assertEqual(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, cache), [])
-        annotation['claims'][0]['categories'].append('production-safety')
-        self.assertTrue(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, cache))
+        self.assertEqual(validate_assessments(annotation, load_prompts(PROMPTS_DIR)['verifier'].schema, ['F-001', 'F-002'], self.annotation_master(), cache, {}), [])
+        annotation['assessments'][0]['categories'].append('production-safety')
+        self.assertTrue(validate_assessments(annotation, load_prompts(PROMPTS_DIR)['verifier'].schema, ['F-001', 'F-002'], self.annotation_master(), cache, {}))
 
     def test_malformed_model_file_paths_fail_grounding_without_crashing_the_run(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding(file='bad\x00path', rule_id='none')]}])
         result = self.run_flow(runner)
-        self.assertEqual(result.passes_completed, 12)
-        self.assertEqual(sum(s.ungrounded for s in result.passes), 12)
+        self.assertEqual(result.passes_completed, 0)
+        self.assertTrue(result.diagnostics)
         self.assertEqual(result.master.items, {})
         annotation = self.annotation()
-        annotation['claims'][0]['evidence'][0]['file'] = 'bad\x00path'
-        self.assertTrue(validate_annotation(annotation, {'findings': ['F-001', 'F-002']}, FileCache(self.ctx.git_dir)))
+        annotation['assessments'][0]['additional_evidence'][0]['file'] = 'bad\x00path'
+        self.assertTrue(validate_assessments(annotation, load_prompts(PROMPTS_DIR)['verifier'].schema, ['F-001', 'F-002'], self.annotation_master(), FileCache(self.ctx.git_dir), {}))
 
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):

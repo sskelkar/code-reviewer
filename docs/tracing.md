@@ -64,7 +64,7 @@ To find a particular saved review, open its `stats.json` beside `report.md`:
 - `tracing.exported` reports whether the exporter delivered the trace successfully.
 - `trace.records` contains the bounded local metadata; `trace.dropped` counts omitted observations.
 
-Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, retries and generation usage. VM traces appear after the review and cleanup; ingestion can take a short time to become visible. The CLI’s [live status and provisional findings](usage.md#live-progress-and-provisional-findings) use a separate bounded progress protocol, not live Langfuse export. Refresh the page if a newly exported trace is not immediately listed.
+Open the review to inspect the stage/agent/model/tool hierarchy, elapsed times, retries and generation usage. VM traces appear after the review and cleanup; ingestion can take a short time to become visible. The CLI’s [live status and candidate counts](usage.md#live-progress-and-candidate-counts) use a separate bounded progress protocol, not live Langfuse export. Refresh the page if a newly exported trace is not immediately listed.
 
 ## Missing traces
 
@@ -79,7 +79,7 @@ Tracing defaults to on. An explicit `tracing = false` in the selected operator f
 
 ## What appears in the UI
 
-One review is one trace. Stable typed observations show review preparation, criteria resolution, review passes, grounding/consolidation, conflict verification, report writing and checkout cleanup. Model-call agents contain generation observations and available tool executions. Rejected output-validation attempts are marked as errors with numeric rejection counts; prompts and validation messages remain excluded. Persona worker threads explicitly inherit trace context, retaining their concurrency and parent relationships.
+One review is one trace. Stable typed observations show review preparation, criteria resolution, review passes, grounding/consolidation, candidate verification, report writing and checkout cleanup. Model-call agents contain generation observations and available tool executions. Rejected output-validation attempts are marked as errors with numeric rejection counts; prompts and validation messages remain excluded. Persona worker threads explicitly inherit trace context, retaining their concurrency and parent relationships.
 
 - **OpenAI:** individual model turns, HTTP attempts and actual Read/Grep/Glob calls. HTTP retries do not duplicate generation usage.
 - **Claude:** one aggregate generation per native CLI invocation, with reported total usage/turns. Internal native tool events are not captured by the current adapter; no synthetic tool history is invented.

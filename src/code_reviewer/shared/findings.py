@@ -7,6 +7,7 @@ from __future__ import annotations
 from ..tracing import traced
 
 from dataclasses import dataclass, field
+import copy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -245,6 +246,13 @@ class FindingsPreparer:
             "expected": _text(raw.get("expected")),
             "suggestion": _text(raw.get("suggestion")),
         }
+        for key in ('consequence', 'conditions', 'reasoning', 'assumptions', 'evidence'):
+            if key in raw:
+                finding[key] = copy.deepcopy(raw[key])
+        if 'evidence' in raw:
+            for key in ('quote', 'expected', 'suggestion'):
+                if raw.get(key) is None:
+                    finding[key] = None
         if finding["severity"] not in SEVERITIES:
             finding["severity"] = "low"
         return finding

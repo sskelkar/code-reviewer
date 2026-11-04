@@ -20,7 +20,7 @@ Tests use synthetic repositories, FakeRunners, fake native executables and simul
 | `test_openai_backend`, `test_openai_http_errors`, `test_chatgpt` | Transport, bounded read tools, safe retry diagnostics, streaming completion, protected OAuth storage and refresh |
 | `test_security_boundary`, `test_vm_review`, `test_connected_sandbox`, `test_sandbox_acquisition` | Actual frontdoors/admission, credential gates, bounded private frames, fixed egress and no VM fallback |
 | `test_sandbox_prototype`, `test_sandbox_check`, `test_sandbox_preparation`, `test_vm_confinement` | Synthetic runtime/protocol checks, artifact fingerprints, clean image reuse, confinement and cleanup logic |
-| `test_tracing`, `test_live_progress` | Metadata privacy/parentage/usage, export failures, closed progress schemas, early previews and terminal safety |
+| `test_tracing`, `test_live_progress` | Metadata privacy/parentage/usage, export failures, closed progress schemas, early count updates and terminal safety |
 | `test_options`, `test_review_banner`, `test_welcome`, `test_stats`, `test_llm_interface` | CLI/configuration, retained parked frontend, accounting and provider-neutral ownership |
 
 Boundary tests must exercise real admission rather than use `tests.helpers.synthetic_frontend`, which is only for presentation tests. Preserving coverage means porting shared behavior when implementation ownership changes, not replacing boundary assertions with test-only success paths.
@@ -40,14 +40,14 @@ Operator TOML belongs outside Git, normally `~/.code-reviewer/review.toml`, mode
 | Criteria | `review/criteria/`, `personas.json`; retain canonical identity and complete rule coverage |
 | Settings | `Config`, validation, example TOML and usage. Algorithm settings crossing the VM also require `sandbox/settings.py:CORE` and round-trip tests; infrastructure paths and credentials stay out |
 | Progress | Engine event, `progress.py`, closed `sandbox/progress.py` projection/validation and protocol tests |
-| Reports | `review/report.py`; preserve sightings, filters, categories and advisory verification semantics |
+| Reports | `review/report.py`; preserve sightings and categories; enforce the shared supported-only publication predicate |
 | Adapter | `backends/contract.py` and factory; no implicit provider, model, billing or execution fallback |
 
 Canonical prompt/schema/criteria changes require separately authorized before/after comparisons under [the comparison policy](proposal.md#review-quality-experiments). Module moves that preserve their bytes do not constitute prompt changes.
 
 ## Debugging
 
-Host runs retain `input/personas/` frozen prompts, accepted criteria, actual per-attempt requests/replies, `pass-*/slot.json`, mappings and verification annotations. The VM exports only `report.md`, `summary.md` and `stats.json`; internal artifact paths refer to destroyed guest data. Keep private code, identifiers, findings and credentials out of fixtures, issues and Git.
+Host runs retain `input/personas/` frozen prompts, accepted criteria, actual per-attempt requests/replies, `pass-*/slot.json`, mappings and candidate assessments. The VM exports `report.md`, `summary.md`, `stats.json` and private `findings.json`; internal artifact paths refer to destroyed guest data. Keep private code, identifiers, findings and credentials out of fixtures, issues and Git.
 
 Use explicit host `--keep-checkout` to inspect an exported head snapshot. It has read-only model tools, not a read-only filesystem mount. No target tests/builds/hooks execute. Read [reports and omissions](usage.md#reading-the-report) and [tracing](tracing.md) before interpreting zero findings, failed calls or missing traces.
 

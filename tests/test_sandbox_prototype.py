@@ -64,8 +64,8 @@ class SandboxPrototypeTests(unittest.TestCase):
 
     def test_real_pipeline_work_with_the_fake_headless_executable(self):
         result = run_smoke()
-        self.assertEqual(result['review']['calls'], 8)
-        self.assertEqual(result['review']['calls'], 8)
+        self.assertEqual(result['review']['calls'], 9)
+        self.assertEqual(result['review']['calls'], 9)
         text = 'synthetic boot noise\n' + RESULT_PREFIX + json.dumps(result) + '\n'
         self.assertEqual(parse_result(text), result)
         with self.assertRaises(ValueError):
@@ -73,7 +73,7 @@ class SandboxPrototypeTests(unittest.TestCase):
         result['review']['calls'] = True
         with self.assertRaises(ValueError):
             parse_result(RESULT_PREFIX + json.dumps(result))
-        result['review']['calls'] = 8
+        result['review']['calls'] = 9
         result['review']['completed'] = 0
         with self.assertRaises(ValueError):
             parse_result(RESULT_PREFIX + json.dumps(result))

@@ -23,7 +23,7 @@ STAGES = {
     'classifying': 'distributing project criteria among personas',
     'reviewing': 'reviewers are investigating the change',
     'consolidating': 'checking evidence and consolidating findings',
-    'verifying': 'verifying flagged conflicts',
+    'verifying': 'verifying review candidates',
     'reporting': 'writing review reports',
     'exporting': 'transferring bounded review results',
     'cleanup': 'cleaning up VM, network and temporary state',

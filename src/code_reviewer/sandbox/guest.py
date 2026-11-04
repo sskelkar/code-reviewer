@@ -22,7 +22,7 @@ from .network import PROXY
 from .probes import file_probes, network_probes
 from .wire import BOOT_PORT, RESULT_LIMIT, receive, receive_json, send_json
 
-ARTIFACTS = {'report.md', 'summary.md', 'stats.json', 'boundary-report.json'}
+ARTIFACTS = {'report.md', 'summary.md', 'stats.json', 'findings.json', 'boundary-report.json'}
 MAX_ARTIFACT = 4 * 1024 * 1024
 MAX_EXPORT = 8 * 1024 * 1024
 
@@ -162,11 +162,11 @@ def _run_job(sock, root, settings, *, probe_network, seal):
         finally:
             git_ops.export_tree = original
     with result.report_path.open('a', encoding='utf-8') as report:
-        report.write('\n## VM export\n\nOnly report.md, summary.md and stats.json are retained locally. '
+        report.write('\n## VM export\n\nReport, summary, stats and private findings.json are retained locally. '
                      'Artifact paths elsewhere in this report refer to ephemeral guest files; '
                      'raw prompts, replies and checkout files are destroyed with the VM.\n')
     paths = {'report.md': result.report_path, 'summary.md': result.run_dir / 'summary.md',
-             'stats.json': result.run_dir / 'stats.json'}
+             'stats.json': result.run_dir / 'stats.json', 'findings.json': result.run_dir / 'findings.json'}
     return {'kind': 'result', 'stop_reason': result.stop_reason, 'checks': checks,
             'files': collect_artifacts(paths, key)}
 

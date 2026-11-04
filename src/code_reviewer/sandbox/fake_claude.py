@@ -20,6 +20,8 @@ def answer(schema, text):
             'severity': 'low', 'kind': 'present', 'rule_id': 'none', 'file': 'app.py', 'line': 2,
             'quote': 'return 2', 'suggestion': 'Synthetic suggestion.',
             'self_check': {'verdict': 'confirmed', 'reason': 'Synthetic fixture evidence.'},
+            'anchor': None, 'expected': None, 'consequence': 'Synthetic behavior change.',
+            'conditions': [], 'reasoning': 'Synthetic fixture argument.', 'assumptions': [], 'evidence': [],
         }]}
     if 'decisions' in required:
         candidates = block(text, 'candidate_findings')
@@ -29,7 +31,14 @@ def answer(schema, text):
         for decision in decisions:
             decision['categories'] = ['correctness']
         return {'decisions': decisions, 'conflicts': []}
-    raise ValueError('the offline smoke test supports Reviewer/Comparator only')
+    if 'assessments' in required:
+        candidates = block(text, 'conflict_claims')
+        return {'assessments': [{'candidate_id': c['id'], 'status': 'supported',
+            'explanation': 'Synthetic evidence support, not a model quality judgment.', 'evidence_refs': ['primary'],
+            'additional_evidence': [], 'remaining_uncertainties': [], 'categories': ['correctness'],
+            'remedy': {'status': 'not_assessed', 'explanation': None, 'evidence_refs': []}} for c in candidates],
+            'relationship': 'independent', 'explanation': 'Synthetic singleton.'}
+    raise ValueError('unsupported synthetic role')
 
 
 def main():

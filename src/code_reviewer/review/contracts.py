@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from ..shared.findings import FileCache, find_quote
 from .criteria import PERSONAS
 
 
@@ -43,33 +42,4 @@ def validate_comparison(payload: Any, findings: Any, master: Any) -> List[str]:
         ids = {resolved.get(r, r) for r in refs}
         if len(ids) < 2 or len(refs) != len(set(refs)) or not ids <= actionable:
             return ['conflicts require distinct actionable canonical claims; do not merge opposing claims']
-    return []
-
-
-def validate_annotation(payload: Any, group: Any, cache: FileCache) -> List[str]:
-    if not isinstance(payload, dict) or payload.get('outcome') not in ('resolved', 'conditional', 'tradeoff', 'unresolved') or not nonempty(payload.get('explanation')):
-        return ['invalid verification outcome or explanation']
-    claims = payload.get('claims')
-    if not isinstance(claims, list) or any(not isinstance(c, dict) for c in claims):
-        return ['claims must be objects']
-    ids = [c.get('finding_id') for c in claims]
-    if any(not isinstance(i, str) for i in ids) or len(ids) != len(set(ids)) or set(ids) != set(group['findings']):
-        return ['annotate every flagged finding exactly once; no unknown IDs']
-    for claim in claims:
-        status, evidence = claim.get('status'), claim.get('evidence')
-        if status not in ('supported', 'refuted', 'conditional', 'unresolved') or not nonempty(claim.get('explanation')) or not categories(claim.get('categories')):
-            return ['invalid claim annotation']
-        if not isinstance(evidence, list) or (status != 'unresolved' and not evidence):
-            return ['non-unresolved claims require grounded evidence']
-        for entry in evidence:
-            if not isinstance(entry, dict) or not nonempty(entry.get('file')) or not nonempty(entry.get('quote')):
-                return ['invalid verification evidence']
-            line = entry.get('line')
-            if not isinstance(line, int) or isinstance(line, bool) or line < 1:
-                return ['evidence requires a positive line number']
-            lines = cache.lines(entry['file'])
-            if lines is None or line not in find_quote(lines, entry['quote']):
-                return ['verification quote/line is not grounded inside the checkout']
-        if payload['outcome'] == 'resolved' and status not in ('supported', 'refuted'):
-            return ['resolved groups cannot contain unresolved or conditional claims']
     return []

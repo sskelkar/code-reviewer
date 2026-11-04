@@ -61,8 +61,13 @@ def finding(**overrides: Any) -> Dict[str, Any]:
         "severity": "high", "kind": "present", "rule_id": "SAFE-001", "file": "app.py", "line": 2,
         "quote": 'query = "SELECT * FROM t WHERE id=" + user_id', "suggestion": "Use a parameterized query.",
         "self_check": {"verdict": "confirmed", "reason": "no validation upstream"},
+        "anchor": None, "expected": None, "consequence": "Untrusted SQL input can change the query.",
+        "conditions": ["A caller supplies untrusted user_id text."],
+        "reasoning": "The quoted concatenation makes user_id part of SQL syntax.", "assumptions": [], "evidence": [],
     }
     data.update(overrides)
+    if data["kind"] == "absent":
+        data["quote"] = None
     return data
 
 
@@ -110,6 +115,9 @@ class FakeRunner:
                     'same_as': None, 'categories': ['production-safety']}
                     for item in block(kwargs['user_prompt'], 'new_findings')], 'conflicts': []}
                 self.counts[role] += 1
+        elif "investigate code-review candidates" in system:
+            role, payload = 'verifier', verification_response(kwargs)
+            self.counts[role] += 1
         else:
             role, payload = "reviewer", self._next("reviewer", self.reviewer)
         self.calls.append({"role": role, **kwargs})
@@ -156,3 +164,13 @@ def synthetic_frontend(test):
         mocked = patch(name, side_effect=review)
         mocked.start()
         test.addCleanup(mocked.stop)
+
+
+def verification_response(kw):
+    """Synthetic acceptance, never an assertion of real review quality."""
+    candidates = block(kw['user_prompt'], 'conflict_claims')
+    return dict(assessments=[dict(candidate_id=c['id'], status='supported',
+        explanation='Synthetic repository support.', evidence_refs=['primary'], additional_evidence=[],
+        remaining_uncertainties=[], categories=['production-safety'],
+        remedy=dict(status='not_assessed', explanation=None, evidence_refs=[])) for c in candidates],
+        relationship='independent' if len(candidates) == 1 else 'tradeoff', explanation='Synthetic group assessment.')

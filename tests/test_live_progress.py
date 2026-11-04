@@ -149,8 +149,9 @@ class ProgressTests(unittest.TestCase):
         raw = {'findings': [dict(row) for _ in range(5)] + [dict(row, self_check={'verdict':'rejected'}),
                                                          dict(row, line=True), None]}
         data = reviewer_preview(raw)
-        self.assertEqual((data['raised'], data['self_rejected'], len(data['findings'])), (8, 1, 3))
+        self.assertEqual((data['raised'], data['self_rejected'], len(data['findings'])), (8, 1, 0))
         self.assertNotIn('PRIVATE_CANARY', json.dumps(data))
+        self.assertNotIn('PRIVATE_TITLE_CANARY', json.dumps(data))
         event = Event('persona_review_finished', dict(persona='correctness', round_no=1, ok=True, **data))
         with patch.object(progress, 'send_json') as send:
             sink = progress.GuestProgress(None)
@@ -181,7 +182,7 @@ class ProgressTests(unittest.TestCase):
         master.items = {'F-001': item('F-001', [1]), 'F-002': item('F-002', []), 'F-003': item('F-003', [2])}
         before = copy.deepcopy(master.items)
         data = round_preview(2, master, {'F-001'}, 1, 0)
-        self.assertEqual([f['id'] for f in data['findings']], ['F-003'])
+        self.assertEqual(data['findings'], [])
         self.assertEqual(data['total'], 2)
         self.assertNotIn('PRIVATE_SOURCE_CANARY', json.dumps(data))
         self.assertEqual(master.items, before)

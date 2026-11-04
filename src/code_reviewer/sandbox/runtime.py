@@ -68,7 +68,7 @@ def parse_result(output):
         raise ValueError('invalid synthetic result envelope')
     row = data.get('review')
     if (not isinstance(row, dict) or type(row.get('completed')) is not int or type(row.get('findings')) is not int
-            or type(row.get('calls')) is not int or row.get('calls') != 8
+            or type(row.get('calls')) is not int or row.get('calls') != 9
             or row.get('completed') != 4 or row.get('findings') != 1 or row.get('stop_reason') != 'completed'):
         raise ValueError('incomplete synthetic review')
     return data

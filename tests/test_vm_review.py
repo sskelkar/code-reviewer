@@ -50,7 +50,7 @@ class VMReviewTests(unittest.TestCase):
 
     def envelope(self):
         files = {name: base64.b64encode(data).decode() for name,data in
-                 {'report.md':b'full report', 'summary.md':b'summary', 'stats.json':b'{"calls":[]}'}.items()}
+                 {'report.md':b'full report', 'summary.md':b'summary', 'stats.json':b'{"calls":[]}', 'findings.json':b'{}'}.items()}
         return {'kind':'finished', 'cleanup':True, 'files':files,
                 'result': {'stop_reason':'completed', 'checks':self.checks(), 'vm_checks':{name:True for name in VMM},
                            'acquisition':{'repo':'example/project','number':1,'base':'a'*40,'head':'b'*40,

@@ -72,6 +72,8 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
                         value = super().run(**kw)
                         self.finished += 1
                         return value
+                if 'investigate code-review candidates' in kw['system_prompt']:
+                    return super().run(**kw)
                 with self.lock:
                     owner.assertEqual(self.finished, 4 if len(self.merged) < 4 else 8)
                     self.merged.append(block(kw['user_prompt'], 'new_findings')[0]['local_id'])

@@ -1,0 +1,369 @@
+{
+  "title": "Shared candidate evidence and verification definitions",
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "optional_text": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notes": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "correctness",
+          "production-safety",
+          "test-quality",
+          "code-quality"
+        ]
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(primary|S[1-9][0-9]*|V[1-9][0-9]*)$"
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "file",
+        "line",
+        "rule_id",
+        "quote",
+        "establishes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[SV][1-9][0-9]*$"
+        },
+        "source": {
+          "enum": [
+            "head",
+            "criterion"
+          ]
+        },
+        "file": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "rule_id": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "quote": {
+          "$ref": "#/$defs/text"
+        },
+        "establishes": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "evidence_list": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "line_start",
+        "line_end",
+        "symbol"
+      ],
+      "properties": {
+        "file": {
+          "$ref": "#/$defs/text"
+        },
+        "line_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "symbol": {
+          "$ref": "#/$defs/optional_text"
+        }
+      }
+    },
+    "self_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "reason"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "confirmed",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "description",
+        "consequence",
+        "conditions",
+        "reasoning",
+        "assumptions",
+        "severity",
+        "kind",
+        "rule_id",
+        "file",
+        "line",
+        "quote",
+        "anchor",
+        "expected",
+        "suggestion",
+        "self_check",
+        "evidence"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "consequence": {
+          "$ref": "#/$defs/text"
+        },
+        "conditions": {
+          "$ref": "#/$defs/notes"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/text"
+        },
+        "assumptions": {
+          "$ref": "#/$defs/notes"
+        },
+        "severity": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "nit"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "present",
+            "absent",
+            "cross_file"
+          ]
+        },
+        "rule_id": {
+          "$ref": "#/$defs/text"
+        },
+        "file": {
+          "$ref": "#/$defs/text"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "quote": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/anchor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "suggestion": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "self_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/self_check"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence_list"
+        }
+      }
+    },
+    "reviewer_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "findings"
+      ],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "$ref": "#/$defs/candidate"
+          }
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 12000
+        }
+      }
+    },
+    "remedy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "explanation",
+        "evidence_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_assessed",
+            "supported",
+            "refuted",
+            "unresolved"
+          ]
+        },
+        "explanation": {
+          "$ref": "#/$defs/optional_text"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "status",
+        "explanation",
+        "evidence_refs",
+        "additional_evidence",
+        "remaining_uncertainties",
+        "categories",
+        "remedy"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^F-[0-9]{3,}$"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "refuted",
+            "unresolved"
+          ]
+        },
+        "explanation": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "additional_evidence": {
+          "$ref": "#/$defs/evidence_list"
+        },
+        "remaining_uncertainties": {
+          "$ref": "#/$defs/notes"
+        },
+        "categories": {
+          "$ref": "#/$defs/categories"
+        },
+        "remedy": {
+          "$ref": "#/$defs/remedy"
+        }
+      }
+    },
+    "verification_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessments",
+        "relationship",
+        "explanation"
+      ],
+      "properties": {
+        "assessments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {
+            "$ref": "#/$defs/assessment"
+          }
+        },
+        "relationship": {
+          "enum": [
+            "independent",
+            "contradictory",
+            "different_conditions",
+            "tradeoff",
+            "unresolved"
+          ]
+        },
+        "explanation": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    }
+  }
+}

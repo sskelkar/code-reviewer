@@ -8,7 +8,7 @@ import os
 import shutil
 from typing import Optional, TextIO
 
-from .shared.events import Event, display_text
+from .shared.events import Event
 
 
 def _fmt_money(value: float) -> str:
@@ -60,7 +60,7 @@ class ProgressPrinter:
         elif kind == "persona_pass_finished":
             self._say("%s: round %d completed, %d usable findings · %s" % (d["persona"], d["round_no"], d["usable"], _fmt_money(d["cost"])))
         elif kind == "verification_started":
-            self._say("investigating flagged conflict %s ..." % d["conflict"])
+            self._say("verifying candidate group %s ..." % d["conflict"])
         elif kind == "reviewer_started" and self.verbose:
             self._say("  reviewer (%s) is reading the PR" % d["model"])
         elif kind == "reviewer_done":
@@ -84,23 +84,11 @@ class ProgressPrinter:
             self._say('%s %d provisional: %d completed, %d incomplete; candidates: %d new, %d total. '
                       'UNCONFIRMED — not independently verified; see the final report.' % (
                           'Round', d['round'], d['completed'], d['failed'], d['new'], d['total']))
-            for row in d['findings']:
-                self._say('  [%s] %s %s:%d — %s' % (row['severity'], row['id'],
-                    display_text(row['file']), row['line'], display_text(row['title'])))
-            if d['new'] > len(d['findings']):
-                self._say('  %d additional new findings omitted from this preview' % (d['new'] - len(d['findings'])))
 
     def reviewer_glimpse(self, persona, number, data):
         self._say('%s: review %d returned — %d proposed, %d self-rejected' % (
             persona, number, data['raised'], data['self_rejected']))
-        if data['findings']:
-            self._say('  Verification pending')
-            for row in data['findings']:
-                self._say('  [%s] %s:%d — %s' % (row['severity'], display_text(row['file']),
-                    row['line'], display_text(row['title'])))
-        omitted = data['raised'] - data['self_rejected'] - len(data['findings'])
-        if omitted:
-            self._say('  %d other proposed entries not shown in this glimpse' % omitted)
+        self._say('  Verification pending; candidate details are withheld until supported.')
 
 
 class LiveProgress:
