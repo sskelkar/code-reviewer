@@ -8,7 +8,8 @@
 | `roles.py`, `prompt_contract.py`, `prompts/` | Model contracts and prompt assembly |
 | `caller.py`, `budget.py`, `runner.py` | Per-attempt checks, atomic pools and cancellation forwarding |
 | `contracts.py`, `master.py`, `models.py` | Validated proposals, sightings, categories, conflicts and results |
-| `report.py` | Flow presentation |
+| `evidence.py`, `verification.py` | Shared evidence validation, connected conflict groups, assessments and publication allowlist |
+| `report.py` | Supported-only summaries/reports and dry-run presentation |
 
 ## Canonical assets
 
@@ -19,4 +20,4 @@
 | [criteria/correctness.md](criteria/correctness.md) | Behavior, contracts and entry-point/artifact wiring |
 | [criteria/code-quality.md](criteria/code-quality.md) | Maintainability and accurate code/contract documentation |
 | [criteria/test-quality.md](criteria/test-quality.md) | Coverage/assertions, faithful isolation, test discovery and failure propagation |
-| [criteria/production-safety.md](criteria/production-safety.md) | Security/privacy, finite input bounds, failure/resource handling and integrity/concurrency and query/index compatibility |
+| [criteria/production-safety.md](criteria/production-safety.md) | Security/privacy, finite input bounds, failure/resource handling, integrity/concurrency and query/index compatibility |

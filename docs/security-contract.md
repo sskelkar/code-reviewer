@@ -22,7 +22,7 @@ Keep provider credentials out of target files, images, command arguments, consol
 
 One disposable VM contains acquisition, Python orchestration and all model sessions/personas. On macOS, dedicated mountless Lima supplies Linux/KVM for Firecracker. The external launcher owns pinned artifacts, jailer/resource/deadline controls, phase-scoped networking, bounded private transfers and cleanup/recovery. Source access is removed before inference. Guest code runs unprivileged against read-only admitted input, with no shared home/keychain or host mounts.
 
-A compromised guest can corrupt its findings/accounting and expose a credential available to it. Keep credential lifetime/exposure explicit; no custom credential broker or guest-wide syscall allow-list is mandated by this plan. Preserve tested isolation controls rather than describing a VM as absolute protection.
+A compromised guest can corrupt its findings/accounting and expose a credential available to it. Keep credential lifetime/exposure explicit; the implementation does not add a custom credential broker or a guest-wide syscall allow-list. Preserve tested isolation controls rather than describing a VM as absolute protection.
 
 ## Advisory progress
 

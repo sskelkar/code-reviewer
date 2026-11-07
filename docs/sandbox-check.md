@@ -1,29 +1,14 @@
-# Run the sandbox deployment check
+# VM setup and deployment checks
 
-`reviewer sandbox check` is the repository-owned command for checking the current Mac/Lima/Firecracker deployment. It replaces handwritten external check drivers. By default it generates a harmless fixture. An optional `--pr` URL checks public acquisition inside the review VM; it accepts no local checkout, model selection or API key and makes no inference request. It is a deployment check, not a review of your project or proof of production readiness.
+`reviewer sandbox check` checks the supported Mac/Lima/Firecracker deployment without provider credentials or model inference. Provision the dedicated worker and pinned artifacts first, then run the check. By default it generates a harmless fixture. An optional `--pr` URL checks public acquisition inside the review VM; it accepts no local checkout, model selection or API key and makes no inference request. It is a deployment check, not a review of your project or proof of production readiness.
 
 ## Prerequisites
 
 The worker and guest use `/usr/local/bin/python3.13`; the guest also exposes `/usr/bin/python3` for native tool scripts. The Lima profile builds a checksum-pinned [CPython 3.13.18 source release](https://www.python.org/downloads/release/python-31318/) into `/usr/local`. Ubuntu's system Python is an OS dependency and is not used to run reviewer code or replaced. Guest images fingerprint the 3.13 executable, standard library and OS libraries, and copy runtime contents without CPython tests, bytecode caches, static build archives or interpreter debug symbols, so changing runtime inputs invalidates their cache.
 
-For an existing stopped worker, install the same runtime before the next review (this provisions tools and compiles Python; no provider credentials are needed):
-
-```bash
-export LIMA_HOME="$HOME/.code-reviewer/lima"
-limactl start reviewer-sandbox
-python3.13 - <<'PYTHON' | limactl shell reviewer-sandbox sudo sh
-from pathlib import Path
-profile = Path('sandbox/lima/reviewer.yaml').read_text()
-script = profile.split('    script: |\n', 1)[1]
-print('\n'.join(line[6:] for line in script.splitlines()))
-PYTHON
-limactl stop reviewer-sandbox
-```
-
-
 Use the editable installation from the [README](../README.md#quick-start). This command currently supports an Apple Silicon Mac with an **already prepared, stopped, dedicated** Lima VZ worker: ARM64 Ubuntu 24.04, nested virtualization, at least 6 GiB RAM, plain mode, no host mounts, forwarded SSH agent/X11/host keys, containerd or proxy-environment propagation. It refuses to take over a running worker. Other Lima instances and Colima are not selected or modified.
 
-The worker needs Python 3.13, Git, static BusyBox, GNU cpio/coreutils, systemd 255 with cgroup v2, iproute2, nftables, Squid 6 with its dedicated `proxy` user and noninteractive root sudo for setup. The system Squid service must not occupy the check proxy port. The command verifies the worker profile and lets missing tools/KVM/policy refuse execution; it does not install packages or relax the host firewall. Initial worker provisioning remains separate; see the [offline runbook](../sandbox/README.md) and [connected prerequisites](sandbox-check.md#prerequisites).
+The worker needs Python 3.13, Git, static BusyBox, GNU cpio/coreutils, systemd 255 with cgroup v2, iproute2, nftables, Squid 6 with its dedicated `proxy` user and noninteractive root sudo for setup. The system Squid service must not occupy the check proxy port. The command verifies the worker profile and lets missing tools/KVM/policy refuse execution; it does not install packages or relax the host firewall. The checked-in worker profile provisions these packages during [first-time setup](#persistent-first-time-setup); the check itself does not install them.
 
 Supply an operator-controlled artifact directory containing:
 
@@ -90,7 +75,7 @@ The command:
 5. Generates a harmless Git fixture inside the outer worker (or fetches the explicit public `--pr` inside the review VM) and runs admission/file/network probes in a **second, sequential Firecracker VM**. This connected check opens verified provider TLS only; no HTTP model request or key is sent. Before dropping privileges, the guest seals the admitted bare Git input and exported head snapshot as read-only mounts. Native write/chmod/runtime-write probes, file-tool limits and direct/forbidden-destination denials are checked, followed by host TAP/firewall cleanup.
 6. Removes the remote job directory and stops the outer worker before saving a successful report. A worker already running at startup is refused and never stopped by this command.
 
-These are two sequential test workloads, not a new architecture for actual reviews. A real review will still use one job VM. Check output records both flow results, boundary checks, source/runtime hashes and confirmed worker shutdown, with `live: false` and `production_qualified: false`.
+Deployment checks use two sequential test workloads. A normal review uses one disposable Firecracker VM for acquisition and all review roles. Check output records both flow results, boundary checks, source/runtime hashes and confirmed worker shutdown, with `live: false` and `production_qualified: false`.
 
 Add `--lifecycle` to exercise cancellation and an actual supervisor SIGKILL with harmless offline VMs (about 30 seconds extra). The test observes the independent service deadline after supervisor death and confirms mount cleanup. No key, repository input or model request is involved.
 
@@ -112,6 +97,22 @@ The metadata endpoint and shallow-fetch behavior follow [GitHub's pull-request A
 
 Preparation is serialized and publication is atomic. Failed builds or changing OS inputs do not publish partial images. The result records `image_preparation.images.*.reused` and the selected hashes. A cache mismatch refuses execution rather than silently trusting/rebuilding a damaged entry; inspect/remove the affected clean cache entry on the worker before retrying. Preparation retains only the offline/connected identities needed for the selected source, OS and native runtime. Under its exclusive lock and idle-worker check, it removes recognized obsolete root-owned image entries before building replacements. Unknown entries and current corrupt images are never silently deleted; unsafe/invalid obsolete entries refuse preparation. This bounds cache growth across source changes without touching review inputs or reports. These are locally prepared images, not signed/reproducible production attestations.
 
+## Updating an existing worker runtime
+
+For an existing stopped worker, install the same runtime before the next review (this provisions tools and compiles Python; no provider credentials are needed):
+
+```bash
+export LIMA_HOME="$HOME/.code-reviewer/lima"
+limactl start reviewer-sandbox
+python3.13 - <<'PYTHON' | limactl shell reviewer-sandbox sudo sh
+from pathlib import Path
+profile = Path('sandbox/lima/reviewer.yaml').read_text()
+script = profile.split('    script: |\n', 1)[1]
+print('\n'.join(line[6:] for line in script.splitlines()))
+PYTHON
+limactl stop reviewer-sandbox
+```
+
 ## Recover an abandoned worker
 
 ```bash
@@ -128,6 +129,6 @@ The exit status is zero only after validated results and cleanup. Ctrl-C, SIGTER
 
 If a shutdown/cleanup operation itself fails, the command fails; do not assume success. Secondary scratch-cleanup failures do not hide the original error. The transient systemd unit bounds the VM independently of Python (180 seconds normally, 360 seconds for the public acquisition workload, 30 seconds in the lifecycle test), kills the whole process group immediately on stop, and bounds stop time; the proxy retains its separate deadline. Python `finally` cannot run after SIGKILL, so use explicit worker recovery for abandoned state. Host failure can still lose the run/result; automatic resume is not implemented. A stale network policy refuses reuse rather than being overwritten. The report confirms only the named tests, not every possible escape or correct model behavior.
 
-Normal VM review/report dispatch is implemented. This no-key command checks deployment without provider credentials; an authorized real PR run must still verify authentication, native tools and actual model/report behavior. See the [security roadmap](proposal.md#checklist), [architecture](sandbox-architecture.md) and [alternative designs](sandbox-alternatives.md).
+Use a separately authorized real PR run to qualify provider authentication, native tools and model/report behavior after the no-key deployment checks pass. See the [security roadmap](proposal.md#checklist), [architecture](sandbox-architecture.md) and [alternative designs](sandbox-alternatives.md).
 
 Checks are credential-free. Host/guest jobs share the adapter factory and explicit `auth_mode`; a deployment check does not establish real authentication/inference. See [LLM access](llm.md).

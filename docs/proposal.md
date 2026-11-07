@@ -4,20 +4,17 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Checklist
 
-- [x] Group persona findings by correctness, production safety, test quality and code quality, using descriptive titles.
-- [x] Distinguish a run with no completed review from a completed review with zero findings.
 - [ ] Handle post-call token overruns without discarding otherwise valid completed output.
 - [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
 - [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
-- [x] Implement shared evidence contracts, independent candidate verification and supported-only publication.
 - [ ] Measure real-model precision and genuine findings suppressed using a manually adjudicated before/after comparison set.
 - [ ] Improve criterion attribution and repository context after manually checking findings.
 - [ ] Compare models and pass counts manually before changing review orchestration or canonical prompts.
 
 ## Qualification evidence
 
-Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. End-to-end execution has been exercised with ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
+Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
 Local synthetic Langfuse ingestion covers both adapters and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
 
@@ -40,7 +37,7 @@ Compare one versus multiple passes per persona, self-check on/off, models and pa
 
 The [verification contract](verification.md) describes the implemented shared JSON evidence, independent investigation and deterministic publication filter. Reviewer/Verifier prompts and schemas now require structured arguments and grounded references. Every eligible deduplicated candidate is investigated, with connected conflicts assessed together; only supported candidates publish. Private audit artifacts preserve withheld claims, and suggested remedies need separate support.
 
-**Comparison evidence and limits.** Implementation is authorized by the user's request to complete the high-quality-findings flow. The reference revision is `01944a4`: its report admitted grounded scored candidates without requiring an independent supported assessment. Deterministic synthetic comparisons cover supported/refuted/unresolved and incomplete investigations, plus absent-claim evidence, schema provenance, overlapping conflicts and remedy gating. The prior policy would expose refuted/unresolved scored candidates; the new publication predicate withholds them. Both provider adapters' offline smoke flows now include a Verifier call. These checks establish contract enforcement and filtering, not the quality of an LLM's judgments. No paid or subscription model comparison has run for these prompt changes; there is no measured precision/recall improvement claim.
+**Comparison evidence and limits.** The reference revision is `01944a4`: its report admitted grounded scored candidates without requiring an independent supported assessment. Deterministic synthetic comparisons cover supported/refuted/unresolved and incomplete investigations, plus absent-claim evidence, schema provenance, overlapping conflicts and remedy gating. The prior policy would expose refuted/unresolved scored candidates; the new publication predicate withholds them. Both provider adapters' offline smoke flows now include a Verifier call. These checks establish contract enforcement and filtering, not the quality of an LLM's judgments. No paid or subscription model comparison has run for these prompt changes; there is no measured precision/recall improvement claim.
 
 Remaining comparison work: independently adjudicate a small public/synthetic set, including genuine defects, existing caller guarantees, uncertain database-performance claims, ineffective tests, preference-only requests and correct defects with unsafe suggested fixes. Run the reference and updated prompts against the same pinned inputs under explicit inference authorization, recording false positives removed, genuine findings suppressed/unresolved, cost, latency and completion. Assess review misses using independently identified defects; candidate-only sets cannot establish recall. Keep private material outside this repository. Do not build a general eval framework for this milestone.
 
@@ -56,10 +53,8 @@ Suggested sequence if pursued: first attach skills to the existing four personas
 
 ### Review-report follow-ups: qualifications and criteria traceability
 
-**Improvement backlog.** Review-report presentation and criteria traceability need manual evaluation. Private code, identifiers, findings and run paths stay outside this repository.
+**Improvement backlog.** Evaluate the supported-only presentation and its separate remedy assessments before changing their contracts. Improve criteria traceability from observed findings. Private code, identifiers, findings and run paths stay outside this repository.
 
-- **Make verification qualifications visible beside findings.** Show accepted status, conditions and evidence beside published findings in full reports and shareable summaries. Preserve all original claims and annotations in private artifacts under the verification milestone's publication rules; do not present unresolved candidates as verified findings.
-- **Separate defect support from remedy support.** A Verifier can support the failure sequence while finding a proposed fix unverified. Make that distinction apparent rather than presenting the suggested fix as established. Schema/prompt changes, if needed, require separate design and evaluation.
 - **Link related defects and regression-test gaps.** Keep distinct concerns available, but help readers see when a test-gap finding covers the same failure as an implementation finding. Related findings are not automatically duplicates, and their count is not independent evidence of review breadth. Suggested tests must check intended recovery, not merely preserve the defective behavior being reported elsewhere.
 - **Improve criterion attribution.** Investigate missing rule citations even when a finding invokes project conventions. Distinguish omitted/incorrect IDs, unavailable assigned rules and legitimate findings outside a persona's focus. Improve traceability without inventing rule matches or dropping otherwise evidenced findings.
 - **Represent authority, scope and conflicting instructions in context.** The project context pack should distinguish repository contracts/conventions from planning claims and retain source paths and applicability. Do not treat conflicting general/specific guidance as an arbitrary strategy choice, or invent precedence when the repository does not establish it. Record unresolved ambiguity visibly.

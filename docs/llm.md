@@ -1,6 +1,6 @@
 # LLM interface and access
 
-Provider, authentication and execution location are independent operator choices. The review pipeline use the same `Runner` contract, validation, criteria, accounting and reports. Subscription access does not change the VM boundary or select a different review algorithm.
+Provider, authentication and execution location are independent operator choices. Both adapters use the same `Runner` contract, validation, criteria, accounting and reports. Subscription access does not change the VM boundary or select a different review algorithm.
 
 ## Support and qualification
 

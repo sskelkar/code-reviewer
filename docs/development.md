@@ -9,7 +9,7 @@ python -m unittest discover -s tests -t .
 python -m unittest tests.test_persona_flow tests.test_persona_parallel
 ```
 
-Tests use synthetic repositories, FakeRunners, fake native executables and simulated HTTP/SSE. They must not read real credentials, make model/network calls or boot VMs. Run the whole suite before finishing a change. There is no CI yet.
+Tests use synthetic repositories, FakeRunners, fake native executables and simulated HTTP/SSE. They must not read real credentials, make model/network calls or boot VMs. Run the whole suite before finishing a change. The repository has no CI workflow; run these checks locally.
 
 | Tests | Coverage |
 |---|---|
@@ -54,7 +54,7 @@ Use explicit host `--keep-checkout` to inspect an exported head snapshot. It has
 
 ## Verifying against the real Claude CLI
 
-Offline tests do not establish native authentication entitlement, tools or review quality. Real inference needs the user's request. Qualify flags, envelopes, read-tool boundaries, usage/budgets and cleanup through the selected supported execution path. Outstanding evidence belongs in [the roadmap](proposal.md#qualification-evidence).
+Offline tests do not establish native authentication entitlement, tools or review quality. Real inference requires explicit authorization for the target and provider. Qualify flags, envelopes, read-tool boundaries, usage/budgets and cleanup through the selected supported execution path. Outstanding evidence belongs in [the roadmap](proposal.md#qualification-evidence).
 
 ## VM deployment checks
 

@@ -94,7 +94,7 @@ sequenceDiagram
             CLI->>CLI: LiveProgress renders counts and inactivity heartbeats
         end
     end
-    Core-->>VM: RunResult with report, summary and stats
+    Core-->>VM: RunResult with report, summary, stats and private findings.json
     VM->>VM: _run_job(): collect_artifacts() bounds / validates export
     VM->>VM: run_job(): close Recorder, attach bounded metadata if enabled
     VM-->>Worker: Result envelope + allowed artifacts

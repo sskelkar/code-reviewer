@@ -13,7 +13,7 @@ Mac
         └── Repository preparation, Python reviewer, model/tool loop
 ```
 
-Firecracker deliberately exposes a small device model, applies VMM syscall filters and provides a Linux jailer for process confinement. Network filtering is explicitly the operator's responsibility. These mechanisms depend on correct host integration; choosing Firecracker alone does not establish production security. The shared jailed lifecycle supports normal review dispatch and no-key deployment checks; native Claude inference still requires qualification. See the [upstream design](https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md), [jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md) and the [security roadmap](proposal.md#checklist).
+Firecracker deliberately exposes a small device model, applies VMM syscall filters and provides a Linux jailer for process confinement. Network filtering is explicitly the operator's responsibility. These mechanisms depend on correct host integration; choosing Firecracker alone does not establish production security. The shared jailed lifecycle supports normal review dispatch and no-key deployment checks; qualification status is tracked in the roadmap. See the [upstream design](https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md), [jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md) and the [security roadmap](proposal.md#checklist).
 
 ## Alternative boundaries
 

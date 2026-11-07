@@ -4,7 +4,7 @@ Optional Langfuse tracing records how a review executes: stages, model calls, re
 
 ## Start local Langfuse
 
-Use a running Docker engine with Compose and sufficient memory. Allocate about **6 GiB to Docker** when sharing it with other apps; the full Langfuse stack does not fit reliably in the observed 2 GiB Colima VM. Resizing an existing Docker VM can interrupt other containers, so schedule that separately. Langfuse runs in Docker, outside the dedicated Lima/Firecracker review worker.
+Use a running Docker engine with Compose and sufficient memory. Allocate about **6 GiB to Docker** when sharing it with other apps. A small Docker VM may not have enough memory for the complete Langfuse stack. Resizing an existing Docker VM can interrupt other containers, so schedule that separately. Langfuse runs in Docker, outside the dedicated Lima/Firecracker review worker.
 
 From the repository root:
 
@@ -16,7 +16,7 @@ docker-compose --env-file "$HOME/.code-reviewer/langfuse/local.env" \
 
 Use `docker compose` instead of `docker-compose` if Compose is installed as a Docker plugin. Initial migrations can take a few minutes. Open **http://localhost:4000**. The local account is `reviewer@localhost.invalid`; its username and generated password are the `LANGFUSE_USER_EMAIL` and `LANGFUSE_USER_PASSWORD` entries in `~/.code-reviewer/langfuse/local.env`. Setup creates the `reviewer` project and its keys automatically. The setup script preserves an existing file rather than rotating credentials underneath stored data.
 
-Only `127.0.0.1:4000` is published; host port 3000 and supporting database/storage ports are untouched. Web/worker server version is 4.72.0. All six images are digest-pinned in [compose.yaml](../deploy/langfuse/compose.yaml), including the MinIO storage/client images. Deployment telemetry is disabled. No Langfuse Cloud account is involved.
+The web UI binds to `127.0.0.1:4000`. Supporting database/storage ports are not published to the host. Web/worker server version is 4.72.0. All six images are digest-pinned in [compose.yaml](../deploy/langfuse/compose.yaml), including the MinIO storage/client images. Deployment telemetry is disabled. No Langfuse Cloud account is involved.
 
 The private environment file contains deployment passwords and local project keys; keep it outside Git. Persistent named Docker volumes contain Langfuse's data. Container logs rotate at 10 MiB × 3 files per service. This does not cap database/object-storage growth: inspect `docker system df` and `docker stats`, delete unwanted traces in Langfuse, and choose an explicit retention/backup policy before accumulating long-lived data. This integration does not promise automatic age-based retention or backups.
 
@@ -112,4 +112,4 @@ Unit tests use synthetic repositories, fake providers and exporters. With the op
 | [sandbox/settings.py](../src/code_reviewer/sandbox/settings.py), [guest.py](../src/code_reviewer/sandbox/guest.py) | Trusted enable/context handoff and bounded stats export |
 | [test_tracing.py](../tests/test_tracing.py) | Privacy, failures, bounds, threading, the review pipeline, guest transfer and optional SDK checks |
 
-Local server 4.72.0 ingestion is verified with synthetic reviews in the review pipeline and adapter paths. Stored observations preserve one logical root, parent links, original timing, usage and metadata-only capture. Remaining provider usage and adapter qualification is tracked in [the roadmap](proposal.md#checklist). Tracing does not move prompts into Langfuse, add evaluations, expand guest networking or introduce another review flow.
+Live deployment and provider qualification evidence belongs in [the roadmap](proposal.md#qualification-evidence). Tracing does not store prompts or findings, add evaluations, or expand guest networking.

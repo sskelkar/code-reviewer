@@ -25,12 +25,12 @@ The CLI selects execution before acquisition and uses the same pipeline and sele
 
 ### Review options
 
-Use these with `reviewer review <url> ...`; `reviewer review --help` describes them. The parked REPL retains shared option definitions for later use.
+Use these with `reviewer review <url> ...`; `reviewer review --help` lists the current options.
 
 | Option | Meaning |
 |---|---|
 | `--no-sandbox` | Explicit direct-host acquisition/review; no VM startup. Also selectable with trusted `sandbox = false`; no automatic fallback |
-| `--preflight` | Show release blockers and effective request without target/model/credential activity |
+| `--preflight` | Check effective configuration and unsupported choices without target/model/credential activity |
 | `--auth NAME` | `api-key` (default) or `subscription`; independent of provider/location. ChatGPT uses reviewer-owned sign-in; Claude uses native subscription login on the host or an explicit OAuth token for host/VM |
 | `--account LABEL` | Local saved ChatGPT account label for subscription access; defaults to `chatgpt_account` |
 | `--provider NAME` | `claude` or `openai`; identical security requirements |
@@ -38,15 +38,15 @@ Use these with `reviewer review <url> ...`; `reviewer review --help` describes t
 | `--passes N` | Scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots. A positive integer; budget, failure and cancellation limits can stop work earlier |
 | `--model NAME` | Model for all roles (including persona classification and verification), an alias such as `haiku` or `sonnet`, or a full model name. Default: the `model_*` settings (`haiku`) |
 | `--criteria MODE` | `merge`, `project_only` or `defaults_only`; overrides `criteria_mode` for this run. `defaults_only` skips the project's own rules (smaller prompt) |
-| `--no-self-check` | Skip the phase where the reviewer tries to refute its own findings. Cheaper, but findings are not double-checked |
+| `--no-self-check` | Skip the Reviewer’s own self-refutation phase. Independent verification and supported-only publication still apply |
 | `--keep-checkout` | Host-only: keep the separate temporary snapshot so you can inspect exactly what the reviewer saw. Model tools are read-only; host mode does not mount the snapshot read-only. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
 | `--dry-run` | Host-only target/prompt preview without credentials or model calls; VM requests refuse. Use `--preflight` for no target IO |
 | `--verbose` | Print extra progress detail (which model is being called, how many findings are being compared) |
-| `--post` | **One-shot only.** Post the summary comment to the PR when the review finishes. Nothing is posted without it. The retained interactive frontend is parked |
-| `--local-path DIR` | **One-shot only.** Local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
+| `--post` | Post the supported-only summary comment to the PR when the review finishes. Nothing is posted without it |
+| `--local-path DIR` | Host-only: local clone to use as the git object store. Default: the current directory, if it is a clone of the same repository; otherwise a cached clone is used |
 | `--config PATH` | **Goes before the subcommand:** `reviewer --config PATH review <url>` (bare `reviewer` only shows help). Explicit trusted operator file outside Git working trees, replacing `~/.code-reviewer/review.toml` |
 
-Options override the settings file for that run only. Everything else (budgets, thresholds, criteria mode, ...) is set in [Configuration](#configuration).
+Options override the settings file for that run only. Other settings, including budgets and agreement thresholds, are set in [Configuration](#configuration).
 
 ### Posting a comment
 
@@ -124,14 +124,14 @@ Reviewers and AI agents must apply the rules in:
 
 Rules of the road:
 
-- **Only files inside the repository count.** Links to a wiki, Confluence or any URL, absolute paths and paths outside the repo are ignored, and the report lists what was ignored.
+- **Only files inside the repository count.** Links to a wiki, Confluence or any URL, absolute paths and paths outside the repo are ignored, and host input artifacts record ignored references.
 - **Criteria are read from the PR's target (base) branch,** not the PR itself. A PR that edits the rules is still judged by the old ones, and the report flags that the PR touches them.
 - **Write rules as Markdown headings.** Each heading becomes a citable rule ID such as `P:docs/review/errors.md#retry-policy`. A file with no headings becomes one rule.
-- **Keep it small.** About 200,000 characters (roughly 50,000 tokens) of project criteria are used; the rest is dropped with a warning.
+- **Keep it small.** The default project-criteria cap is 200,000 characters; entries beyond the cap are omitted with a warning. Token usage depends on the model, text and repeated tool turns.
 - **Some files are added automatically,** because where they apply is clear from their location. You do not need to link them from the root `AGENTS.md`:
   - an `AGENTS.md` in a directory that contains a changed file, or in one of its parent directories (for a change under `spec/controllers/`, both `spec/AGENTS.md` and `spec/controllers/AGENTS.md`);
   - every `.claude/rules/*.md` file, except those with a `paths:` list in their front matter that matches none of the changed files (such a file is scoped to those paths on purpose).
-  The report lists them with the reason each was added.
+  Host input artifacts retain the inclusion reasons; the private criteria index records the accepted rules and their sources.
 - Without a root `AGENTS.md`, or if nothing in it resolves, the files above and the defaults are still used, and the report says so.
 
 
@@ -141,7 +141,7 @@ The pipeline uses thirteen canonical rules with static assignments; see the [per
 
 ### Customizing the default rules
 
-Edit `src/code_reviewer/review/criteria/*.md` using canonical ID-bearing headings, and maintain static assignments in `review/personas.json`. Shared rules have one definition. Prompt/criteria changes require authorized comparisons under the [comparison policy](proposal.md#review-quality-experiments).
+For a target project, add project criteria and optionally disable built-in rule IDs through `disabled_default_rules`; avoid modifying the reviewer installation for project-specific conventions. To contribute a built-in rule, edit `src/code_reviewer/review/criteria/*.md` using canonical ID-bearing headings and maintain static assignments in `review/personas.json`. Shared rules have one definition. Prompt/criteria changes require authorized comparisons under the [comparison policy](proposal.md#review-quality-experiments).
 
 ## Configuration
 
@@ -190,7 +190,7 @@ A persona budget/failure limit disables only that persona. Criteria exhaustion f
 | Path | Contents |
 |---|---|
 | `~/.code-reviewer/auth/chatgpt.json` | Private reviewer-owned ChatGPT registrations and credentials; outside Git, 0600 under 0700 directory |
-| `~/.code-reviewer/runs/vm-<random ID>/` | VM run: private report, summary and stats only; guest raw replies/prompts are not retained |
+| `~/.code-reviewer/runs/vm-<random ID>/` | VM run: private report, summary, stats and findings.json (supported view plus candidate audit); guest raw replies/prompts are not retained |
 | `~/.code-reviewer/runs/<time>_<repo>_<pr>/` | Host review: summary/report, master, usage, labels and settings; `input/` holds redacted PR metadata, diff and criteria; `pass-NN/` holds raw replies, findings and mappings. Frozen persona prompts live under `input/personas/`, with candidate investigations under `verification/` and a private `findings.json` audit/automation view |
 | `~/.code-reviewer/cache/` | Bare clones used when you review a repository other than the current one |
 | `<system temp dir>/code-reviewer-checkout-*/` | The reviewer's separate PR snapshot, exposed through read-only model tools, **outside the run directory** so nothing the run produced (earlier passes' findings, reports) is next to it. Deleted when the run ends unless host-only `--keep-checkout` |
@@ -229,28 +229,24 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
 | Prompt asset not found | Check the active executable/virtual environment matches this checkout. Prompts live under `src/code_reviewer/review/prompts/`; keep the checkout when using an editable install |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
-| `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Use a fresh one-shot invocation after updating. A new review fetches the latest branch tips; commits are pinned only within a run |
+| `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Retry with a fresh invocation. A new review fetches the latest branch tips; commits are pinned only within a run |
 | `VM setup missing Firecracker archive`, `guest kernel` or `Lima worker definition` | Check `vm_artifacts`, `vm_lima_home` and `vm_instance`; restore the [persistent installation](sandbox-check.md#persistent-first-time-setup). Existing empty parent directories are insufficient. Credential access follows successful setup and admission |
 | `GitHub public PR metadata returned HTTP ...` | The VM could not obtain public PR metadata, before credential handoff. Check that the PR exists and is publicly accessible and that unauthenticated API access is not rate-limited. Private source authentication is not implemented in VM mode; trusted host execution requires explicit `--no-sandbox` |
 | `VM public acquisition failed: ... admission limit` | The VM rejected repository input before credential handoff. Current caps are 2 MiB per text file, 32 MiB of text per tree and 5000 entries (including binaries). Binary contents are omitted rather than triggering text-size limits; retained Git acquisition limits still apply. An oversized-file error includes only an escaped bounded filename and byte count, not file contents. Changing input scope/limits is a separate explicit decision; recovery or a larger model budget will not fix it |
 | `VM review failed during ...` | The message identifies the failing preparation/startup/image/review/cleanup/export phase. Run the no-key deployment check for infrastructure failures; recovery is for abandoned worker state, not missing installations |
 | `error: ... refusing to review` | The diff exceeds `max_diff_lines`. Review a smaller PR or raise the limit |
 | `error: ... no reviewable changes` | Every changed file matches `exclude_patterns` or `extra_exclude_patterns` |
-| `pass N FAILED: ... timed out` or `not a valid JSON object` | For host runs, inspect `pass-NN/reviewer.raw.json`. VM exports contain report/summary/stats and private findings.json; use their failure and verification accounting. Raise `call_timeout_s` or `call_budget_usd`, or try another model |
-| `pass N FAILED` mentioning budget | The call hit `call_budget_usd`. Raise it, or review a smaller PR |
-| Many findings counted as ungrounded | See the `reason` of each in `pass-NN/findings.json`. The model may be quoting from memory. Try `--model sonnet` |
-| Warning: criteria resolver failed | Resolver-selected rules may be missing; enabled defaults and automatically included project rules can still apply. Check the criteria index, warnings and `input/resolver.raw.json` |
-| Every pass reports only one finding, or findings are all Low | Passes may stop early or pick a different issue each time. Check `notes` in each `pass-NN/findings.json` for what the pass verified and what it left "unverified", and compare the number of findings per pass in the report's appendix. See [Reading the report](#reading-the-report) |
-| No findings at all | May be correct. Check `notes` in `pass-NN/findings.json` and compare with the diff. Try `--model sonnet` |
-| `post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |
-
-## VM execution status
-
-Normal VM reviews acquire public GitHub PRs inside the VM, select the configured adapter, privately hand off credentials after boundary checks and return bounded reports after worker shutdown. Explicit host dispatch remains available. Private URL authentication and normal-CLI capsule input remain unsupported; low-level no-key checks retain capsules. See the [execution contract](security-contract.md) and [VM runbook](sandbox-check.md).
+| `pass N FAILED: ... timed out` or `not a valid JSON object` | Inspect the failure stage and role in the report. Host runs retain `pass-NN/reviewer.raw.json`; VM runs retain bounded reports and the private candidate audit. Check configured timeouts and the selected API/token allowance before retrying |
+| `pass N FAILED` mentioning budget | Check which API-dollar or subscription-token pool exhausted and whether the call completed before its usage was rejected. Pools do not borrow. Adjust scope or explicit operator allowances only after inspecting accounting |
+| Many findings counted as ungrounded | Inspect grounding counters. Host `pass-NN/findings.json` records rejection reasons; fabricated or mismatched quotes are withheld rather than published |
+| Warning: criteria resolver failed | Resolver-selected rules may be missing; enabled defaults and automatically included project rules can still apply. Check the saved criteria index and warnings; host runs also retain `input/resolver.raw.json` |
+| Every pass reports only one finding, or findings are all Low | Review the completed-slot counts, per-persona agreement and verification outcomes. Host pass notes and the private audit can explain differences; low agreement alone does not invalidate a supported finding. See [Reading the report](#reading-the-report) |
+| No findings at all | Check whether reviews completed and whether candidates were refuted, unresolved or never verified. Inspect verification counts and private findings.json; zero supported findings does not prove the PR is correct |
+| `--post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |
 
 ## Host adapter configuration
 
-Use the same provider/authentication settings and factory as the guest. `--no-sandbox` chooses host execution; it does not choose authentication. Choose the credential source described in [the LLM support matrix](llm.md#selecting-access). OpenAI API-key access requires explicit model/token rates. Claude host subscription mode uses an explicit `CLAUDE_CODE_OAUTH_TOKEN` override when set; otherwise it checks and reuses the native Claude subscription/SSO login. Complete your normal `claude` login first. Cached Console/API-key logins are refused. See [Claude sign-in](llm.md#claude-subscription-sign-in) for selection and isolation details. ChatGPT subscription access uses `reviewer auth login` for the selected host/VM identity; see [sign-in](llm.md#chatgpt-sign-in).
+`--no-sandbox` selects execution location independently from provider and authentication. Follow [LLM access](llm.md#selecting-access) for credentials, model selection, token rates and host/VM sign-in identities; these rules use the same adapter factory in both locations.
 
 ## VM review configuration
 

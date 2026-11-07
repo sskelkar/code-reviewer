@@ -13,7 +13,7 @@ openai_cached_input_price = 0.0
 openai_output_price = 0.0
 
 
-# Persona mode: scheduled passes per persona (4 times this many total); --passes N overrides for one run.
+# Four-perspective review: scheduled passes per persona (4 times this many total); --passes N overrides for one run.
 persona_passes = 3
 # Persona Reviewers run concurrently within a round, then merge serially; --parallel N overrides.
 persona_parallel = 4
@@ -21,8 +21,8 @@ persona_parallel = 4
 # Models: any alias or full name accepted by `claude --model`.
 model_reviewer = "haiku"
 model_comparator = "haiku"
-model_resolver = "haiku"   # also used for project-rule classification in persona mode
-model_verifier = "haiku"   # persona conflict annotations only
+model_resolver = "haiku"   # also used for project-rule classification
+model_verifier = "haiku"   # independent candidate verification
 
 # Reviewer refutes its own findings in a second phase.
 self_check = true
@@ -42,7 +42,7 @@ tier_medium = 0.40
 # Limits
 max_diff_lines = 3000          # changed lines after exclusions
 persona_prompt_max_chars = 500000  # complete persona call/retry text; never silently truncated
-criteria_max_chars = 200000    # about 50k tokens
+criteria_max_chars = 200000    # project criteria text cap; tokens depend on model and content
 # Files left out of the diff, and about which no findings are reported. A trailing slash matches a directory anywhere in the
 # path, including several folders such as "docs/plans/". This list REPLACES the built-in one (lockfiles, minified, generated, vendor/ ...).
 # exclude_patterns = ["package-lock.json", "yarn.lock", "*.min.js", "vendor/", "node_modules/"]
@@ -54,7 +54,7 @@ criteria_max_chars = 200000    # about 50k tokens
 grounding_line_window = 30     # count corrections exceeding this distance; quotes are searched across the file
 
 # Budgets and timeouts
-call_budget_usd = 0.50         # --max-budget-usd for every claude call
+call_budget_usd = 0.50         # estimated API allowance per call, limited by its pool
 call_timeout_s = 600
 run_budget_usd = 3.00         # personas: 10% criteria, 10% Comparator, 13 1/3% Verifier, remainder split equally
 run_budget_tokens = 2000000    # API: excludes cache reads; subscription: includes cache reads and charges unknown usage conservatively
@@ -65,7 +65,7 @@ claude_bin = "claude"
 # Flags that isolate the reviewer from local Claude Code configuration. Do not remove unless you know why.
 isolation_flags = ["--safe-mode", "--restricted"]
 
-# Confidence tiers shown in the review summary and included in a posted comment (single-pass findings are always included)
+# Agreement tiers shown in summaries/comments; supported findings with fewer than two completed passes are unrated and included
 post_tiers = ["High", "Medium", "Low"]
 
 # Replace email addresses in the PR title, description and commit messages with [email] before sending (not the diff)
