@@ -1,0 +1,24 @@
+handover.md
+  s_7818298118e32f::t_da1a405d272fca 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "948cc5a3da7bca5d607b246bad738e039dd925ca",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_7818298118e32f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "826d94f4-2134-4658-a84c-1d43e1434b28",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
