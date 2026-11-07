@@ -1,0 +1,53 @@
+docs/tracing.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 7,19,115
+review.example.toml
+  s_68cd0db0a8fc3a::t_e36f7268419389 16,24-25,45,57,68
+docs/sandbox-alternatives.md
+  s_68cd0db0a8fc3a::t_c751b422cb25c1 16
+src/code_reviewer/review/README.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 11-12,23
+CONTRIBUTING.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 17-27,35-42
+docs/llm.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 3
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_3a3090b85600b2 97
+docs/development.md
+  s_68cd0db0a8fc3a::t_c751b422cb25c1 12,57
+README.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 16,18,42,50,67,84,89,101,116-122,124,133,143
+  s_68cd0db0a8fc3a::t_3a3090b85600b2 123
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_3a3090b85600b2 17,40,56
+docs/security-contract.md
+  s_68cd0db0a8fc3a::t_e36f7268419389 25
+docs/usage.md
+  s_68cd0db0a8fc3a::t_c751b422cb25c1 28,33,41,45-46,49,193
+  s_68cd0db0a8fc3a::t_e36f7268419389 127,130,134,144
+  s_68cd0db0a8fc3a::t_97273268572bb6 232,239-245,249
+docs/sandbox-check.md
+  s_68cd0db0a8fc3a::t_3a3090b85600b2 1,3,11,78,100-115,132
+docs/architecture.md
+  s_68cd0db0a8fc3a::t_3a3090b85600b2 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f950d990d9dbbaee2494c5cd0aeca4541cd8add6",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
