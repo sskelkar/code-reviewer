@@ -19,6 +19,10 @@ class GitError(RuntimeError):
     """Raised when a git or gh command fails."""
 
 
+class GitContentTooLarge(GitError):
+    """An immutable Git blob exceeds the requested read allowance."""
+
+
 @dataclass(frozen=True)
 class PRRef:
     host: str
@@ -190,7 +194,15 @@ def ls_tree(git_dir: Path, sha: str) -> Dict[str, str]:
     return tree
 
 
-def git_show(git_dir: Path, sha: str, path: str) -> Optional[str]:
+def git_show(git_dir: Path, sha: str, path: str, *, max_bytes: Optional[int] = None) -> Optional[str]:
+    if max_bytes is not None:
+        # Query the immutable blob size before capturing content, including on the host.
+        size = subprocess.run(["git", "-C", str(git_dir), "cat-file", "-s", "%s:%s" % (sha, path)],
+                              capture_output=True, timeout=60)
+        if size.returncode:
+            return None
+        if int(size.stdout) > max_bytes:
+            raise GitContentTooLarge('Git content exceeds the requested read limit')
     proc = subprocess.run(["git", "-C", str(git_dir), "show", "%s:%s" % (sha, path)], capture_output=True, timeout=60)
     if proc.returncode != 0:
         return None

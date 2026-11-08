@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
+from .models import ReviewRefused
 from .templates import escape_untrusted
 
 REGULAR_MODES = ("100644", "100755")
@@ -17,6 +18,10 @@ _DEFAULT_ID = re.compile(r"^\[([A-Za-z][A-Za-z0-9]*-\d+)\]\s*(.*)$")
 _URL = re.compile(r"https?://[^\s)>\]\"'`]+")
 _TOKEN_SPLIT = re.compile(r"[\s()\[\]{}<>,;\"'`]+")
 _FRONT_MATTER = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
+
+
+class CriteriaLimitExceeded(ReviewRefused):
+    """Complete review guidance cannot be selected within the input/resource bounds."""
 
 
 @dataclass
@@ -259,23 +264,10 @@ def resolve_project(tree: Dict[str, str], show: Callable[[str], Optional[str]],
     """Load explicit base-commit review instructions without inference or execution."""
     from .review_guidance import discover
     pc = ProjectCriteria(source="auto")
-    pc.rules = _apply_size_cap(discover(tree, show, changed_paths, pc, max_chars), max_chars, pc)
+    pc.rules = discover(tree, show, changed_paths, pc, max_chars)
     if not pc.rules:
         pc.warnings.append("no explicit project code-review instructions loaded; using enabled baseline criteria")
     return pc
-
-
-def _apply_size_cap(rules: List[Rule], max_chars: int, pc: ProjectCriteria) -> List[Rule]:
-    kept: List[Rule] = []
-    total = 0
-    for rule in rules:
-        size = len(rule.text) + len(rule.heading)
-        if total + size <= max_chars:
-            kept.append(rule)
-            total += size
-    if len(kept) < len(rules):
-        pc.warnings.append("%d project rule(s) dropped: criteria size cap of %d characters reached" % (len(rules) - len(kept), max_chars))
-    return kept
 
 
 def assemble(defaults: List[Rule], project: ProjectCriteria, changed_paths: Sequence[str]) -> CriteriaSet:

@@ -316,6 +316,31 @@ class VMReviewTests(unittest.TestCase):
             self.assertNotIn(other,policy)
             self.assertNotIn(endpoint, network.squid_config('/tmp/proxy','acquisition',provider))
 
+    def test_guest_exports_actionable_criteria_failure_without_inference(self):
+        from code_reviewer.sandbox import capsule
+        ctx=make_repo(self.root,project_criteria=True)
+        target=self.root/'input.tar'
+        capsule.prepare(ctx.git_dir,ctx.base_sha,ctx.head_sha,target)
+        cfg=self.cfg('claude')
+        cfg.criteria_max_chars=1
+        root=self.root/'guest-criteria-limit'
+        root.mkdir()
+        runner=FakeRunner([])
+        with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
+             patch.object(guest,'receive',side_effect=[target.read_bytes(),b'fake-selected-key']), \
+             patch.object(guest,'send_json'), \
+             patch('code_reviewer.backends.factory.ClaudeRunner',return_value=runner):
+            result=guest.run_job(None,root,probe_network=lambda:self.checks()['network'])
+        self.assertEqual(result['stop_reason'],'failures')
+        self.assertEqual(runner.calls,[])
+        report=base64.b64decode(result['files']['report.md']).decode()
+        self.assertIn('criteria_max_chars=1',report)
+        self.assertIn('no instructions were dropped',report)
+        self.assertEqual(json.loads(base64.b64decode(result['files']['findings.json']))['criteria'],{})
+        stats=json.loads(base64.b64decode(result['files']['stats.json']))
+        self.assertEqual(stats['calls'],[])
+        self.assertEqual(stats['stop_reason'],'failures')
+
     def test_guest_uses_selected_adapter_and_configuration_for_both_algorithms(self):
         from code_reviewer.sandbox import capsule
         ctx = make_repo(self.root)

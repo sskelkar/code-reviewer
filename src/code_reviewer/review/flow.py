@@ -13,6 +13,7 @@ from typing import Any
 
 from ..config import ConfigError, REVIEW_DIR, PROMPTS_DIR, DEFAULT_CRITERIA_DIR
 from ..shared import git_ops
+from ..shared.criteria import CriteriaLimitExceeded
 from ..backends.contract import RunnerError
 from ..shared.diffview import DiffIndex
 from ..shared.events import Event, null_sink, round_preview, reviewer_preview
@@ -126,8 +127,11 @@ class ReviewFlow:
             result.stop_reason = 'budget_exceeded'
         except KeyboardInterrupt:
             result.stop_reason = 'cancelled'
-        except (RunnerError, PassFailed) as exc:
+        except (RunnerError, PassFailed, CriteriaLimitExceeded) as exc:
             result.stop_reason = 'failures'
+            if isinstance(exc, CriteriaLimitExceeded):
+                # No rule set was selected; do not audit the initial baseline placeholder as accepted criteria.
+                result.criteria = replace(result.criteria, rules=[])
             result.warnings.append(str(exc))
         finally:
             try:

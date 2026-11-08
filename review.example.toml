@@ -40,7 +40,7 @@ tier_medium = 0.40
 # Limits
 max_diff_lines = 3000          # changed lines after exclusions
 persona_prompt_max_chars = 500000  # complete persona call/retry text; never silently truncated
-criteria_max_chars = 200000    # project criteria text cap; tokens depend on model and content
+criteria_max_chars = 200000    # accepted rule text + headings only; overflow stops, never drops rules
 # Files left out of the diff, and about which no findings are reported. A trailing slash matches a directory anywhere in the
 # path, including several folders such as "docs/plans/". This list REPLACES the built-in one (lockfiles, minified, generated, vendor/ ...).
 # exclude_patterns = ["package-lock.json", "yarn.lock", "*.min.js", "vendor/", "node_modules/"]

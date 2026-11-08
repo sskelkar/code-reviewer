@@ -2,13 +2,24 @@
 from __future__ import annotations
 
 from collections import deque
+import json
 import posixpath
 import re
 from pathlib import PurePosixPath
 
-from .criteria import (REGULAR_MODES, MAX_CANDIDATES, _directories_of, _inline_rule,
+from .criteria import (CriteriaLimitExceeded, REGULAR_MODES, MAX_CANDIDATES, _directories_of, _inline_rule,
                        extract_candidates, glob_to_regex, rules_from_markdown,
                        split_front_matter, split_sections)
+
+# Discovery resource bounds are independent of accepted criteria / model prompt limits.
+SOURCE_BYTES = 2 * 1024 * 1024
+DISCOVERY_BYTES = 16 * 1024 * 1024
+
+
+def source_label(path):
+    """Bound and escape repository-controlled paths in diagnostics."""
+    return json.dumps(path[:256], ensure_ascii=True)
+
 
 _REVIEW = re.compile(r'\b(?:code[ -]?review(?:s|ing)?|review(?:er)?[ -]+(?:instructions|guidelines|criteria|checklist|policy)|pull[ -]+request[ -]+reviews?|reviewing[ -]+(?:code|changes|pull[ -]+requests))\b', re.I)
 
@@ -40,24 +51,33 @@ def discover(tree, show, changed_paths, pc, max_chars):
     cache = {}
     processed = {}
     rules_by_path = {}
-    remaining = max_chars
+    remaining = DISCOVERY_BYTES
+    accepted_chars = 0
     while queue:
         path, whole, reason = queue.popleft()
         if path not in regular or (path in processed and (processed[path] or not whole)):
             continue
         if path not in cache:
             if len(cache) >= MAX_CANDIDATES:
-                pc.warnings.append('review discovery candidate cap reached; some guidance was not inspected')
-                continue
+                raise CriteriaLimitExceeded(
+                    'review guidance discovery exceeds the %d-source inspection limit; narrow guidance sources; '
+                    'no review passes ran' % MAX_CANDIDATES)
             text = show(path)
             cache[path] = None
             if text is None:
                 pc.warnings.append('review guidance could not be read at base commit: %s' % path)
                 continue
-            if len(text) > remaining:
-                pc.warnings.append('review discovery size cap reached; skipped %s' % path)
-                continue
-            remaining -= len(text)
+            size = len(text.encode('utf-8'))
+            if size > SOURCE_BYTES:
+                raise CriteriaLimitExceeded(
+                    'review guidance source %s exceeds the %d-byte discovery file limit; shorten or split the source; '
+                    'no review passes ran' % (source_label(path), SOURCE_BYTES))
+            if size > remaining:
+                raise CriteriaLimitExceeded(
+                    'review guidance discovery exceeds the %d-byte inspected-source limit at %s; '
+                    'narrow guidance sources; criteria_max_chars applies only to accepted rules; no review passes ran'
+                    % (DISCOVERY_BYTES, source_label(path)))
+            remaining -= size
             cache[path] = text
         text = cache[path]
         if text is None:
@@ -98,6 +118,14 @@ def discover(tree, show, changed_paths, pc, max_chars):
                 rule.rule_id = '%s-%d' % (original, suffix)
                 suffix += 1
             ids.add(rule.rule_id)
+        previous_size = sum(len(r.text) + len(r.heading) for r in rules_by_path.get(path, []))
+        accepted_chars += sum(len(r.text) + len(r.heading) for r in selected) - previous_size
+        if accepted_chars > max_chars:
+            raise CriteriaLimitExceeded(
+                'accepted project review criteria require %d characters at %s, exceeding criteria_max_chars=%d; '
+                'shorten the review instructions or raise criteria_max_chars in operator configuration '
+                'within the full prompt limit; no instructions were dropped and no review passes ran'
+                % (accepted_chars, source_label(path), max_chars))
         rules_by_path[path] = selected
         if path in pc.files_used:
             pc.auto_included = [item for item in pc.auto_included if item['path'] != path]

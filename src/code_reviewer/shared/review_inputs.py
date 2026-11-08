@@ -91,10 +91,17 @@ class InputBuilder:
 
     def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff]) -> criteria_mod.ProjectCriteria:
         tree = git_ops.ls_tree(ctx.git_dir, ctx.base_sha)
-        return criteria_mod.resolve_project(
-            tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
-            self.cfg.criteria_max_chars, self.scope_paths(files),
-        )
+        from .review_guidance import SOURCE_BYTES, source_label
+
+        def show(path):
+            try:
+                return git_ops.git_show(ctx.git_dir, ctx.base_sha, path, max_bytes=SOURCE_BYTES)
+            except git_ops.GitContentTooLarge as exc:
+                raise criteria_mod.CriteriaLimitExceeded(
+                    'review guidance source %s exceeds the %d-byte discovery file limit; shorten or split the source; '
+                    'no review passes ran' % (source_label(path), SOURCE_BYTES)) from exc
+
+        return criteria_mod.resolve_project(tree, show, self.cfg.criteria_max_chars, self.scope_paths(files))
 
     @staticmethod
     def scope_paths(files: List[FileDiff]) -> List[str]:

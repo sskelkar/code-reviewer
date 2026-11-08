@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from code_reviewer.shared import criteria
 from code_reviewer.config import DEFAULT_CRITERIA_DIR
@@ -128,9 +129,8 @@ class ExplicitGuidanceTests(unittest.TestCase):
         self.assertTrue(any('reference unavailable' in w for w in pc.warnings))
 
     def test_limits_and_symlinks_do_not_silently_load_partial_guidance(self):
-        pc = self.resolve({'code-review.md': 'x' * 100}, max_chars=10)
-        self.assertEqual(pc.rules, [])
-        self.assertTrue(any('cap' in w for w in pc.warnings))
+        with self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'criteria_max_chars=10'):
+            self.resolve({'code-review.md': 'x' * 100}, max_chars=10)
         pc = criteria.resolve_project({'code-review.md': '120000'}, lambda p: self.fail('symlink read'), 1000)
         self.assertEqual(pc.rules, [])
 
@@ -166,19 +166,67 @@ class ExplicitGuidanceTests(unittest.TestCase):
         files.update({'AGENTS.md': '## Code review\nFollow [checks](docs/checks.md).',
                       'docs/checks.md': 'Check error propagation.'})
         reads = []
-        pc = criteria.resolve_project({p: '100644' for p in files},
-                                      lambda p: reads.append(p) or files[p], 100000, ['src/app.py'])
-        self.assertIn('docs/checks.md', pc.files_used)
+        with self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'source inspection limit'):
+            criteria.resolve_project({p: '100644' for p in files},
+                                     lambda p: reads.append(p) or files[p], 100000, ['src/app.py'])
+        self.assertIn('docs/checks.md', reads)
         self.assertLessEqual(len(reads), criteria.MAX_CANDIDATES)
-        self.assertTrue(any('candidate cap' in w for w in pc.warnings))
 
-    def test_oversized_cycle_is_read_once_and_warns(self):
+    def test_oversized_reference_stops_instead_of_using_partial_rules(self):
         files = {'code-review.md': '# Checks\nFollow [large](large.md).', 'large.md': 'x' * 1000}
         reads = []
-        pc = criteria.resolve_project({p: '100644' for p in files},
-                                      lambda p: reads.append(p) or files[p], 100)
+        with self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'no instructions were dropped'):
+            criteria.resolve_project({p: '100644' for p in files},
+                                     lambda p: reads.append(p) or files[p], 100)
         self.assertEqual(reads.count('large.md'), 1)
-        self.assertTrue(any('cap' in w for w in pc.warnings))
+
+    def test_unrelated_or_out_of_scope_content_does_not_spend_criteria_allowance(self):
+        files = {
+            'README.md': '## Setup\n' + 'x' * 5000,
+            '.agents/skills/build/SKILL.md': '---\nname: build\n---\n' + 'y' * 5000,
+            '.agents/skills/aaa/SKILL.md': '---\nname: code-review\npaths: other/**\n---\n' + 'z' * 5000,
+            '.agents/skills/review-pr/SKILL.md': '---\nname: code-review\n---\n## Checks\nCheck cleanup.',
+        }
+        pc = self.resolve(files, max_chars=50)
+        self.assertEqual(pc.files_used, ['.agents/skills/review-pr/SKILL.md'])
+        self.assertFalse(pc.warnings)
+
+    def test_only_selected_review_sections_count_and_exact_limit_is_accepted(self):
+        files = {'README.md': '## Setup\n' + 'x' * 5000 + '\n## Code review\nCheck cleanup.'}
+        size = len('Code review') + len('Check cleanup.')
+        pc = self.resolve(files, max_chars=size)
+        self.assertEqual(len(pc.rules), 1)
+        with self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'criteria_max_chars'):
+            self.resolve(files, max_chars=size - 1)
+
+    def test_total_rules_are_not_partially_dropped_and_reference_upgrades_are_not_double_counted(self):
+        files = {'code-review.md': '## First\nCheck errors.\n## Second\nCheck cleanup.'}
+        with self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'no instructions were dropped'):
+            self.resolve(files, max_chars=25)
+        files = {'AGENTS.md': '## Code review\nSee [standards](README.md).',
+                 'README.md': '## Code review\nCheck errors.\n## More\nCheck cleanup.'}
+        pc = self.resolve(files)
+        actual_size = sum(len(r.heading) + len(r.text) for r in pc.rules)
+        self.assertEqual(self.resolve(files, max_chars=actual_size).rules, pc.rules)
+
+    def test_discovery_file_and_total_limits_are_separate_and_fail_closed(self):
+        from code_reviewer.shared import review_guidance
+        files = {'README.md': '## Setup\n' + 'x' * 200}
+        with patch.object(review_guidance, 'SOURCE_BYTES', 100), \
+             self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'discovery file limit'):
+            self.resolve(files)
+        files = {'README.md': '## Setup\n' + 'x' * 80,
+                 '.agents/skills/review-pr/SKILL.md': '---\nname: code-review\n---\nCheck errors.'}
+        with patch.object(review_guidance, 'DISCOVERY_BYTES', 100), \
+             self.assertRaisesRegex(criteria.CriteriaLimitExceeded, 'inspected-source limit'):
+            self.resolve(files)
+
+    def test_limit_errors_escape_repository_controlled_paths(self):
+        path = 'docs/code-review/unsafe\x1b[31m\n.md'
+        with self.assertRaises(criteria.CriteriaLimitExceeded) as raised:
+            self.resolve({path: 'x' * 100}, max_chars=1)
+        self.assertNotIn('\x1b', str(raised.exception))
+        self.assertNotIn('\n', str(raised.exception))
 
     def test_nested_document_can_reference_a_root_path_without_false_warning(self):
         pc = self.resolve({'skills/code-review/SKILL.md': '# Checks\nFollow [standards](docs/checks.md).',

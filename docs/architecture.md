@@ -45,7 +45,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 ## Review pipeline
 
 1. Redact email addresses in PR metadata, parse the merge-base diff, omit binary contents, apply exclusions and enforce diff limits. The code snapshot is the pinned head.
-2. Discover explicit project review sections, documents and skills deterministically from the pinned base commit. Use those project rules when any load, otherwise the enabled baseline. The Classifier distributes project rules; baseline rules use static assignments without a model call.
+2. Discover explicit project review sections, documents and skills deterministically from the pinned base commit. Use those project rules when any load, otherwise the enabled baseline. Accepted rule text has its own limit; separate bounds constrain discovery reads. Limit exhaustion stops the review before classification instead of dropping instructions. The Classifier distributes project rules; baseline rules use static assignments without a model call.
 3. Validate complete project-rule coverage. Unresolved assignments visibly fall back to all personas. Freeze each reviewer's complete system/user input and assigned criteria.
 4. For each configured round, submit active reviewers to a bounded `ThreadPoolExecutor`. Each starts fresh, without previous findings. Wait for all reviewers in that round.
 5. In fixed scheduling order—correctness, code quality, test quality, production safety—ground evidence and consolidate each usable batch serially. The Comparator proposes duplicates, categories and conflicts; Python validates and applies a staged master copy. Incomplete slots create no votes.

@@ -15,6 +15,8 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Qualification evidence
 
+Offline regressions cover accepted-criteria accounting separately from discovery resource bounds, bounded Git source reads, refusal on overflow without inference, and actionable host/guest failure reports. These checks establish input handling, not live model quality.
+
 Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native Claude VM tools, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
 Local synthetic Langfuse ingestion covers both adapters and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.

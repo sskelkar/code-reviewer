@@ -149,7 +149,9 @@ Review skills use `SKILL.md` with front-matter name or description explicitly id
 - Instructions come from the pinned base commit. A PR changing instructions is reviewed against the base version.
 - Nested README/AGENTS review sections apply to reviewed files beneath their directory. Front-matter `paths:` globs restrict a source to matching reviewed paths.
 - Only regular repository Markdown files are loaded. Symlinks, external URLs and absolute paths are excluded; external references are recorded as ignored.
-- Discovery inspects at most 200 sources within `criteria_max_chars` characters (default 200,000). Omitted or unavailable guidance produces warnings. Enabled baseline rules apply when no project rules load.
+- `criteria_max_chars` limits accepted rule text plus headings (default 200,000 characters), not entire READMEs, unrelated skills or out-of-scope instructions. Referenced documents are counted once; a whole-document inclusion replaces any earlier section-only inclusion.
+- Discovery separately bounds its work to 200 source files, 2 MiB per source and 16 MiB of cached source text, measured as UTF-8 bytes. Git blob sizes are checked before content is captured. These resource limits do not consume the accepted-criteria allowance.
+- Exceeding either the discovery bounds or accepted-criteria limit stops the review before classification or reviewer calls. The failed report gives the limit and corrective action; instructions are not trimmed and the run does not continue with partial criteria or the baseline. For accepted-criteria overflow, shorten guidance or raise `criteria_max_chars` in operator settings while respecting the complete model-prompt limit. Unavailable references still produce warnings. Enabled baseline rules apply when discovery completes without any project rules.
 
 Accepted sources, inclusion reasons and rule IDs are saved in private input artifacts. Project rules are assigned to relevant personas; unresolved assignments go to all personas with a warning. Reports display criterion titles and sources.
 
@@ -176,7 +178,7 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 | `exclude_patterns` | lockfiles, minified, generated, `vendor/`, `node_modules/`, ... | Files left out of the diff (this list replaces the built-in one) |
 | `extra_exclude_patterns` | none | Added to `exclude_patterns` without replacing it. Use it for planning documents such as PRDs and implementation plans (the author's claims, which may drift from the code): `["docs/prds/", "docs/plans/"]`. They are left out of the prompt but listed by path, the reviewer can still open them in the checkout, and findings located in excluded files are dropped and counted. Keep public-facing documentation (API and event docs) out of this list: it must stay reviewed |
 | `persona_prompt_max_chars` | `500000` | Persona-only limit on complete system + user text per call, including retry feedback. Oversized inputs are reported and never silently truncated |
-| `criteria_max_chars` | `200000` | Cap on project criteria text |
+| `criteria_max_chars` | `200000` | Accepted project rule text plus headings; overflow stops the review without dropping rules. Independent of discovery resource bounds and the full prompt limit |
 | `call_budget_usd`, `call_timeout_s` | `0.50`, `600` | API estimated spend allowance and per-call timeout; subscription mode ignores dollar allowances |
 | `chatgpt_account` | `default` | Local saved ChatGPT account label |
 | `call_budget_tokens` | `200000` | Subscription per-call token allowance, including cache reads |

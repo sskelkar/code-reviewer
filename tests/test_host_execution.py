@@ -71,6 +71,60 @@ class HostExecutionTests(unittest.TestCase):
         stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
         self.assertTrue(all(c['billing_mode']=='subscription' for c in stats['calls']))
 
+    def test_oversized_explicit_criteria_stop_before_models_and_cleanup_checkout(self):
+        ctx=make_repo(self.root, project_criteria=True)
+        runner=FakeRunner([])
+        cfg=replace(self.cfg,criteria_max_chars=1)
+        from code_reviewer.shared.run_store import RunStore
+        paths=[]
+        prepare=RunStore.prepare_checkout
+        def record_checkout(store):
+            checkout=prepare(store)
+            paths.append(checkout)
+            return checkout
+        with patch.object(Engine,'prepare',return_value=ctx), \
+             patch.object(factory,'create_runner',return_value=runner), \
+             patch.object(RunStore,'prepare_checkout',record_checkout):
+            status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
+        self.assertEqual(status,1,err)
+        self.assertEqual(runner.calls,[])
+        self.assertTrue(paths)
+        self.assertTrue(all(not path.parent.exists() for path in paths))
+        report=next(Path(cfg.runs_dir).glob('*/report.md'))
+        self.assertIn('criteria_max_chars=1',report.read_text())
+        self.assertIn('no instructions were dropped',report.read_text())
+        self.assertEqual(json.loads(report.with_name('findings.json').read_text())['criteria'],{})
+        stats=json.loads(report.with_name('stats.json').read_text())
+        self.assertEqual(stats['stop_reason'],'failures')
+        self.assertEqual(stats['calls'],[])
+        self.assertFalse(list(Path(cfg.runs_dir).rglob('classifier.raw.requests.json')))
+
+    def test_source_read_limit_is_reported_without_falling_back_to_baseline(self):
+        ctx=make_repo(self.root,project_criteria=True)
+        runner=FakeRunner([])
+        with patch.object(Engine,'prepare',return_value=ctx), \
+             patch.object(factory,'create_runner',return_value=runner), \
+             patch('code_reviewer.shared.review_guidance.SOURCE_BYTES',10):
+            status,out,err=self.invoke(self.cfg,'--no-sandbox','--passes','1')
+        self.assertEqual(status,1,err)
+        self.assertEqual(runner.calls,[])
+        report=next(Path(self.cfg.runs_dir).glob('*/report.md'))
+        self.assertIn('discovery file limit',report.read_text())
+        self.assertIn('no review passes ran',report.read_text())
+        self.assertEqual(json.loads(report.with_name('stats.json').read_text())['stop_reason'],'failures')
+
+    def test_criteria_discovery_rejects_large_blob_before_reading_its_contents(self):
+        from code_reviewer.shared import git_ops
+        from code_reviewer.shared.review_guidance import SOURCE_BYTES
+        ctx=make_repo(self.root)
+        with patch.object(git_ops.subprocess,'run') as run:
+            run.return_value.returncode=0
+            run.return_value.stdout=str(SOURCE_BYTES+1).encode()
+            with self.assertRaises(git_ops.GitContentTooLarge):
+                git_ops.git_show(ctx.git_dir,ctx.base_sha,'README.md',max_bytes=SOURCE_BYTES)
+            self.assertEqual(run.call_count,1)
+            self.assertIn('cat-file',run.call_args.args[0])
+
     def test_default_vm_request_never_creates_host_runner_or_prepares_target(self):
         with patch.object(factory, 'create_runner', side_effect=AssertionError('no credentials/runner')), \
              patch.object(Engine, 'prepare', side_effect=AssertionError('no host acquisition')):
