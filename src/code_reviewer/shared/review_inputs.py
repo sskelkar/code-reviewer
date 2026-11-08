@@ -17,7 +17,6 @@ from .diffview import FileDiff, changed_line_count, mark_exclusions, parse_unifi
 from .llm import ModelCaller
 from .models import PRContext, ReviewInput, ReviewRefused
 from .redact import redact_emails
-from .resolver import CriteriaResolver
 from .templates import PromptSet
 
 
@@ -110,10 +109,9 @@ class InputBuilder:
                         raise ValueError('manifest entries must be lists')
             except (OSError, ValueError) as exc:
                 raise ConfigError('cannot read valid criteria_manifest JSON object') from exc
-        resolver = CriteriaResolver(caller, self.prompts["resolver"], self.cfg, ctx, work_dir, self.emit)
         return criteria_mod.resolve_project(
             agents_text, tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
-            resolver, override, self.cfg.criteria_max_chars, self.scope_paths(files),
+            None, override, self.cfg.criteria_max_chars, self.scope_paths(files),
         )
 
     @staticmethod

@@ -6,7 +6,7 @@ All model contracts live in [`src/code_reviewer/review/prompts/`](../src/code_re
 
 | Role | Input and output | Model / tools |
 |---|---|---|
-| Resolver | Base-commit metadata and candidate paths → proposed project-criteria files/sections | `model_resolver`; none |
+| Resolver (legacy asset; inactive) | Project review guidance is now discovered deterministically from explicit base-commit instructions | No model call |
 | Classifier | Accepted rules and persona focus → assignments and reasons | `model_resolver`; none |
 | Reviewer | Common standard, one focus, assigned criteria, pinned PR and diff → findings and self-checks | `model_reviewer`; Read/Grep/Glob |
 | Comparator | Complete master and incoming findings → duplicate mappings, categories and conflicts | `model_comparator`; none |

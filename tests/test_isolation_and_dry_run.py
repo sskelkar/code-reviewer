@@ -131,7 +131,8 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
         runner = FakeRunner(reviewer=[{"findings": []}], resolver=RESOLVER)
         Engine(Config(runs_dir=str(self.tmp / "runs")), runner).review(self.ctx)
         self.assertEqual({c["tools"] for c in runner.calls_for("reviewer")}, {"Read,Grep,Glob"})
-        self.assertEqual({c["tools"] for c in runner.calls_for("comparator") + runner.calls_for("resolver")}, {""})
+        self.assertEqual(runner.calls_for("resolver"), [])
+        self.assertTrue(all(c["tools"] == "" for c in runner.calls_for("comparator")))
 
 
 class DryRunTests(TempDirTestMixin, unittest.TestCase):

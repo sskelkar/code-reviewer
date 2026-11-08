@@ -45,7 +45,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 ## Review pipeline
 
 1. Redact email addresses in PR metadata, parse the merge-base diff, omit binary contents, apply exclusions and enforce diff limits. The code snapshot is the pinned head.
-2. Load the thirteen canonical default rules. Discover project criteria from the pinned base commit. The optional Resolver selects repository files; the Classifier distributes accepted project rules. Static defaults need neither classification nor another model call.
+2. Load the thirteen canonical default rules. Discover project criteria from the pinned base commit. Deterministic discovery loads explicit review sections, documents and skills; the Classifier distributes accepted project rules. Static defaults need neither classification nor another model call.
 3. Validate complete project-rule coverage. Unresolved assignments visibly fall back to all personas. Freeze each reviewer's complete system/user input and assigned criteria.
 4. For each configured round, submit active reviewers to a bounded `ThreadPoolExecutor`. Each starts fresh, without previous findings. Wait for all reviewers in that round.
 5. In fixed scheduling order—correctness, code quality, test quality, production safety—ground evidence and consolidate each usable batch serially. The Comparator proposes duplicates, categories and conflicts; Python validates and applies a staged master copy. Incomplete slots create no votes.
@@ -65,7 +65,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 | `review/contracts.py`, `master.py` | Validated duplicate/conflict proposals, immutable candidate arguments, sightings and agreement |
 | `review/evidence.py`, `verification.py` | Shared bounded schema validation, citation grounding, conflict components, assessments and publication allowlist |
 | `review/report.py` | Category-grouped summaries, full reports and dry-run presentation |
-| `shared/review_inputs.py`, `criteria.py`, `resolver.py` | Diff and criteria preparation |
+| `shared/review_inputs.py`, `criteria.py`, `review_guidance.py` | Diff and criteria preparation |
 | `shared/findings.py`, `diffview.py` | Deterministic normalization, evidence and scope checks |
 | `shared/llm.py`, `stats.py`, `run_store.py`, `events.py` | Bounded role retries, accounting, artifacts and advisory events |
 | `backends/factory.py`, `contract.py`, `claude.py`, `openai.py` | Provider/auth selection and actual native/HTTP invocation |

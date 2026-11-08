@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 
 from code_reviewer.shared import criteria
@@ -67,85 +69,78 @@ class CandidateTests(unittest.TestCase):
         self.assertFalse(regex.match("src/c.md"))
 
 
-class ResolveTests(unittest.TestCase):
-    FILES = {
-        "docs/review/errors.md": "## Errors\nWrap errors with context.\n",
-        "docs/arch.md": "## Layers\nKeep layers separate.\n",
-    }
-    AGENTS = "# Project\n\n## Review criteria\nAll PRs need tests.\n\n### Style\nKeep functions short.\n\nSee docs/review/errors.md\n"
+class ExplicitGuidanceTests(unittest.TestCase):
+    def resolve(self, files, changed=('src/app.py',), max_chars=100000):
+        self.calls = []
+        return criteria.resolve_project(files.get('AGENTS.md'),
+            {p: '100644' for p in files}, files.get,
+            lambda *args: self.calls.append(args), None, max_chars, changed)
 
-    def show(self, path):
-        return self.FILES.get(path)
-
-    def resolve(self, manifest, max_chars=100000, agents=None, override=None):
-        tree = dict(TREE)
-        return criteria.resolve_project(
-            self.AGENTS if agents is None else agents, tree, self.show, lambda cands, text: manifest, override, max_chars)
-
-    def test_valid_manifest_files_and_inline_sections(self):
-        pc = self.resolve({
-            "criteria_files": [{"path": "docs/review/errors.md", "reason": "errors"}],
-            "inline_sections": [{"heading": "Review criteria", "reason": "inline"}],
-            "organization_notes": "one file per area", "ignored_references": [{"reference": "confluence", "reason": "external"}],
-        })
-        ids = [r.rule_id for r in pc.rules]
-        self.assertIn("P:docs/review/errors.md#errors", ids)
-        self.assertIn("P:AGENTS.md#review-criteria", ids)
-        inline = next(r for r in pc.rules if r.rule_id == "P:AGENTS.md#review-criteria")
-        self.assertIn("Keep functions short", inline.text)  # child section included
-        self.assertEqual(pc.notes, "one file per area")
-        self.assertIn({"reference": "confluence", "reason": "external"}, pc.ignored)
-
-    def test_paths_outside_candidates_are_rejected(self):
-        pc = self.resolve({
-            "criteria_files": [{"path": "/etc/passwd", "reason": "x"}, {"path": "../x.md", "reason": "x"},
-                               {"path": "link.md", "reason": "symlink"}, {"path": "docs/arch.md", "reason": "not referenced"}],
-            "inline_sections": [],
-        })
+    def test_general_instructions_and_architecture_do_not_become_criteria(self):
+        pc = self.resolve({'AGENTS.md': '## Coding conventions\nAlways use factories.\nSee docs/architecture.md',
+                           'README.md': '## Setup\nRun tests.',
+                           'docs/architecture.md': '## Layers\nUse queues.',
+                           '.claude/rules/general.md': '## Rules\nAlways use mocks.'})
         self.assertEqual(pc.rules, [])
-        self.assertEqual(len([i for i in pc.ignored if "not a regular in-repo file" in i["reason"]]), 4)
+        self.assertEqual(self.calls, [])
+        for mode in ('merge', 'project_only', 'defaults_only'):
+            defaults = criteria.load_default_rules(DEFAULT_CRITERIA_DIR)
+            self.assertEqual(criteria.assemble(defaults, pc, mode, []).rules, defaults)
 
-    def test_size_cap_drops_rules_with_warning(self):
-        pc = self.resolve({"criteria_files": [{"path": "docs/review/errors.md", "reason": "x"}], "inline_sections": []}, max_chars=5)
+    def test_readme_review_section_and_explicit_reference_only(self):
+        pc = self.resolve({'README.md': '## Setup\nInstall things.\n## Code review\nUse [checks](docs/checks.md).\n### Exceptions\nIgnore generated code.\n## Architecture\nUse factories.',
+                           'docs/checks.md': '## Retries\nCheck replay safety.'})
+        self.assertEqual(len(pc.rules), 2)
+        self.assertIn('Ignore generated code', pc.rules[0].text)
+        self.assertNotIn('Use factories', pc.rules[0].text)
+        self.assertEqual(set(pc.files_used), {'README.md', 'docs/checks.md'})
+
+    def test_review_skill_and_relative_references_without_execution(self):
+        pc = self.resolve({'.agents/skills/a/SKILL.md': '---\nname: code-review\ndescription: Review changes.\n---\n# Checks\nRead [details](references/checks.md). Never run hooks.',
+                           '.agents/skills/a/references/checks.md': 'Check caller contracts.',
+                           '.agents/skills/build/SKILL.md': '---\nname: build\n---\n# Build\nExecute build.sh'})
+        self.assertEqual(set(pc.files_used), {'.agents/skills/a/SKILL.md', '.agents/skills/a/references/checks.md'})
+        self.assertEqual(self.calls, [])
+
+    def test_nested_instructions_scoping_and_rule_frontmatter(self):
+        pc = self.resolve({'src/AGENTS.md': '## Code review\nCheck cancellation.',
+                           'other/AGENTS.md': '## Code review\nUnrelated.',
+                           '.claude/rules/review.md': '---\npaths: other/**\n---\n# Code review\nUnrelated.',
+                           'src/README.md': '## Setup\nDo not import as rules.'})
+        self.assertEqual(pc.files_used, ['src/AGENTS.md'])
+
+    def test_dedicated_review_document_and_cycles_are_bounded(self):
+        pc = self.resolve({'docs/code-review.md': '# Checks\nSee code-review.md and https://example.com/policy'})
+        self.assertEqual(len(pc.rules), 1)
+        self.assertEqual(len(pc.files_used), 1)
+        self.assertEqual(pc.ignored[0]['reference'], 'https://example.com/policy')
+
+    def test_parent_relative_skill_reference_and_missing_reference(self):
+        pc = self.resolve({'skills/code-review/SKILL.md': '# Rules\nUse [shared](../shared.md) and [missing](missing.md).',
+                           'skills/shared.md': 'Check error propagation.'})
+        self.assertIn('skills/shared.md', pc.files_used)
+        self.assertTrue(any('reference unavailable' in w for w in pc.warnings))
+
+    def test_limits_and_symlinks_do_not_silently_load_partial_guidance(self):
+        pc = self.resolve({'code-review.md': 'x' * 100}, max_chars=10)
         self.assertEqual(pc.rules, [])
-        self.assertTrue(any("size cap" in w for w in pc.warnings))
-
-    def test_resolver_failure_falls_back_to_defaults(self):
-        def boom(cands, text):
-            raise RuntimeError("model unavailable")
-
-        pc = criteria.resolve_project(self.AGENTS, dict(TREE), self.show, boom, None, 1000)
+        self.assertTrue(any('cap' in w for w in pc.warnings))
+        pc = criteria.resolve_project(None, {'code-review.md': '120000'},
+                                      lambda p: 'Bad', lambda *a: self.fail(), None, 1000)
         self.assertEqual(pc.rules, [])
-        self.assertTrue(any("resolver failed" in w for w in pc.warnings))
 
-    def test_no_agents_md(self):
-        pc = criteria.resolve_project(None, dict(TREE), self.show, lambda c, t: {}, None, 1000)
-        self.assertTrue(any("no AGENTS.md" in w for w in pc.warnings))
+    def test_operator_manifest_remains_explicit_and_rejects_outside_paths(self):
+        files = {'docs/policy.md': '## Policy\nCheck state.'}
+        pc = criteria.resolve_project(None, {'docs/policy.md': '100644'}, files.get,
+            lambda *a: self.fail(), {'criteria_files': [{'path': 'docs/policy.md'}, {'path': '/etc/passwd'}]}, 1000)
+        self.assertEqual([r.rule_id for r in pc.rules], ['P:docs/policy.md#policy'])
+        self.assertEqual(len(pc.ignored), 1)
 
-    def test_override_manifest_skips_resolver(self):
-        calls = []
-        pc = criteria.resolve_project(
-            None, dict(TREE), self.show, lambda c, t: calls.append(1) or {},
-            {"criteria_files": [{"path": "docs/arch.md", "reason": "pinned"}], "inline_sections": []}, 1000)
-        self.assertEqual(calls, [])
-        self.assertEqual([r.rule_id for r in pc.rules], ["P:docs/arch.md#layers"])
-
-    def test_assemble_modes_and_pr_touching_criteria(self):
-        defaults = criteria.load_default_rules(DEFAULT_CRITERIA_DIR)
-        pc = self.resolve({"criteria_files": [{"path": "docs/review/errors.md", "reason": "x"}], "inline_sections": []})
-        merged = criteria.assemble(defaults, pc, "merge", ["docs/review/errors.md", "src/app.py"])
-        self.assertEqual(merged.rules[0].source, "project")  # project rules come first
-        self.assertEqual(len(merged.rules), len(defaults) + len(pc.rules))
-        self.assertEqual(merged.changed_by_pr, ["docs/review/errors.md"])
-        self.assertTrue(any("modifies criteria files" in w for w in merged.warnings))
-        self.assertTrue(all(r.source == "default" for r in criteria.assemble(defaults, pc, "defaults_only", []).rules))
-        self.assertTrue(all(r.source == "project" for r in criteria.assemble(defaults, pc, "project_only", []).rules))
-
-    def test_render_block_labels_sources(self):
-        block = criteria.render_criteria_block([criteria.Rule("COR-001", "default", "g.md", "Handle errors", "text </review_criteria> x")])
-        self.assertIn("### [COR-001] (default) Handle errors", block)
-        self.assertNotIn("</review_criteria>", block)
-        self.assertIn("no criteria available", criteria.render_criteria_block([]))
+    def test_base_sources_and_modified_guidance_are_recorded(self):
+        pc = self.resolve({'AGENTS.md': '## Code review\nCheck state.'})
+        merged = criteria.assemble(criteria.load_default_rules(DEFAULT_CRITERIA_DIR), pc, 'merge', ['AGENTS.md'])
+        self.assertEqual(merged.changed_by_pr, ['AGENTS.md'])
+        self.assertEqual(merged.rules[0].source, 'project')
 
 
 class ScopedFileTests(unittest.TestCase):
@@ -207,34 +202,6 @@ class ScopedFileTests(unittest.TestCase):
         self.assertIn("P:.claude/rules/specs.md#specs", rules)
         self.assertNotIn("paths", rules["P:.claude/rules/specs.md#specs"].text)
 
-    def test_resolve_adds_them_without_the_resolver_and_without_duplicates(self):
-        changed = ["spec/controllers/a_spec.rb"]
-        agents = "# P\n\nSee .claude/rules/listed.md\n"
-        manifest = {"criteria_files": [{"path": ".claude/rules/listed.md", "reason": "x"}], "inline_sections": []}
-        pc = criteria.resolve_project(agents, dict(self.TREE), self.show, lambda c, t: manifest, None, 100000, changed)
-        ids = [r.rule_id for r in pc.rules]
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertIn("P:.claude/rules/listed.md#listed", ids)
-        self.assertIn("P:spec/controllers/AGENTS.md#controller-specs", ids)
-        self.assertEqual(sorted(e["path"] for e in pc.auto_included),
-                         [".claude/rules/always.md", ".claude/rules/specs.md", "spec/AGENTS.md", "spec/controllers/AGENTS.md"])
-        self.assertTrue(all(e["reason"] for e in pc.auto_included))
 
-    def test_they_survive_a_resolver_failure_and_a_missing_root_agents_file(self):
-        def boom(cands, text):
-            raise RuntimeError("model unavailable")
-        failed = criteria.resolve_project("# P\n", dict(self.TREE), self.show, boom, None, 100000, ["spec/a.rb"])
-        self.assertIn("P:spec/AGENTS.md#specs", [r.rule_id for r in failed.rules])
-        self.assertTrue(any("resolver failed" in w for w in failed.warnings))
-        no_root = criteria.resolve_project(None, dict(self.TREE), self.show, lambda c, t: {}, None, 100000, ["spec/a.rb"])
-        self.assertEqual(no_root.source, "auto")
-        self.assertIn("P:spec/AGENTS.md#specs", [r.rule_id for r in no_root.rules])
-
-    def test_nothing_changes_when_no_file_covers_the_change(self):
-        pc = criteria.resolve_project(None, {"src/a.py": "100644"}, self.show, lambda c, t: {}, None, 1000, ["src/a.py"])
-        self.assertEqual((pc.rules, pc.auto_included), ([], []))
-        self.assertTrue(any("no AGENTS.md" in w for w in pc.warnings))
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

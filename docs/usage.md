@@ -133,32 +133,28 @@ The agent applies two sets of criteria:
 - **Defaults**: generic, language-agnostic rules shipped with the agent ([the persona criteria](persona-criteria.md)).
 - **Project criteria**: your project's own rules. **Project rules take precedence** when they cover the same concern (the model is instructed to follow them).
 
-To make your project's rules visible, describe where they are in the **`AGENTS.md` at the repository root**. There is no required format; the agent reads it and works out which files hold criteria. For example:
+Project guidance is discovered deterministically from explicit code-review instructions, not inferred from general coding conventions, architecture, or setup documentation. No criteria-resolver model call is made.
+
+Supported sources at the pinned base commit:
+
+- `Code review`, `Review guidelines`, `Review instructions`, `Review criteria`, `Review checklist` or `Review policy` sections in root and applicable ancestor `README.md` / `AGENTS.md` files. Their subsections are included; unrelated sections are excluded.
+- Dedicated Markdown review documents named `review.md`, `reviews.md`, `reviewing.md`, `code-review-guidelines.md`, `code-review-checklist.md`, `code-review.md`, `code-reviewing.md`, `review-guidelines.md` or `review-checklist.md`, and Markdown documents under `review/`, `code-review/` or `code-reviewing/` directories. Underscores are accepted in these names.
+- `SKILL.md` files explicitly identifying code review in their front-matter name/description, or under a dedicated review directory. Other skills are not activated.
+- In-repository Markdown files explicitly referenced by accepted review guidance, including skill references. References can be relative to the containing document or repository-root paths. Cycles are deduplicated. Skill scripts/hooks are never executed; permissions remain Read/Grep/Glob.
+
+For example:
 
 ```markdown
-# AGENTS.md
-
-## Build
-Run `make test`.
-
-## Code review criteria
-Reviewers and AI agents must apply the rules in:
-- [Error handling](docs/review/errors.md)
-- [Security](docs/review/security.md)
-- Every file under `docs/review/api/`
+## Code review
+Check error propagation and cleanup.
+Follow [our checklist](docs/review/checklist.md).
 ```
 
-Rules of the road:
+Nested README/AGENTS sources apply only when their directory contains a reviewed file. A source with front-matter `paths:` globs is included only when those match reviewed paths. General `.claude/rules` content is no longer automatically treated as review criteria; use an explicit review section, review document, or reference.
 
-- **Only files inside the repository count.** Links to a wiki, Confluence or any URL, absolute paths and paths outside the repo are ignored, and host input artifacts record ignored references.
-- **Criteria are read from the PR's target (base) branch,** not the PR itself. A PR that edits the rules is still judged by the old ones, and the report flags that the PR touches them.
-- **Write rules as Markdown headings.** Each heading becomes a citable rule ID such as `P:docs/review/errors.md#retry-policy`. A file with no headings becomes one rule.
-- **Keep it small.** The default project-criteria cap is 200,000 characters; entries beyond the cap are omitted with a warning. Token usage depends on the model, text and repeated tool turns.
-- **Some files are added automatically,** because where they apply is clear from their location. You do not need to link them from the root `AGENTS.md`:
-  - an `AGENTS.md` in a directory that contains a changed file, or in one of its parent directories (for a change under `spec/controllers/`, both `spec/AGENTS.md` and `spec/controllers/AGENTS.md`);
-  - every `.claude/rules/*.md` file, except those with a `paths:` list in their front matter that matches none of the changed files (such a file is scoped to those paths on purpose).
-  Host input artifacts retain the inclusion reasons; the private criteria index records the accepted rules and their sources.
-- Without a root `AGENTS.md`, or if nothing in it resolves, the files above and the defaults are still used, and the report says so.
+Only regular repository files count; symlinks, external URLs and absolute paths are not loaded. External references in accepted guidance are recorded as ignored. Jira/MCP retrieval remains planned, not implemented. Guidance comes from the base commit, so PR edits cannot redefine its own review instructions. Accepted paths, inclusion reasons and citable rule IDs are retained in private input artifacts.
+
+Discovery inspects at most 200 sources and at most `criteria_max_chars` characters (default 200,000); skipped content produces warnings. Accepted guidance is also subject to the criteria size cap. When no explicit project review guidance is loaded, enabled baseline rules are always used, including in `project_only` mode. Missing or oversized guidance produces warnings rather than a claim of complete coverage. An explicit host `criteria_manifest` remains an operator-selected source override; it does not invoke inference.
 
 
 The default criteria use `COR-*`, `SAFE-*`, `TEST-*` and `CQ-*` by subject. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. Tests verify criteria loading and delivery; they do not establish review quality. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
@@ -266,7 +262,7 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 | `pass N FAILED: ... timed out` or `not a valid JSON object` | Inspect the failure stage and role in the report. Host runs retain `pass-NN/reviewer.raw.json`; VM runs retain bounded reports and the private candidate audit. Check configured timeouts and the selected API/token allowance before retrying |
 | `pass N FAILED` mentioning budget | Check which API-dollar or subscription-token pool exhausted and whether the call completed before its usage was rejected. Pools do not borrow. Adjust scope or explicit operator allowances only after inspecting accounting |
 | Many findings counted as ungrounded | Inspect grounding counters. Host `pass-NN/findings.json` records rejection reasons; fabricated or mismatched quotes are withheld rather than published |
-| Warning: criteria resolver failed | Resolver-selected rules may be missing; enabled defaults and automatically included project rules can still apply. Check the saved criteria index and warnings; host runs also retain `input/resolver.raw.json` |
+| Warning: no explicit project code-review instructions loaded | Enabled baseline rules are used. Check discovery warnings for unreadable or oversized sources and the saved criteria index for accepted guidance. |
 | Every pass reports only one finding, or findings are all Low | Review the completed-slot counts, per-persona agreement and verification outcomes. Host pass notes and the private audit can explain differences; low agreement alone does not invalidate a supported finding. See [Reading the report](#reading-the-report) |
 | No findings at all | Check whether reviews completed and whether candidates were refuted, unresolved or never verified. Inspect verification counts and private findings.json; zero supported findings does not prove the PR is correct |
 | `--post` fails | You need permission to comment on the PR, and `gh` must be logged in as that user |

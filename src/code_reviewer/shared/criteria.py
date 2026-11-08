@@ -303,51 +303,29 @@ def resolve_project(
     agents_text: Optional[str],
     tree: Dict[str, str],
     show: Callable[[str], Optional[str]],
-    call_resolver: Callable[[List[str], str], Dict[str, Any]],
+    call_resolver: Optional[Callable[[List[str], str], Dict[str, Any]]],
     manifest_override: Optional[Dict[str, Any]],
     max_chars: int,
     changed_paths: Sequence[str] = (),
 ) -> ProjectCriteria:
-    """Resolve project criteria from the base commit. The LLM only proposes; this function validates.
+    """Load explicit review instructions, never infer requirements from general docs.
 
-    Files that cover the changed paths (nested AGENTS.md files, `.claude/rules`) are added without asking the model."""
-    pc = ProjectCriteria()
-    scoped = scoped_files(tree, changed_paths, show)
-    if manifest_override is None and not agents_text:
-        if not scoped:
-            pc.warnings.append("no AGENTS.md at the base commit; using default criteria only")
-            return pc
-        pc.source = "auto"
-        pc.rules = _apply_size_cap(_add_scoped(scoped, set(), pc), max_chars, pc)
-        return pc
-
-    candidates: List[str] = []
-    if agents_text:
-        candidates, external = extract_candidates(agents_text, tree)
-        for ref in external:
-            pc.ignored.append({"reference": ref, "reason": "external reference (not in the repository)"})
-
+    The legacy callback is retained for callers but discovery makes no model calls.
+    Explicit operator manifests remain supported as deliberate source selection.
+    """
+    pc = ProjectCriteria(source="auto")
     if manifest_override is not None:
-        manifest, pc.source = manifest_override, "override"
+        pc.source = "override"
+        pc.manifest = manifest_override
         allowed = {p for p, mode in tree.items() if mode in REGULAR_MODES}
+        rules = _rules_from_files(manifest_override, allowed, tree, show, pc)
+        rules += _rules_from_inline_sections(manifest_override, agents_text, pc)
     else:
-        try:
-            manifest = call_resolver(candidates, agents_text or "")
-        except Exception as exc:  # the review continues with defaults only
-            pc.warnings.append("criteria resolver failed (%s); using %s" % (exc, "only the files that cover the changed paths" if scoped else "default criteria only"))
-            pc.rules = _apply_size_cap(_add_scoped(scoped, set(), pc), max_chars, pc)
-            return pc
-        pc.source = "resolver"
-        allowed = set(candidates)
-    pc.manifest = manifest
-    pc.notes = str(manifest.get("organization_notes", "") or "")
-    pc.ignored.extend(_clean_ignored(manifest.get("ignored_references")))
-
-    rules = _rules_from_files(manifest, allowed, tree, show, pc) + _rules_from_inline_sections(manifest, agents_text, pc)
-    rules = _add_scoped(scoped, set(pc.files_used), pc) + rules
+        from .review_guidance import discover
+        rules = discover(tree, show, agents_text, changed_paths, pc, max_chars)
     pc.rules = _apply_size_cap(rules, max_chars, pc)
     if not pc.rules:
-        pc.warnings.append("the project's criteria resolved to nothing; using default criteria only")
+        pc.warnings.append("no explicit project code-review instructions loaded; using default criteria only")
     return pc
 
 
@@ -421,9 +399,9 @@ def assemble(defaults: List[Rule], project: ProjectCriteria, mode: str, changed_
     if mode == "defaults_only":
         rules = list(defaults)
     elif mode == "project_only":
-        rules = list(project.rules)
-        if not rules:
-            warnings.append("criteria_mode is project_only but no project criteria were found")
+        rules = list(project.rules) or list(defaults)
+        if not project.rules:
+            warnings.append("criteria_mode is project_only but no project review instructions were found; using defaults")
     else:
         rules = list(project.rules) + list(defaults)
     touched = sorted(set(project.files_used + ["AGENTS.md"]) & set(changed_paths))
