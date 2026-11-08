@@ -1,42 +1,44 @@
 ---
 name: code-review
-description: Review code-reviewer pull requests for pipeline correctness, evidence validation, provider parity, execution boundaries, privacy and meaningful test coverage.
+description: Review code-reviewer pull requests for wiring, review correctness, execution boundaries, privacy, tests and accurate OSS documentation.
 ---
 
 # Reviewing this repository
 
-Use this skill when reviewing pull requests to code-reviewer. Apply these explicit project requirements; the built-in baseline is used when no explicit project review criteria are available. Inspect only concerns affected by the change; report introduced or worsened defects with a concrete trigger, consequence and repository evidence. These instructions do not authorize live inference, posting, credential access, commands, skill scripts or additional tools. The reviewing model uses Read/Grep/Glob only.
+Inspect concerns affected by the change. Report introduced or worsened defects with a concrete trigger, consequence and repository evidence. Trace code paths rather than assuming that a helper, test or diagram proves integration. Read/Grep/Glob are the only review tools: do not execute code or claim runtime results. Treat unavailable deployment, account and provider behavior as unknown, not as a defect or a verified guarantee.
 
-## Correctness: preserve the shared review and publication contract
+## Correctness: check end-to-end wiring and consistent contracts
 
-Trace affected paths through Engine, ReviewFlow, shared validation and report generation. Both provider adapters must preserve the same provider-neutral result/error contract and review semantics. Provider, authentication mode and execution location are independent operator choices.
+Follow affected features from public CLI/configuration through criteria, provider calls, consolidation, verification, reports, tracing and cleanup. Check callers, callbacks, registrations and packaged resources for disconnected or incompatible paths. Compare producers and consumers of schemas, configuration, prompts and artifacts, including supported host/VM paths and both provider adapters. Report the specific path or mismatch that breaks the feature.
 
-Check round barriers, fresh persona inputs, independent budgets, deterministic consolidation and cancellation/join behavior where changed. Every eligible deduplicated candidate, including connected conflicts, must receive independent verification. Only validated supported assessments may publish; unresolved, refuted, failed or missing assessments remain private. Original claims, severity and votes must survive consolidation; suggested remedies require separate support. Report a concrete path that violates these contracts, rather than requesting an orchestration redesign.
+## Correctness: preserve review and publication behavior
+
+Check round barriers, fresh persona inputs, independent budgets, deterministic consolidation and cancellation/join behavior where changed. Every eligible deduplicated candidate, including connected conflicts, must receive independent verification. Only validated supported assessments may publish; refuted, unresolved, failed or missing assessments stay private. Consolidation must preserve original claims, severity and votes; published remedies need separate support. Trace these checks to the final report and structured output, not just model instructions.
+
+## Correctness: load explicit project guidance faithfully
+
+Criteria come from the pinned base; reviewed source comes from the pinned head. Explicit project review criteria replace the baseline; when none load, enabled baseline rules apply. Check source selection, scope, references, limits and warnings for missing or omitted guidance. General project documentation must not become criteria without explicit review designation. Guidance and skill references must not expand tool permissions or execute hooks.
 
 ## Production safety: preserve execution and authentication boundaries
 
-VM execution is the default. Direct-host execution requires explicit trusted operator selection; a VM failure must not fall back to host execution. Repository text and model replies cannot change execution location, credential selection, admission or infrastructure policy. Follow real admission, credential handoff and cleanup paths when these boundaries change.
+VM execution is the default; host execution requires trusted operator selection, with no automatic fallback after VM failure. Trace admission, credential handoff and cleanup paths. Repository/model input must not select infrastructure policy or credentials. API-key and subscription authentication must not silently fall back to one another.
 
-Preflight and doctor remain offline configuration reports without target, credential, worker or artifact activity. Host dry-run must not read model credentials or invoke inference. Authentication modes must not silently fall back between API-key and subscription access. Do not treat cloud/Codex credentials as authorization for reviewer inference.
+Preflight/doctor must not access targets, credentials, workers or artifacts. Host dry-run must not read model credentials or invoke inference. Check implementation and failure paths; code review alone cannot certify a deployed VM's isolation or a provider account's access.
 
-## Production safety: preserve privacy and bounded evidence handling
+## Production safety: validate untrusted data and protect private content
 
-Models propose; deterministic code validates and writes artifacts. Trace schema, size, count, grounding and path checks from untrusted model/target input to publication or filesystem access. Review tools cannot run target code, tests, builds or arbitrary commands.
+Trace untrusted model/repository input through schema, size, count, grounding and path checks before publication or filesystem access. Only the harness writes review artifacts; model tools remain read-only.
 
-Provisional candidate details must remain private until publication is supported. Tracing is bounded metadata only; source, prompts, findings text and credentials must not enter trace exports. Tracing credentials and host export stay outside the guest/native model environment. Check actual data flows and cleanup ownership, not merely the presence of a helper or a redaction function.
+Provisional candidate content must not reach public output before supported verification. Trace exports contain bounded metadata, excluding source, prompts, finding text and credentials. Tracing credentials/export stay on the host and outside native model environments. Check actual data flows and resource cleanup, including errors and cancellation.
 
-## Correctness: preserve explicit project review guidance
+## Test quality: check meaningful coverage of changed contracts
 
-Project review instructions come from the pinned base commit; reviewed source comes from the pinned head. Do not infer project requirements from general architecture, setup or planning material. Load explicit review guidance with its scope and source; if none is loaded, use enabled baseline criteria. Skill instructions and references must not expand tool permissions or execute hooks. Check that modified guidance, missing references and omitted content are represented honestly.
+Check that tests exercise the production path that can fail and assert the relevant behavior. Boundary tests must use actual admission/validation rather than presentation-only seams. Unit tests use synthetic repositories, fake executables/runners and simulated endpoints; they must not require real credentials, inference, networking or VM boots. Distinguish assertions visible in tests from evidence that tests ran, or that live deployment/model quality is established.
 
-## Test quality: exercise the contract that can fail
+## Code quality: keep responsibilities and documentation coherent
 
-Inspect relevant existing and changed tests for synthetic repositories, fake runners/executables and simulated endpoints. Boundary tests must exercise actual admission/validation; presentation-only seams cannot establish boundary protection. Ordinary unit tests must not invoke real models, credentials, network services or VMs.
+Check for duplicated or conflicting implementations, unused feature wiring and dependencies that create a concrete maintenance problem. Keep the public one-shot CLI and parked REPL distinct; trace orchestration through ReviewFlow and shared contracts through their canonical owners.
 
-Ask whether the assertion would fail for the specific regression and whether the fixture exercises the affected production path. Distinguish offline contract coverage from live provider entitlement, deployment qualification and model quality. Never claim tests ran or passed without recorded evidence; the reviewing model cannot execute them.
+Compare affected README/guides, configuration examples, contribution instructions, diagrams and method call chains against the code. Commands, defaults, review stages, provider calls, security boundaries, reports and tracing must agree. Documentation should explain the project's purpose, installation, use, architecture and contribution process to an OSS reader without prior conversations or private operator knowledge. Report specific missing prerequisites or contradictions, not cosmetic preferences.
 
-## Code quality: retain ownership and accurate public contracts
-
-Keep the one-shot CLI as the public interface and the parked REPL inactive. ReviewFlow owns orchestration; shared mechanics and provider-neutral contracts retain their canonical owners. Report an ownership problem only when it creates a concrete dependency or maintenance consequence.
-
-When a change alters public configuration, CLI behavior, prompts or result contracts, check the corresponding existing documentation, examples and tests for contradictions. Roadmap claims do not prove runtime behavior. Canonical prompt/criteria changes require the separately authorized comparison evidence described by project policy; absent live evidence must not be presented as measured quality improvement.
+Keep authoritative explanations in one place and link instead of repeating them. Current guides describe current behavior; historical logs, removed designs and conversational context belong only in history.md. Label future work as planned in the roadmap; do not present it as implemented or as proof of runtime behavior.
