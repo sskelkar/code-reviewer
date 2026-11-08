@@ -2,6 +2,10 @@
 
 Guidance for agents working on this repository. Create a handover document only when the user explicitly requests one.
 
+## Code review instructions
+
+For pull-request reviews, apply the [repository review skill](.agents/skills/code-review/SKILL.md) alongside the reviewer baseline. Its checks are read-only and do not authorize inference or tool execution.
+
 ## Product direction
 
 One pull-request reviewer supports Claude and OpenAI as runtime-selected adapters. Both use the same four-perspective pipeline, criteria, validation, accounting and reports. `backends/contract.py` owns provider-neutral Runner/LLMResult/RunnerError; host and guest use one factory. Repository ownership, visibility or labels such as “production” and “personal” do not select behavior or providers.
