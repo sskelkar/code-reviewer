@@ -82,6 +82,18 @@ class ExplicitGuidanceTests(unittest.TestCase):
         defaults = criteria.load_default_rules(DEFAULT_CRITERIA_DIR)
         self.assertEqual(criteria.assemble(defaults, pc, []).rules, defaults)
 
+    def test_implementation_review_package_is_not_project_guidance(self):
+        pc = self.resolve({'src/tool/review/prompts/reviewer.system.md': '# Role\nFollow docs/architecture.md',
+                           'docs/architecture.md': '# Layers\nUse queues.'})
+        self.assertEqual(pc.rules, [])
+        self.assertEqual(criteria.assemble(criteria.load_default_rules(DEFAULT_CRITERIA_DIR), pc, []).rules,
+                         criteria.load_default_rules(DEFAULT_CRITERIA_DIR))
+
+    def test_documentation_and_skill_review_directories_are_explicit(self):
+        pc = self.resolve({'docs/review/errors.md': '# Errors\nCheck cleanup.',
+                           '.agents/skills/code-review/SKILL.md': '# Checks\nCheck callers.'})
+        self.assertEqual(set(pc.files_used), {'docs/review/errors.md', '.agents/skills/code-review/SKILL.md'})
+
     def test_readme_review_section_and_explicit_reference_only(self):
         pc = self.resolve({'README.md': '## Setup\nInstall things.\n## Code review\nUse [checks](docs/checks.md).\n### Exceptions\nIgnore generated code.\n## Architecture\nUse factories.',
                            'docs/checks.md': '## Retries\nCheck replay safety.'})

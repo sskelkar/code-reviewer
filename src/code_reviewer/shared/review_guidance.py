@@ -24,7 +24,12 @@ def discover(tree, show, changed_paths, pc, max_chars):
         parent = '' if parent == '.' else parent
         stem = PurePosixPath(path).stem.lower().replace('_', '-').replace(' ', '-')
         dedicated = stem in {'review', 'reviews', 'reviewing', 'code-review', 'code-reviewing', 'review-guidelines', 'review-checklist', 'code-review-guidelines', 'code-review-checklist'}
-        dedicated |= any(part.lower() in {'review', 'code-review', 'code-reviewing'} for part in PurePosixPath(path).parts[:-1])
+        parts = tuple(part.lower() for part in PurePosixPath(path).parts[:-1])
+        # A package named review is implementation, not an implicit policy source.
+        dedicated |= bool(parts and parts[0] in {'review', 'code-review', 'code-reviewing'})
+        dedicated |= any(parts[i] in {'docs', 'documentation', 'skills', 'rules'} and
+                         parts[i + 1] in {'review', 'code-review', 'code-reviewing'}
+                         for i in range(len(parts) - 1))
         if path.lower().endswith('.md') and (dedicated or name == 'skill.md' or
                 (parent in ancestors and name in {'agents.md', 'readme.md'})):
             queue.append((path, dedicated, 'explicit review document' if dedicated else 'review sections in project instructions'))
