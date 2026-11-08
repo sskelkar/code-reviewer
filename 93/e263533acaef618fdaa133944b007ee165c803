@@ -1,0 +1,55 @@
+src/code_reviewer/sandbox/acquire.py
+  s_68cd0db0a8fc3a::t_6e715da4491508 18,45
+  s_68cd0db0a8fc3a::t_071d993e92bb97 46
+tests/test_binary_omissions.py
+  s_68cd0db0a8fc3a::t_6e715da4491508 81-96
+  s_68cd0db0a8fc3a::t_071d993e92bb97 67-80
+docs/sandbox-check.md
+  s_68cd0db0a8fc3a::t_4125a0354a856e 90
+tests/test_host_execution.py
+  s_68cd0db0a8fc3a::t_6a94df658fba12 163-164
+tests/test_llm_interface.py
+  s_68cd0db0a8fc3a::t_28ca3e07d80f1d 25-69
+src/code_reviewer/sandbox/git_input.py
+  s_68cd0db0a8fc3a::t_071d993e92bb97 15
+  s_68cd0db0a8fc3a::t_6e715da4491508 13
+docs/usage.md
+  s_68cd0db0a8fc3a::t_f7e055fafc6a8a 40,63,180,296
+  s_68cd0db0a8fc3a::t_4125a0354a856e 262,310
+src/code_reviewer/config.py
+  s_68cd0db0a8fc3a::t_5c1e30b2ef3f6d 43-48,57-60,102,125-133,135
+docs/proposal.md
+  s_68cd0db0a8fc3a::t_960d76e9b0339a 9,17,21
+  s_68cd0db0a8fc3a::t_9d4af0a38ab2dd 22
+AGENTS.md
+  s_68cd0db0a8fc3a::t_bff0ca410c953c 23
+README.md
+  s_68cd0db0a8fc3a::t_2c95824935d28f 76,81
+docs/llm.md
+  s_68cd0db0a8fc3a::t_1a7b27f806dbd3 58
+review.example.toml
+  s_68cd0db0a8fc3a::t_8883a9eb1b04a8 8,21-26
+src/code_reviewer/review_options.py
+  s_68cd0db0a8fc3a::t_de6ec329b96c6b 44,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "93e263533acaef618fdaa133944b007ee165c803",
+  "prompts": {},
+  "humans": {
+    "h_63c0bd0a7be43b": {
+      "author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  },
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
