@@ -10,9 +10,12 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
 - [ ] Measure real-model precision and genuine findings suppressed using a manually adjudicated before/after comparison set.
 - [ ] Improve criterion attribution and repository context after manually checking findings.
+- [ ] Explore read-only MCP access to explicitly referenced Jira tickets for requirements and acceptance criteria, with source provenance and visible access gaps.
 - [ ] Compare models and pass counts manually before changing review orchestration or canonical prompts.
 
 ## Qualification evidence
+
+Explicit project review guidance is selected deterministically from README/AGENTS review sections, dedicated review documents and review skills. General documentation is no longer inferred into criteria; explicit project criteria replace the baseline when available, otherwise enabled baseline rules apply. Discovery caches bounded reads, honors explicit references even after an initial section-only inspection, and prioritizes entry instructions. Synthetic tests cover source selection, reference upgrades, scope and baseline fallback through the production input builder. No live before/after quality comparison has been run for this discovery change; no precision/recall improvement is claimed.
 
 Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native Claude VM tools, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
@@ -42,6 +45,16 @@ The [verification contract](verification.md) describes the implemented shared JS
 **Comparison evidence and limits.** The reference revision is `01944a4`: its report admitted grounded scored candidates without requiring an independent supported assessment. Deterministic synthetic comparisons cover supported/refuted/unresolved and incomplete investigations, plus absent-claim evidence, schema provenance, overlapping conflicts and remedy gating. The prior policy would expose refuted/unresolved scored candidates; the new publication predicate withholds them. Both provider adapters' offline smoke flows now include a Verifier call. These checks establish contract enforcement and filtering, not the quality of an LLM's judgments. No paid or subscription model comparison has run for these prompt changes; there is no measured precision/recall improvement claim.
 
 Remaining comparison work: independently adjudicate a small public/synthetic set, including genuine defects, existing caller guarantees, uncertain database-performance claims, ineffective tests, preference-only requests and correct defects with unsafe suggested fixes. Run the reference and updated prompts against the same pinned inputs under explicit inference authorization, recording false positives removed, genuine findings suppressed/unresolved, cost, latency and completion. Assess review misses using independently identified defects; candidate-only sets cannot establish recall. Keep private material outside this repository. Do not build a general eval framework for this milestone.
+
+### Possible future improvement: referenced Jira requirements through MCP
+
+When a PR or applicable project guidance explicitly references Jira tickets, optionally retrieve their requirements and acceptance criteria through an operator-configured, authenticated MCP connection. This supplements project context; it does not replace the baseline review rules or explicit project review instructions. Limit retrieval to referenced tickets rather than searching unrelated project issues.
+
+Use read-only host-side acquisition and pass bounded, frozen ticket context to reviewers and the Verifier. Record ticket identity, source URL, retrieval time and available update/version metadata so requirement-based findings can cite the exact context used. Keep credentials and MCP access outside the guest and model tools; preserve existing execution and privacy boundaries.
+
+Distinguish stated requirements from proposals and discussion. Ticket text is external evidence, not authority to execute commands or change reviewer policy. Surface contradictions with repository contracts or PR intent rather than inventing precedence. Missing authentication, inaccessible tickets or ambiguous references must be reported as context gaps; do not invent their requirements. Reviews can continue with available context and baseline rules, without claiming ticket requirements were checked. Keep private ticket content outside this repository and metadata-only traces.
+
+Qualification should cover explicit reference resolution, read-only access, bounded content, requirement citations, conflicting/stale requirements and unavailable tickets using synthetic fixtures before separately authorized live integration checks.
 
 ### Possible future improvement: pluggable review skills
 

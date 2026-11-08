@@ -43,7 +43,7 @@ def run_smoke(runner=None, *, model="haiku", expected_findings=1, provider="clau
         fake.write_bytes(Path(__file__).with_name('fake_claude.py').read_bytes())
         fake.chmod(0o700)
         cfg = Config(provider=provider, model_reviewer=model, model_comparator=model, model_resolver=model, model_verifier=model,
-                     criteria_mode='defaults_only', persona_passes=1, claude_bin=str(fake), runs_dir=str(root / 'run'))
+                     persona_passes=1, claude_bin=str(fake), runs_dir=str(root / 'run'))
         result = Engine(cfg, runner if runner is not None else ClaudeRunner(str(fake))).review(ctx)
         if (result.passes_completed != 4
                 or (expected_findings is not None and sum(publishable(item) for item in result.master.scored()) != expected_findings)):

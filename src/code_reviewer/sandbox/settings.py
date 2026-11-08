@@ -11,7 +11,7 @@ from ..backends.factory import configuration_errors, credential
 # All algorithm options travel together. Infrastructure and host executable paths
 # are deliberately absent, even when new Config fields are added later.
 CORE = ('provider', 'auth_mode', 'chatgpt_account', 'call_budget_tokens', 'model_reviewer', 'model_comparator', 'model_resolver', 'model_verifier',
-        'self_check', 'criteria_mode', 'criteria_manifest', 'disabled_default_rules', 'max_consecutive_failures', 'tier_high', 'tier_medium', 'max_diff_lines', 'criteria_max_chars', 'exclude_patterns',
+        'self_check', 'disabled_default_rules', 'max_consecutive_failures', 'tier_high', 'tier_medium', 'max_diff_lines', 'criteria_max_chars', 'exclude_patterns',
         'extra_exclude_patterns', 'grounding_line_window', 'redact_emails', 'call_budget_usd', 'call_timeout_s',
         'run_budget_usd', 'run_budget_tokens', 'post_tiers', 'persona_prompt_max_chars', 'persona_passes',
         'persona_parallel', 'openai_input_price', 'openai_cached_input_price', 'openai_output_price', 'tracing')
@@ -69,8 +69,6 @@ def config_from_job(value, root):
     failures = configuration_errors(cfg)
     if failures:
         raise ConfigError('; '.join(failures))
-    if cfg.criteria_manifest:
-        raise ValueError('criteria_manifest is host-only; VM reviews discover criteria from the pinned base commit')
     cfg.claude_bin = '/usr/bin/claude'
     cfg.runs_dir = str(Path(root) / 'runs')
     return cfg

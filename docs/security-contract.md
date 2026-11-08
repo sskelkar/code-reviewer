@@ -40,7 +40,7 @@ Host Claude subscription authentication may reuse Claude Code’s own cached log
 
 ## Supported limits and later work
 
-The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout`, `--dry-run` and the operator-file `criteria_manifest` override are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.
+The normal VM CLI is currently Mac/Lima plus public github.com acquisition. `--local-path`, `--keep-checkout` and `--dry-run` are host-only; VM reviews discover project criteria from pinned base-commit files. VM deadlines are 60–1800 seconds. Unsupported choices fail before target/credential activity.
 
 Supported interfaces and parked code are listed in [usage](usage.md); outstanding qualification and extensions belong in [the roadmap](proposal.md#checklist).
 

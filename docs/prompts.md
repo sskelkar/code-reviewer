@@ -6,7 +6,6 @@ All model contracts live in [`src/code_reviewer/review/prompts/`](../src/code_re
 
 | Role | Input and output | Model / tools |
 |---|---|---|
-| Resolver | Base-commit metadata and candidate paths → proposed project-criteria files/sections | `model_resolver`; none |
 | Classifier | Accepted rules and persona focus → assignments and reasons | `model_resolver`; none |
 | Reviewer | Common standard, one focus, assigned criteria, pinned PR and diff → findings and self-checks | `model_reviewer`; Read/Grep/Glob |
 | Comparator | Complete master and incoming findings → duplicate mappings, categories and conflicts | `model_comparator`; none |
@@ -16,7 +15,7 @@ Each role has `<role>.system.md`, `<role>.user.md` and `schemas/<role>.schema.js
 
 ## Criteria and frozen input
 
-Thirteen unique defaults have fourteen assignments: `COR-002` is shared by correctness and production safety. Project rules take precedence over defaults and retain original text/source. Their Classifier assignments must cover every accepted rule; unresolved rules visibly fall back to all personas. Defaults need no model classification.
+Thirteen unique defaults have fourteen assignments: `COR-002` is shared by correctness and production safety. Explicit project rules replace the baseline and retain original text/source. When none load, enabled defaults are used. Their Classifier assignments must cover every accepted rule; unresolved rules visibly fall back to all personas. Defaults need no model classification.
 
 Every reviewer's complete prompt is frozen before rounds begin and reused unchanged across that persona's passes. Each model call starts a fresh session and never receives earlier findings. The harness saves frozen prompts/settings in `input/personas/<persona>/`. A persona may report an evidenced defect outside its focus; the Comparator assigns categories separately from the discovering persona.
 

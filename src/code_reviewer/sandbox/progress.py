@@ -140,7 +140,7 @@ class GuestProgress:
 
     def __call__(self, event: Event):
         kind, d = event.type, event.data
-        stages = {'checkout_ready': 'checkout', 'resolver_started': 'criteria',
+        stages = {'checkout_ready': 'checkout', 'criteria_discovery_started': 'criteria',
                   'classification_started': 'classifying',
                   'verification_started': 'verifying', 'report_ready': 'exporting', 'report_started': 'reporting'}
         if kind in stages:

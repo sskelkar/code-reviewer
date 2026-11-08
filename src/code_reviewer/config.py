@@ -39,7 +39,6 @@ DEFAULT_EXCLUDE_PATTERNS = [
     ".idea/",
 ]
 
-CRITERIA_MODES = ("merge", "project_only", "defaults_only")
 MODEL_ROLES = ('reviewer', 'comparator', 'resolver', 'verifier')
 DEFAULT_MODELS = {'claude': 'haiku', 'openai': 'gpt-6-luna'}
 
@@ -61,8 +60,6 @@ class Config:
 
     # Review behavior
     self_check: bool = True
-    criteria_mode: str = "merge"
-    criteria_manifest: str = ""
     disabled_default_rules: List[str] = field(default_factory=list)
 
     # Loop control
@@ -175,8 +172,6 @@ class Config:
             raise ConfigError('call_budget_usd must be >= 0.01 (Claude CLI dollar limits use cents)')
         if self.persona_prompt_max_chars < 1:
             raise ConfigError("persona_prompt_max_chars must be positive")
-        if self.criteria_mode not in CRITERIA_MODES:
-            raise ConfigError("criteria_mode must be one of %s" % ", ".join(CRITERIA_MODES))
         if not (0 < self.tier_medium < self.tier_high <= 1):
             raise ConfigError("need 0 < tier_medium < tier_high <= 1")
         if self.call_budget_usd <= 0 or self.run_budget_usd <= 0:

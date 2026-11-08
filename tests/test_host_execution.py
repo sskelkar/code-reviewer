@@ -25,8 +25,7 @@ class HostExecutionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.cfg = Config(tracing=False, runs_dir=str(self.root/'runs'), criteria_mode='defaults_only',
-                          openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2)
+        self.cfg = Config(tracing=False, runs_dir=str(self.root/'runs'), openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2)
 
     def invoke(self, cfg, *args):
         out, err = io.StringIO(), io.StringIO()
@@ -71,17 +70,6 @@ class HostExecutionTests(unittest.TestCase):
         self.assertIn('full report:',out)
         stats=json.loads(next(Path(cfg.runs_dir).glob('*/stats.json')).read_text())
         self.assertTrue(all(c['billing_mode']=='subscription' for c in stats['calls']))
-
-    def test_invalid_host_manifest_is_a_configuration_error_instead_of_traceback(self):
-        ctx=make_repo(self.root)
-        manifest=self.root/'manifest.json'
-        for content in ('not-json','[]','{"criteria_files":7}'):
-            manifest.write_text(content)
-            cfg=replace(self.cfg,criteria_mode='merge',criteria_manifest=str(manifest))
-            with patch.object(Engine,'prepare',return_value=ctx),patch.object(factory,'create_runner',return_value=FakeRunner([])):
-                status,out,err=self.invoke(cfg,'--no-sandbox','--passes','1')
-            self.assertEqual(status,1)
-            self.assertIn('criteria_manifest',err)
 
     def test_default_vm_request_never_creates_host_runner_or_prepares_target(self):
         with patch.object(factory, 'create_runner', side_effect=AssertionError('no credentials/runner')), \

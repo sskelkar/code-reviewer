@@ -21,8 +21,7 @@ class VerificationTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
         self.root = self.make_tmp()
         self.ctx = make_repo(self.root)
-        self.cfg = Config(persona_passes=1, persona_parallel=1, criteria_mode='defaults_only',
-                          runs_dir=str(self.root / 'runs'))
+        self.cfg = Config(persona_passes=1, persona_parallel=1, runs_dir=str(self.root / 'runs'))
         self.prompts = load_prompts(PROMPTS_DIR)
 
     def run_flow(self, transform=None, candidate=None):

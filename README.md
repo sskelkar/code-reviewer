@@ -21,7 +21,7 @@ Choose Claude or OpenAI at runtime. Reviews run inside one jailed Firecracker VM
 
 ```mermaid
 flowchart TD
-    INPUT["Pin PR commits and discover project criteria"] --> ROUTE["Distribute rules and freeze four review inputs"]
+    INPUT["Pin PR commits; use explicit project criteria<br/>or enabled baseline"] --> ROUTE["Distribute rules and freeze four review inputs"]
     ROUTE --> ROUND["Start round"]
     ROUND --> C["Correctness"]
     ROUND --> S["Production safety"]
@@ -98,7 +98,7 @@ The CLI shows timed progress and verification-pending candidate counts, then pri
 
 `summary.md` and `report.md` show supported findings; `stats.json` records usage. Private `findings.json` contains the supported-only automation view and the full candidate audit, with pinned commits. VM runs export these four bounded files; host runs also retain prompts and per-call artifacts. See [report interpretation](docs/usage.md#reading-the-report).
 
-Operator settings live outside Git, normally `~/.code-reviewer/review.toml`. Start from [example settings](review.example.toml), then use [configuration](docs/usage.md#configuration) for path/permission requirements. Add [project criteria](docs/usage.md#preparing-your-project-optional-recommended) through the target repository’s `AGENTS.md`; these are separate from operator settings.
+Operator settings live outside Git, normally `~/.code-reviewer/review.toml`. Start from [example settings](review.example.toml), then use [configuration](docs/usage.md#configuration) for path/permission requirements. Add explicit [project review instructions](docs/usage.md#preparing-your-project-optional-recommended) through README/AGENTS review sections, dedicated review documents or review skills; these replace the baseline when present and are separate from operator settings.
 
 ## View review traces
 

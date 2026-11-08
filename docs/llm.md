@@ -49,7 +49,7 @@ For OpenAI VM reviews, the host hands off the selected API key or ChatGPT access
 
 Provider selection does not change execution location. Use `--no-sandbox` on individual commands when you want host execution while retaining VM defaults for other reviews.
 
-Only Reviewers and the persona Verifier receive Read/Grep/Glob. Resolver, Classifier and Comparator receive no code tools. The adapters do not choose criteria, merge findings or post comments.
+Only Reviewers and the persona Verifier receive Read/Grep/Glob. Classifier and Comparator receive no code tools. The adapters do not choose criteria, merge findings or post comments.
 
 ## Selecting access
 

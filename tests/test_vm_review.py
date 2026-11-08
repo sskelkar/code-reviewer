@@ -58,7 +58,7 @@ class VMReviewTests(unittest.TestCase):
 
     def test_full_settings_roundtrip_preserves_algorithm_options_without_host_paths(self):
         cfg = self.cfg()
-        cfg.criteria_mode = 'defaults_only'
+
         cfg.extra_exclude_patterns = ['fixtures/']
         cfg.post_tiers = ['High']
         raw = settings.job_settings(cfg)
@@ -82,15 +82,14 @@ class VMReviewTests(unittest.TestCase):
         self.assertTrue(value['ready'])
         self.assertFalse(value['runtime_checked'])
 
-    def test_unsupported_manifest_and_deadline_refuse_during_offline_configuration(self):
+    def test_unsupported_deadline_refuses_during_offline_configuration(self):
         with patch.object(settings.sys,'platform','darwin'):
-            for name,value in (('criteria_manifest','manifest.json'),('vm_timeout_s',1801)):
-                cfg=self.cfg()
-                setattr(cfg,name,value)
-                with patch.object(Path,'read_text',side_effect=AssertionError('no manifest/target IO')):
-                    errors=review.configuration_errors(cfg,self.ref,self.options)
-                self.assertTrue(errors)
-                self.assertIn('host-only' if name=='criteria_manifest' else '1800','; '.join(errors))
+            cfg=self.cfg()
+            cfg.vm_timeout_s=1801
+            with patch.object(Path,'read_text',side_effect=AssertionError('no target IO')):
+                errors=review.configuration_errors(cfg,self.ref,self.options)
+            self.assertTrue(errors)
+            self.assertIn('1800','; '.join(errors))
 
     def test_normal_cli_selects_vm_instead_of_host_for_each_provider_and_strategy(self):
         for provider in ('claude','openai'):
@@ -330,7 +329,7 @@ class VMReviewTests(unittest.TestCase):
         for provider,auth in (('claude','api-key'),('claude','subscription'),('openai','api-key'),('openai','subscription')):
             cfg = self.cfg(provider,'agent-personas')
             cfg.auth_mode=auth
-            cfg.criteria_mode='defaults_only'
+
             root = self.root/(provider+auth+'agent-personas')
             root.mkdir()
             with patch.object(guest,'receive_json',return_value=settings.job_settings(cfg)), \
@@ -342,7 +341,7 @@ class VMReviewTests(unittest.TestCase):
             self.assertIn(result['stop_reason'],('completed',))
             metadata=json.loads(next((root/'runs').glob('*/config.json')).read_text())['config']
             self.assertEqual(metadata['provider'],provider)
-            self.assertEqual(metadata['criteria_mode'],'defaults_only')
+            self.assertNotIn('criteria_mode', metadata)
             if provider=='claude':
                 env=native.call_args.kwargs['env']
                 selected_name=credential_name(provider,auth)

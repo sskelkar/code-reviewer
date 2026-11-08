@@ -56,8 +56,7 @@ class Roles:
         prompt = self.prompts[role]
         system, user = texts or (prompt.system, render(prompt.user, variables))
         models = {'reviewer': self.cfg.model_reviewer, 'verifier': self.cfg.model_verifier,
-                  'comparator': self.cfg.model_comparator, 'classifier': self.cfg.model_resolver,
-                  'resolver': self.cfg.model_resolver}
+                  'comparator': self.cfg.model_comparator, 'classifier': self.cfg.model_resolver}
         reads_code = role in ('reviewer', 'verifier')
         if reads_code != (checkout is not None):
             raise ValueError('only Reviewer/Verifier calls require the head checkout')

@@ -119,7 +119,7 @@ Orange nodes invoke an LLM when their condition applies. Every invocation expand
 ```mermaid
 flowchart TD
     START["ReviewFlow.review()"] --> INPUT["InputBuilder + RunStore<br/>Budget + ParallelRunner + PersonaCaller + Roles"]
-    INPUT --> RES["LLM when needed: resolve_criteria()<br/>CriteriaResolver.__call__() → ModelCaller.call()"]
+    INPUT --> RES["InputBuilder.resolve_criteria()<br/>review_guidance.discover() → criteria.assemble()<br/>project criteria or enabled baseline"]
     RES --> CLASS["LLM for project rules: Roles.classify()<br/>Roles.call('classifier')"]
     CLASS --> FREEZE["Catalog.allocate() → _freeze()<br/>freeze() + save_frozen() per persona"]
     FREEZE --> ROUND["_passes(): ThreadPoolExecutor.submit()<br/>LLM: Roles.review() for each active persona"]
@@ -135,7 +135,7 @@ flowchart TD
     GATE --> REPORT["RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()<br/>artifact() → findings.json"]
     REPORT --> CLEAN["finally: cleanup_checkout()<br/>unless explicitly kept on host"]
     classDef llm fill:#fff1d6,stroke:#b76b00,color:#171717
-    class RES,CLASS,ROUND,MERGE,VERIFY llm
+    class CLASS,ROUND,MERGE,VERIFY llm
 ```
 
 Each persona has frozen instructions, caller/log state and an independent pool. Pool exhaustion or repeated failures disable that persona; the others continue. Shared-role exhaustion, global cancellation or terminal failure prevents further calls. Workers are joined before checkout cleanup. Validated Verifier assessments gate publication. Refuted, unresolved and unfinished candidates remain private; severity and votes are unchanged. `review/verification.py` owns conflict components, assessment validation and the publication predicate shared by reporting and structured output.
@@ -148,7 +148,7 @@ The actual shared adapter invocation is `self.runner.run(...)` in [ModelCaller._
 
 ```mermaid
 flowchart TD
-    ROLE["Roles.call() or CriteriaResolver.__call__()<br/>build CallSpec + validator"] --> CALL["PersonaCaller.call()<br/>select pool and check prompt bounds"]
+    ROLE["Roles.call()<br/>build CallSpec + validator"] --> CALL["PersonaCaller.call()<br/>select pool and check prompt bounds"]
     CALL --> SHARED["ModelCaller.call() → _attempts()<br/>self.runner.run(...)"]
     SHARED --> BUDGET["BudgetRunner.run()<br/>Budget.check() → reserve()"]
     BUDGET --> PARALLEL["ParallelRunner.run()<br/>adapter.run_cancellable(cancelled, ...)"]
@@ -177,7 +177,7 @@ flowchart TD
 
 Claude's provider implementation lives outside this repository: `subprocess.Popen()` hands the request to Claude Code. Python gets its aggregate JSON result. OpenAI transport is implemented here; both authentication methods use `request_response()`. VM HTTP requests use the fixed external egress proxy. An injected `_transport` substitutes synthetic HTTP replies only in tests.
 
-One role invocation can involve several provider requests: OpenAI tool continuations, bounded transient HTTP retries and the shared output-validation retry are distinct. They do not add review rounds or grant fresh budgets. Only Reviewers and Verifier have code tools; Resolver, Classifier and Comparator do not.
+One role invocation can involve several provider requests: OpenAI tool continuations, bounded transient HTTP retries and the shared output-validation retry are distinct. They do not add review rounds or grant fresh budgets. Only Reviewers and Verifier have code tools; Classifier and Comparator do not.
 
 ### Following the diagrams in code
 
@@ -191,7 +191,7 @@ One role invocation can involve several provider requests: OpenAI tool continuat
 
 ### Using this map to check for unused code
 
-Trace reachability from `cli.main()` and the separately launched worker/guest `main()` functions. Search both direct calls and references passed as callbacks, then check tests and supported deployment commands before removing a symbol. A method absent from a literal `name()` search can still execute through `CriteriaResolver.__call__()`, `PersonaCaller` inheritance, `Engine.__getattr__()`, a context manager's `__enter__()`/`__exit__()`, an executor task or a subprocess module entry point.
+Trace reachability from `cli.main()` and the separately launched worker/guest `main()` functions. Search both direct calls and references passed as callbacks, then check tests and supported deployment commands before removing a symbol. A method absent from a literal `name()` search can still execute through `PersonaCaller` inheritance, `Engine.__getattr__()`, a context manager's `__enter__()`/`__exit__()`, an executor task or a subprocess module entry point.
 
 The diagrams cover the review command. `sandbox check/recover` have separate supported entry paths; the retained `parked/` frontend/REPL helpers are deliberately outside this path. Neither omission alone establishes dead code. Authentication is expanded below; offline preflight does not enter that path.
 

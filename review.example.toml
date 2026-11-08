@@ -22,16 +22,13 @@ persona_parallel = 4
 # Leave these commented to follow the selected provider; --model overrides all roles for one run.
 # model_reviewer = "haiku"
 # model_comparator = "haiku"
-# model_resolver = "haiku"   # also used for project-rule classification
+# model_resolver = "haiku"   # project-rule classification
 # model_verifier = "haiku"   # independent candidate verification
 
 # Reviewer refutes its own findings in a second phase.
 self_check = true
 
-# merge | project_only | defaults_only
-criteria_mode = "merge"
-# Path to a JSON manifest that replaces the criteria resolver's output (reproducible experiments).
-criteria_manifest = ""
+# Explicit project review criteria are used when available; otherwise enabled baseline rules apply.
 # Default rule IDs to switch off, for example ["CQ-002"].
 disabled_default_rules = []
 

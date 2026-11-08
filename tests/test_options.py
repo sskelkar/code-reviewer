@@ -79,18 +79,14 @@ class HelpTextTests(unittest.TestCase):
 
 
 class ParsingTests(unittest.TestCase):
-    def test_criteria_override_reaches_host_and_vm_settings_without_mutating_config(self):
-        from code_reviewer.config import CRITERIA_MODES
-        from code_reviewer.sandbox.settings import config_from_job, job_settings
-        from pathlib import Path
-        original = Config()
-        for mode in CRITERIA_MODES:
-            with self.subTest(flow='agent-personas', criteria=mode):
-                args = build_parser().parse_args(['review', 'example/project#1', '--criteria', mode])
-                cfg = apply_run_options(original, args)
-                self.assertEqual(cfg.criteria_mode, mode)
-                self.assertEqual(config_from_job(job_settings(cfg), Path('/work')).criteria_mode, mode)
-                self.assertEqual(original.criteria_mode, 'merge')
+    def test_criteria_selection_is_automatic_and_has_no_cli_override(self):
+        from dataclasses import fields
+        from code_reviewer.sandbox.settings import CORE
+        for key in ('criteria_mode', 'criteria_manifest'):
+            self.assertNotIn(key, {f.name for f in fields(Config)})
+            self.assertNotIn(key, CORE)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            build_parser().parse_args(['review', 'example/project#1', '--criteria', 'merge'])
 
     def parse(self, *argv):
         return build_parser().parse_args(["review", "owner/repo#1"] + list(argv))

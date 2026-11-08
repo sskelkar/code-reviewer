@@ -31,14 +31,14 @@ def git(repo: Path, *args: str) -> str:
     return proc.stdout.strip()
 
 
-def make_repo(root: Path) -> PRContext:
+def make_repo(root: Path, *, project_criteria: bool = False) -> PRContext:
     repo = root / "project"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     (repo / "app.py").write_text(APP_BASE)
     (repo / "AGENTS.md").write_text(AGENTS_MD)
     (repo / "docs").mkdir()
-    (repo / "docs" / "review.md").write_text(REVIEW_MD)
+    (repo / "docs" / ("review.md" if project_criteria else "conventions.md")).write_text(REVIEW_MD)
     (repo / "package-lock.json").write_text("{}\n")
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "base")

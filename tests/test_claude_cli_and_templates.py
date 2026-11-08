@@ -109,7 +109,7 @@ class TemplateTests(unittest.TestCase):
         for role, prompt in prompt_contract.load_prompts(PROMPTS_DIR).items():
             self.assertEqual(prompt.schema["type"], "object")
             self.assertTrue(prompt.system.strip())
-        self.assertEqual(len(prompt_contract.load_prompts(PROMPTS_DIR)), 5)
+        self.assertEqual(len(prompt_contract.load_prompts(PROMPTS_DIR)), 4)
 
 
 
@@ -119,7 +119,7 @@ class ConfigTests(unittest.TestCase):
         Config().validate()
 
     def test_validation_errors(self):
-        for kwargs in ({"criteria_mode": "nope"}, {"persona_passes": 0}, {"tier_medium": 0.9}, {"post_tiers": ["Huge"]}, {"post_tiers": []}):
+        for kwargs in ({"persona_passes": 0}, {"tier_medium": 0.9}, {"post_tiers": ["Huge"]}, {"post_tiers": []}):
             with self.assertRaises(ConfigError):
                 Config(**kwargs).validate()
 
