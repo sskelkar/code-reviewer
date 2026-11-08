@@ -33,7 +33,7 @@ class PersonaRunner:
 
     def run(self, **kw):
         system = kw['system_prompt']
-        role = 'classifier' if 'distribute project review' in system else 'comparator' if 'consolidate persona' in system else 'verifier' if 'investigate code-review candidates' in system else 'resolver' if 'identify which files' in system else 'reviewer'
+        role = 'classifier' if 'distribute project review' in system else 'comparator' if 'consolidate persona' in system else 'verifier' if 'investigate code-review candidates' in system else 'reviewer'
         self.calls.append(dict(kw, role=role))
         index = self.counts.get(role, 0)
         self.counts[role] = index + 1
@@ -46,8 +46,6 @@ class PersonaRunner:
         if value is None:
             if role == 'reviewer':
                 value = {'findings': []}
-            elif role == 'resolver':
-                value = {'criteria_files': [{'path': 'docs/review.md'}], 'inline_sections': [], 'ignored_references': []}
             elif role == 'classifier':
                 value = {'assignments': [{'rule_id': r['rule_id'], 'personas': ['correctness'], 'reason': 'Relevant behavior rule'}
                                         for r in block(kw['user_prompt'], 'project_rules')]}
@@ -72,9 +70,13 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         synthetic_frontend(self)
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
-        self.cfg = Config(persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.tmp / 'runs'))
+        self.cfg = Config(persona_parallel=1, runs_dir=str(self.tmp / 'runs'))
 
-    def run_flow(self, runner, **changes):
+    def run_flow(self, runner, *, project_criteria=False, **changes):
+        if project_criteria:
+            root = self.tmp / 'explicit-guidance'
+            root.mkdir()
+            self.ctx = make_repo(root, project_criteria=True)
         for key, value in changes.items():
             setattr(self.cfg, key, value)
         return Engine(self.cfg, runner).review(self.ctx)
@@ -245,7 +247,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertIn('Validate inputs and enforce finite bounds', result.report_path.read_text())
 
     def test_project_rules_are_routed_without_rewriting_and_full_prompts_saved(self):
-        result = self.run_flow(PersonaRunner(), criteria_mode='merge')
+        result = self.run_flow(PersonaRunner(), project_criteria=True)
         project = [r for r in result.criteria.rules if r.source == 'project']
         self.assertTrue(project)
         self.assertTrue(all(r in result.assignments['correctness'] for r in project))
@@ -256,7 +258,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
 
     def test_invalid_classification_retries_then_falls_back_without_losing_rules(self):
         runner = PersonaRunner(classifier=[{'assignments': []}])
-        result = self.run_flow(runner, criteria_mode='merge')
+        result = self.run_flow(runner, project_criteria=True)
         self.assertEqual(runner.counts['classifier'], 2)
         project = [r for r in result.criteria.rules if r.source == 'project']
         for rules in result.assignments.values():
@@ -556,7 +558,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(self.cfg.model_verifier, 'haiku')
 
     def test_criteria_budget_failure_falls_back_without_stopping_other_pools(self):
-        result = self.run_flow(PersonaRunner(cost=0.01), criteria_mode='merge', run_budget_usd=0.015)
+        result = self.run_flow(PersonaRunner(cost=0.01), project_criteria=True, run_budget_usd=0.015)
         self.assertEqual(result.stop_reason, 'incomplete')
         self.assertEqual(result.passes_completed, 1)
         self.assertTrue(result.assignments)
@@ -619,7 +621,7 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
 
     def test_verifier_gets_authoritative_project_rules_even_when_claims_cite_none(self):
         runner = self.conflict_runner(self.annotation())
-        result = self.run_flow(runner, criteria_mode='merge')
+        result = self.run_flow(runner, project_criteria=True)
         verifier = next(c for c in runner.calls if c['role'] == 'verifier')
         project = [r for r in result.criteria.rules if r.source == 'project']
         self.assertTrue(project)

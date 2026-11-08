@@ -51,8 +51,7 @@ class ParallelTests(TempDirTestMixin, unittest.TestCase):
     def setUp(self):
         self.tmp = self.make_tmp()
         self.ctx = make_repo(self.tmp)
-        self.cfg = Config(criteria_mode='defaults_only',
-                          persona_passes=2, runs_dir=str(self.tmp / 'runs'))
+        self.cfg = Config(persona_passes=2, runs_dir=str(self.tmp / 'runs'))
 
     def test_round_barriers_serial_merge_and_isolated_request_logs(self):
         owner = self

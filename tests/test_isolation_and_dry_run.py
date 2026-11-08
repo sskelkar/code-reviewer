@@ -56,7 +56,7 @@ class CheckoutLocationTests(TempDirTestMixin, unittest.TestCase):
                 seen.append((checkout, (checkout / "app.py").exists()))  # the checkout existed and was populated
                 raise RunnerError("claude binary not found")
 
-        result = self.engine(Boom(reviewer=[{"findings": []}]), criteria_mode="defaults_only").review(self.ctx)
+        result = self.engine(Boom(reviewer=[{"findings": []}])).review(self.ctx)
         self.assertEqual(result.stop_reason, "failures")
         self.assertTrue(seen)
         self.assertTrue(all(populated for _, populated in seen))
@@ -168,9 +168,9 @@ class DryRunTests(TempDirTestMixin, unittest.TestCase):
         self.assertEqual(runner.calls, [])
 
     def test_dry_run_prompts_equal_a_real_reviews_prompts(self):
-        runner, engine = self.make(criteria_mode="defaults_only")
+        runner, engine = self.make()
         dry = engine.dry_run(self.ctx)
-        runner2, engine2 = self.make(criteria_mode="defaults_only")
+        runner2, engine2 = self.make()
         real = engine2.review(self.ctx)
         for persona in ('correctness', 'code-quality', 'test-quality', 'production-safety'):
             for name in ('reviewer.system.md', 'reviewer.user.md'):

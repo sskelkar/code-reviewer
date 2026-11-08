@@ -132,7 +132,7 @@ class VMConfinementTests(unittest.TestCase):
         ctx = make_repo(self.root)
         checkout = self.root/'snapshot'
         bounded_export(ctx.git_dir, ctx.head_sha, checkout)
-        cfg = Config(criteria_mode='defaults_only', persona_passes=1, persona_parallel=1, runs_dir=str(self.root/'agent-personas'))
+        cfg = Config(persona_passes=1, persona_parallel=1, runs_dir=str(self.root/'agent-personas'))
         runner = FakeRunner([{'findings': []}])
         with patch('code_reviewer.shared.git_ops.export_tree', side_effect=AssertionError('already exported')):
             result = Engine(cfg, runner).review(ctx, prepared_checkout=checkout)

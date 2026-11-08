@@ -44,8 +44,8 @@ class ProgressPrinter:
             self._say("checkout ready at %s (%d files, %d symlinks skipped; %s); model tools are read-only" % (
                 display_text(str(d['path']), 4096), d["files"], d["skipped_links"],
                 'kept after review' if d.get('kept') else 'removed after review'))
-        elif kind == "resolver_started":
-            self._say("resolving project criteria from AGENTS.md (%d candidate files) ..." % d["candidates"])
+        elif kind == "criteria_discovery_started":
+            self._say("discovering explicit project review guidance at the pinned base commit ...")
         elif kind == "criteria_resolved":
             self._say("criteria: %d default + %d project rules from %d files, %d ignored references" % (
                 d["default_rules"], d["project_rules"], d["project_files"], d["ignored"]))

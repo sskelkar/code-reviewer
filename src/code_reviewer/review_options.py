@@ -5,7 +5,7 @@ import argparse
 from dataclasses import replace
 from typing import Any
 
-from .config import Config, CRITERIA_MODES
+from .config import Config
 
 
 class OptionError(ValueError):
@@ -43,9 +43,6 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
         "--model", metavar="NAME",
         help="model for all roles, an alias or full name such as haiku or gpt-6-luna (default: model_* settings, otherwise haiku for Claude or gpt-6-luna for OpenAI)")
     parser.add_argument(
-        "--criteria", choices=CRITERIA_MODES, metavar="MODE",
-        help="which review criteria to apply: merge, project_only or defaults_only (default: criteria_mode in review.toml, merge)")
-    parser.add_argument(
         "--no-self-check", action="store_true",
         help="skip the phase where the reviewer tries to refute its own findings (cheaper, but findings are not double-checked)")
     parser.add_argument(
@@ -76,8 +73,6 @@ def apply_run_options(cfg: Config, args: Any) -> Config:
         cfg.persona_parallel = args.parallel
     if args.passes:
         cfg.persona_passes = args.passes
-    if getattr(args, "criteria", None):
-        cfg.criteria_mode = args.criteria
     if args.no_self_check:
         cfg.self_check = False
     if args.model:
@@ -97,7 +92,6 @@ BANNER_OPTIONS = [
     ("--parallel N", "concurrent reviewers, 1 to 4 (default 4)"),
     ("--passes N", "passes per persona (default 3)"),
     ("--model NAME", "model for all roles; defaults: Claude haiku, OpenAI gpt-6-luna"),
-    ("--criteria MODE", "merge (default), project_only or defaults_only"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
     ("--keep-checkout", "keep the temporary checkout (its location is printed)"),
     ("--verbose", "print extra progress detail"),

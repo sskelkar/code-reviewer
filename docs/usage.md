@@ -61,7 +61,6 @@ Use these with `reviewer review <url> ...`; `reviewer review --help` lists the c
 | `--parallel N` | Concurrent reviewers from 1 to 4, default `persona_parallel` (4). Reviewers run concurrently within each round, then consolidation is serial; available for every review |
 | `--passes N` | Scheduled passes per persona, default `persona_passes` (3), for 4 × N total slots. A positive integer; budget, failure and cancellation limits can stop work earlier |
 | `--model NAME` | Model for all roles (including persona classification and verification), an alias such as `haiku` or `sonnet`, or a full model name. Default: explicit `model_*` settings, otherwise `haiku` for Claude or `gpt-6-luna` for OpenAI |
-| `--criteria MODE` | `merge`, `project_only` or `defaults_only`; overrides `criteria_mode` for this run. `defaults_only` skips the project's own rules (smaller prompt) |
 | `--no-self-check` | Skip the Reviewer’s own self-refutation phase. Independent verification and supported-only publication still apply |
 | `--keep-checkout` | Host-only: keep the separate temporary snapshot so you can inspect exactly what the reviewer saw. Model tools are read-only; host mode does not mount the snapshot read-only. Its location is printed. It is in a temporary directory outside the run directory; delete it when done. Otherwise it is deleted when the run ends, even if the run fails |
 | `--dry-run` | Host-only target/prompt preview without credentials or model calls; VM requests refuse. Use `--preflight` for no target IO |
@@ -128,10 +127,12 @@ How to read the report:
 
 ## Preparing your project (optional, recommended)
 
-The agent applies two sets of criteria:
+Criteria selection is automatic:
 
-- **Defaults**: generic, language-agnostic rules shipped with the agent ([the persona criteria](persona-criteria.md)).
-- **Project criteria**: your project's own rules. **Project rules take precedence** when they cover the same concern (the model is instructed to follow them).
+- **Explicit project criteria**, when available: review instructions from the pinned base commit.
+- **Baseline criteria**, otherwise: the enabled generic rules shipped with the agent ([the persona criteria](persona-criteria.md)).
+
+Project criteria replace the baseline; no mode or manual source override is needed. All four perspectives still run, with the same shared evidence and verification requirements.
 
 Project guidance is discovered deterministically from explicit code-review instructions, not inferred from general coding conventions, architecture, or setup documentation. No criteria-resolver model call is made.
 
@@ -154,7 +155,7 @@ Nested README/AGENTS sources apply only when their directory contains a reviewed
 
 Only regular repository files count; symlinks, external URLs and absolute paths are not loaded. External references in accepted guidance are recorded as ignored. Jira/MCP retrieval remains planned, not implemented. Guidance comes from the base commit, so PR edits cannot redefine its own review instructions. Accepted paths, inclusion reasons and citable rule IDs are retained in private input artifacts.
 
-Discovery inspects at most 200 sources and at most `criteria_max_chars` characters (default 200,000); skipped content produces warnings. Accepted guidance is also subject to the criteria size cap. When no explicit project review guidance is loaded, enabled baseline rules are always used, including in `project_only` mode. Missing or oversized guidance produces warnings rather than a claim of complete coverage. An explicit host `criteria_manifest` remains an operator-selected source override; it does not invoke inference.
+Discovery inspects at most 200 sources and at most `criteria_max_chars` characters (default 200,000); skipped content produces warnings. Accepted guidance is also subject to the criteria size cap. When no explicit project review guidance is loaded, enabled baseline rules are used. Missing or oversized guidance produces warnings rather than a claim of complete coverage.
 
 
 The default criteria use `COR-*`, `SAFE-*`, `TEST-*` and `CQ-*` by subject. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. Tests verify criteria loading and delivery; they do not establish review quality. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
@@ -177,8 +178,6 @@ Operator settings come from `--config PATH` or `~/.code-reviewer/review.toml` on
 | `persona_parallel` | `4` | Concurrent reviewers (1–4), overridden with `--parallel N`; consolidation follows the round barrier |
 | `persona_passes` | `3` | Scheduled passes per persona. `--passes N` overrides it for one run; 4 × N review slots, with fixed rounds. One completed pass per persona is unrated |
 | `self_check` | `true` | The Reviewer tries to refute its own findings before answering |
-| `criteria_mode` | `merge` | `merge`, `project_only` or `defaults_only` |
-| `criteria_manifest` | `""` | Host-only operator JSON file replacing the Resolver answer; VM mode refuses this override |
 | `disabled_default_rules` | `[]` | Default rule IDs to switch off |
 | `max_consecutive_failures` | `2` | Consecutive failures per persona; disable only that persona |
 | `tier_high`, `tier_medium` | `0.75`, `0.40` | Confidence tier thresholds |
@@ -201,7 +200,7 @@ Environment variables: `CODE_REVIEWER_HOME` (repository checkout containing the 
 
 ## Persona budget pools
 
-The API dollar cap or subscription token cap is split at startup: weights 3/3/4 for criteria (Resolver + Classifier), Comparator and Verifier out of 30, with the remaining 20/30 divided equally among the four personas. API allocations round down to cents, subscription allocations to whole tokens; remainders go to personas in fixed order. Allocations sum to the configured cap. The per-call cap still applies.
+The API dollar cap or subscription token cap is split at startup: weights 3/3/4 for criteria (Classifier), Comparator and Verifier out of 30, with the remaining 20/30 divided equally among the four personas. API allocations round down to cents, subscription allocations to whole tokens; remainders go to personas in fixed order. Allocations sum to the configured cap. The per-call cap still applies.
 
 Before each attempt/retry, atomically reserve its allowance from its own pool; reconcile reported cost (API) or tokens (subscription) afterward. No borrowing or automatic redistribution occurs. For API calls, if cost is unavailable (for example after timeout/cancellation), conservatively consume that attempt's allowance in the budget ledger and increment an unknown-cost counter; `spent_usd` includes these conservative charges, rather than only confirmed spend; `cost_known_for_all_calls` is false for failed calls without reported cost, even with zero reported tokens. Subscription ledgers use `allocated_tokens`, `spent_tokens`, `reserved_tokens` and `unknown_usage_calls`; incomplete/missing-usage calls consume at least their allowance; validated usage is reconciled even if output validation fails. API cost totals remain estimates. Startup output, dry runs, `report.md` and `stats.json` show allocations/accounting. CLI budget enforcement is not a billing guarantee.
 

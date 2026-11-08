@@ -33,7 +33,7 @@ def config(**kwargs):
     values = dict(tracing=False, provider='openai', auth_mode='subscription', sandbox=False,
                   model_reviewer='test-model', model_comparator='test-model',
                   model_resolver='test-model', model_verifier='test-model',
-                  persona_passes=1, criteria_mode='defaults_only')
+                  persona_passes=1)
     values.update(kwargs)
     return Config(**values)
 

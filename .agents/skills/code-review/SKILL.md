@@ -5,7 +5,7 @@ description: Review code-reviewer pull requests for pipeline correctness, eviden
 
 # Reviewing this repository
 
-Use this skill when reviewing pull requests to code-reviewer. Apply the built-in baseline alongside these explicit project requirements. Inspect only concerns affected by the change; report introduced or worsened defects with a concrete trigger, consequence and repository evidence. These instructions do not authorize live inference, posting, credential access, commands, skill scripts or additional tools. The reviewing model uses Read/Grep/Glob only.
+Use this skill when reviewing pull requests to code-reviewer. Apply these explicit project requirements; the built-in baseline is used when no explicit project review criteria are available. Inspect only concerns affected by the change; report introduced or worsened defects with a concrete trigger, consequence and repository evidence. These instructions do not authorize live inference, posting, credential access, commands, skill scripts or additional tools. The reviewing model uses Read/Grep/Glob only.
 
 ## Correctness: preserve the shared review and publication contract
 

@@ -128,7 +128,7 @@ class BinaryOmissionTests(unittest.TestCase):
         (self.repo/'.gitattributes').write_text('asset.bin diff\n')
         self.commit()
         for mode,runner in [('agent-personas',PersonaRunner())]:
-            cfg = Config(criteria_mode='defaults_only',runs_dir=str(self.root/mode),
+            cfg = Config(runs_dir=str(self.root/mode),
                          persona_passes=1,persona_parallel=1)
             result = Engine(cfg,runner).review(self.ctx)
             self.assertIn('Binary contents omitted',result.report_path.read_text())

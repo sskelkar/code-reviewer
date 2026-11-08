@@ -45,7 +45,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 ## Review pipeline
 
 1. Redact email addresses in PR metadata, parse the merge-base diff, omit binary contents, apply exclusions and enforce diff limits. The code snapshot is the pinned head.
-2. Load the thirteen canonical default rules. Discover project criteria from the pinned base commit. Deterministic discovery loads explicit review sections, documents and skills; the Classifier distributes accepted project rules. Static defaults need neither classification nor another model call.
+2. Discover explicit project review sections, documents and skills deterministically from the pinned base commit. Use those project rules when any load, otherwise the enabled baseline. The Classifier distributes project rules; baseline rules use static assignments without a model call.
 3. Validate complete project-rule coverage. Unresolved assignments visibly fall back to all personas. Freeze each reviewer's complete system/user input and assigned criteria.
 4. For each configured round, submit active reviewers to a bounded `ThreadPoolExecutor`. Each starts fresh, without previous findings. Wait for all reviewers in that round.
 5. In fixed scheduling order—correctness, code quality, test quality, production safety—ground evidence and consolidate each usable batch serially. The Comparator proposes duplicates, categories and conflicts; Python validates and applies a staged master copy. Incomplete slots create no votes.
@@ -73,7 +73,7 @@ The host dry-run path acquires input and saves defaults-only persona prompts wit
 | `sandbox/vm.py`, `snapshot.py`, `network.py` | Jailer/systemd confinement, admitted read-only input and external phase-scoped egress |
 | `tracing/recorder.py`, `review.py`, `langfuse.py` | Context/metadata, host lifecycle/guest merging and deadline-bounded export |
 
-Only Reviewers and the Verifier receive Read/Grep/Glob. Resolver, Classifier and Comparator have no code tools. Models propose; deterministic code validates and decides. Canonical contracts are described in [prompts](prompts.md).
+Only Reviewers and the Verifier receive Read/Grep/Glob. Classifier and Comparator have no code tools. Models propose; deterministic code validates and decides. Canonical contracts are described in [prompts](prompts.md).
 
 ## Budgets and observability
 

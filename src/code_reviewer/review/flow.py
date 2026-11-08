@@ -105,7 +105,7 @@ class ReviewFlow:
                     'adapter': self.runner.version() if hasattr(self.runner, 'version') else 'unknown'}})
             self.emit('checkout_ready', path=str(checkout), kept=keep_checkout,
                       **({} if prepared_checkout is not None else git_ops.export_tree(ctx.git_dir, ctx.head_sha, checkout)))
-            result.criteria = self.inputs.resolve_criteria(ctx, files, caller, store.input_dir)
+            result.criteria = self.inputs.resolve_criteria(ctx, files)
             result.warnings.extend(result.criteria.warnings)
             if any(r.source == 'project' for r in result.criteria.rules):
                 self.emit('classification_started', rules=sum(r.source == 'project' for r in result.criteria.rules))

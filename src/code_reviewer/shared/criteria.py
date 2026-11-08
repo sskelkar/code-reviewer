@@ -1,4 +1,4 @@
-"""Review criteria: default rules, project rules discovered through AGENTS.md, rule IDs and prompt rendering."""
+"""Review criteria: baseline rules, explicit project review guidance, rule IDs and prompt rendering."""
 from __future__ import annotations
 
 import re
@@ -11,8 +11,6 @@ from .templates import escape_untrusted
 REGULAR_MODES = ("100644", "100755")
 DOC_EXTENSIONS = (".md", ".mdx", ".rst", ".txt", ".adoc")
 MAX_CANDIDATES = 200
-RULES_DIR = ".claude/rules/"
-NESTED_AGENTS = "AGENTS.md"
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _DEFAULT_ID = re.compile(r"^\[([A-Za-z][A-Za-z0-9]*-\d+)\]\s*(.*)$")
@@ -46,14 +44,13 @@ class ProjectCriteria:
     auto_included: List[Dict[str, str]] = field(default_factory=list)  # files added because they cover the changed paths
     notes: str = ""
     warnings: List[str] = field(default_factory=list)
-    source: str = "none"  # "resolver", "override", "auto" (no resolver call was needed) or "none"
+    source: str = "none"  # "auto" for deterministic discovery, otherwise "none"
 
 
 @dataclass
 class CriteriaSet:
     rules: List[Rule]
     project: ProjectCriteria
-    mode: str
     warnings: List[str] = field(default_factory=list)
     changed_by_pr: List[str] = field(default_factory=list)
 
@@ -212,39 +209,6 @@ def _directories_of(paths: Sequence[str]) -> List[str]:
     return sorted(found)
 
 
-def scoped_files(tree: Dict[str, str], changed_paths: Sequence[str],
-                 show: Callable[[str], Optional[str]]) -> List[Tuple[str, str, List[Rule]]]:
-    """Criteria files that cover the changed paths, found by location instead of by the AGENTS.md links:
-    an AGENTS.md in a directory that contains changed files (or one of its ancestors), and every `.claude/rules/*.md`
-    file that is not scoped by a `paths:` key or whose `paths:` globs match a changed file. Returns (path, why, rules)."""
-    regular = {p for p, mode in tree.items() if mode in REGULAR_MODES}
-    found: List[Tuple[str, str, List[Rule]]] = []
-    candidates: List[Tuple[str, str]] = []
-    for directory in _directories_of(changed_paths):
-        path = "%s/%s" % (directory, NESTED_AGENTS)
-        if path in regular:
-            candidates.append((path, "AGENTS.md in a directory that contains changed files (%s/)" % directory))
-    for path in sorted(p for p in regular if p.startswith(RULES_DIR) and p.lower().endswith(".md")):
-        candidates.append((path, ""))
-    for path, why in candidates:
-        text = show(path)
-        if text is None:
-            continue
-        globs, body = split_front_matter(text)
-        if path.startswith(RULES_DIR):
-            if globs:
-                regexes = [glob_to_regex(g) for g in globs]
-                if not any(r.match(c) for r in regexes for c in changed_paths):
-                    continue
-                why = "rule file scoped to %s, which matches changed files" % ", ".join(globs)
-            else:
-                why = "rule file that applies to all files"
-        rules = rules_from_markdown(path, body)
-        if rules:
-            found.append((path, why, rules))
-    return found
-
-
 def extract_candidates(agents_text: str, tree: Dict[str, str]) -> Tuple[List[str], List[str]]:
     """Find in-repo files referenced from AGENTS.md. Returns (candidate paths, external references)."""
     external: List[str] = []
@@ -290,95 +254,15 @@ def extract_candidates(agents_text: str, tree: Dict[str, str]) -> Tuple[List[str
     return sorted(found), external
 
 
-def _clean_ignored(items: Any) -> List[Dict[str, str]]:
-    cleaned: List[Dict[str, str]] = []
-    if isinstance(items, list):
-        for item in items:
-            if isinstance(item, dict):
-                cleaned.append({"reference": str(item.get("reference", "")), "reason": str(item.get("reason", ""))})
-    return cleaned
-
-
-def resolve_project(
-    agents_text: Optional[str],
-    tree: Dict[str, str],
-    show: Callable[[str], Optional[str]],
-    call_resolver: Optional[Callable[[List[str], str], Dict[str, Any]]],
-    manifest_override: Optional[Dict[str, Any]],
-    max_chars: int,
-    changed_paths: Sequence[str] = (),
-) -> ProjectCriteria:
-    """Load explicit review instructions, never infer requirements from general docs.
-
-    The legacy callback is retained for callers but discovery makes no model calls.
-    Explicit operator manifests remain supported as deliberate source selection.
-    """
+def resolve_project(tree: Dict[str, str], show: Callable[[str], Optional[str]],
+                    max_chars: int, changed_paths: Sequence[str] = ()) -> ProjectCriteria:
+    """Load explicit base-commit review instructions without inference or execution."""
+    from .review_guidance import discover
     pc = ProjectCriteria(source="auto")
-    if manifest_override is not None:
-        pc.source = "override"
-        pc.manifest = manifest_override
-        allowed = {p for p, mode in tree.items() if mode in REGULAR_MODES}
-        rules = _rules_from_files(manifest_override, allowed, tree, show, pc)
-        rules += _rules_from_inline_sections(manifest_override, agents_text, pc)
-    else:
-        from .review_guidance import discover
-        rules = discover(tree, show, agents_text, changed_paths, pc, max_chars)
-    pc.rules = _apply_size_cap(rules, max_chars, pc)
+    pc.rules = _apply_size_cap(discover(tree, show, changed_paths, pc, max_chars), max_chars, pc)
     if not pc.rules:
-        pc.warnings.append("no explicit project code-review instructions loaded; using default criteria only")
+        pc.warnings.append("no explicit project code-review instructions loaded; using enabled baseline criteria")
     return pc
-
-
-def _add_scoped(scoped: List[Tuple[str, str, List[Rule]]], already: Set[str], pc: ProjectCriteria) -> List[Rule]:
-    """Rules of the files that cover the changed paths, except those the resolver already chose. Records why each was added."""
-    rules: List[Rule] = []
-    for path, why, file_rules in scoped:
-        if path in already:
-            continue
-        rules.extend(file_rules)
-        pc.files_used.append(path)
-        pc.auto_included.append({"path": path, "reason": why})
-    return rules
-
-
-def _rules_from_files(manifest: Dict[str, Any], allowed: Set[str], tree: Dict[str, str],
-                      show: Callable[[str], Optional[str]], pc: ProjectCriteria) -> List[Rule]:
-    """Rules from the files the resolver named. Anything outside the allowed set is dropped and reported."""
-    rules: List[Rule] = []
-    for item in manifest.get("criteria_files") or []:
-        path = str(item.get("path", "")) if isinstance(item, dict) else ""
-        if path not in allowed or tree.get(path) not in REGULAR_MODES:
-            pc.ignored.append({"reference": path, "reason": "not a regular in-repo file from the candidate list"})
-            continue
-        text = show(path)
-        if text is None:
-            pc.ignored.append({"reference": path, "reason": "could not be read at the base commit"})
-            continue
-        file_rules = rules_from_markdown(path, text)
-        if file_rules:
-            rules.extend(file_rules)
-            pc.files_used.append(path)
-    return rules
-
-
-def _rules_from_inline_sections(manifest: Dict[str, Any], agents_text: Optional[str], pc: ProjectCriteria) -> List[Rule]:
-    """Rules from sections of AGENTS.md itself that the resolver identified as criteria."""
-    wanted = [str(i.get("heading", "")).strip().lower() for i in manifest.get("inline_sections") or [] if isinstance(i, dict)]
-    if not wanted or not agents_text:
-        return []
-    _, sections = split_sections(agents_text)
-    by_heading = {s.heading.strip().lower(): idx for idx, s in enumerate(sections)}
-    rules: List[Rule] = []
-    for heading in wanted:
-        idx = by_heading.get(heading)
-        rule = _inline_rule("AGENTS.md", sections, idx) if idx is not None else None
-        if rule is None:
-            pc.ignored.append({"reference": "AGENTS.md#%s" % heading, "reason": "inline section not found or empty"})
-        else:
-            rules.append(rule)
-    if rules and "AGENTS.md" not in pc.files_used:
-        pc.files_used.append("AGENTS.md")
-    return rules
 
 
 def _apply_size_cap(rules: List[Rule], max_chars: int, pc: ProjectCriteria) -> List[Rule]:
@@ -394,20 +278,14 @@ def _apply_size_cap(rules: List[Rule], max_chars: int, pc: ProjectCriteria) -> L
     return kept
 
 
-def assemble(defaults: List[Rule], project: ProjectCriteria, mode: str, changed_paths: Sequence[str]) -> CriteriaSet:
+def assemble(defaults: List[Rule], project: ProjectCriteria, changed_paths: Sequence[str]) -> CriteriaSet:
+    """Use explicit project criteria when available, otherwise the enabled baseline."""
     warnings = list(project.warnings)
-    if mode == "defaults_only":
-        rules = list(defaults)
-    elif mode == "project_only":
-        rules = list(project.rules) or list(defaults)
-        if not project.rules:
-            warnings.append("criteria_mode is project_only but no project review instructions were found; using defaults")
-    else:
-        rules = list(project.rules) + list(defaults)
+    rules = list(project.rules or defaults)
     touched = sorted(set(project.files_used + ["AGENTS.md"]) & set(changed_paths))
     if touched:
         warnings.append("this PR modifies criteria files (read from the base branch instead): %s" % ", ".join(touched))
-    return CriteriaSet(rules=rules, project=project, mode=mode, warnings=warnings, changed_by_pr=touched)
+    return CriteriaSet(rules=rules, project=project, warnings=warnings, changed_by_pr=touched)
 
 
 def render_criteria_block(rules: Sequence[Rule]) -> str:

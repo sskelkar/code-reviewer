@@ -103,7 +103,7 @@ class TracingTests(unittest.TestCase):
         root.mkdir()
         ctx = make_repo(root)
         cfg = Config(persona_passes=1,
-                     criteria_mode='defaults_only', runs_dir=str(root / 'runs'))
+                     runs_dir=str(root / 'runs'))
         recorder = tracing.Recorder()
         with tracing.activate(recorder), tracing.observation('review.run'):
             result = Engine(cfg, FakeRunner([{'findings': []}])).review(ctx)
@@ -117,7 +117,7 @@ class TracingTests(unittest.TestCase):
 
     def test_validation_retry_is_visible_without_changing_accounting(self):
         ctx = make_repo(self.root)
-        cfg = Config(persona_passes=1, persona_parallel=1, criteria_mode='defaults_only', runs_dir=str(self.root / 'runs'))
+        cfg = Config(persona_passes=1, persona_parallel=1, runs_dir=str(self.root / 'runs'))
         recorder = tracing.Recorder()
         with tracing.activate(recorder), tracing.observation('review.run'):
             result = Engine(cfg, FakeRunner([{}, {'findings': []}])).review(ctx)
@@ -131,7 +131,7 @@ class TracingTests(unittest.TestCase):
 
     def test_host_frontdoor_saves_trace_even_when_export_fails(self):
         ctx = make_repo(self.root)
-        cfg = Config(sandbox=False, criteria_mode='defaults_only', runs_dir=str(self.root / 'runs'))
+        cfg = Config(sandbox=False, runs_dir=str(self.root / 'runs'))
         self.assertTrue(cfg.tracing)  # An ordinary review records traces by default.
         options = SimpleNamespace(preflight=False, dry_run=False)
         with patch.object(Engine, 'prepare', return_value=ctx), patch('code_reviewer.tracing.langfuse.export', side_effect=RuntimeError('SECRET_CANARY')), redirect_stderr(io.StringIO()) as err:
@@ -246,7 +246,7 @@ class TracingTests(unittest.TestCase):
         cfg = Config(tracing=True, provider='openai', model_reviewer='synthetic',
                      model_comparator='synthetic', model_resolver='synthetic', model_verifier='synthetic',
                      openai_input_price=1, openai_cached_input_price=.5, openai_output_price=2,
-                     criteria_mode='defaults_only', persona_passes=1)
+                     persona_passes=1)
         host = tracing.Recorder()
         with tracing.activate(host), tracing.observation('review.run'):
             settings = job_settings(cfg)

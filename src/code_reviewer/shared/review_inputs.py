@@ -5,16 +5,14 @@ Shared by the review pipeline. Dry runs build the pinned diff and default criter
 from __future__ import annotations
 from ..tracing import traced
 
-import json
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from . import criteria as criteria_mod
 from . import git_ops
-from ..config import Config, ConfigError
+from ..config import Config
 from .diffview import FileDiff, changed_line_count, mark_exclusions, parse_unified_diff, render_changed_files, render_diff_block, render_excluded, reviewable
-from .llm import ModelCaller
 from .models import PRContext, ReviewInput, ReviewRefused
 from .redact import redact_emails
 from .templates import PromptSet
@@ -68,22 +66,18 @@ class InputBuilder:
     # ------------------------------------------------------------------ criteria
 
     def default_rules(self) -> List[criteria_mod.Rule]:
-        if self.cfg.criteria_mode == "project_only":
-            return []
         return criteria_mod.load_default_rules(self.defaults_dir, self.cfg.disabled_default_rules)
 
     def default_criteria(self, files: List[FileDiff]) -> criteria_mod.CriteriaSet:
-        """The criteria without the project's own rules. Resolving those needs a model call, which a dry run avoids."""
-        return criteria_mod.assemble(self.default_rules(), criteria_mod.ProjectCriteria(), self.cfg.criteria_mode, [f.path for f in files])
+        """Baseline-only preview; dry runs omit project discovery and model calls."""
+        return criteria_mod.assemble(self.default_rules(), criteria_mod.ProjectCriteria(), [f.path for f in files])
 
     @traced('criteria.resolve')
-    def resolve_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ModelCaller, work_dir: Path) -> criteria_mod.CriteriaSet:
-        """Default rules plus the project's own rules (from the base commit), merged with project precedence."""
-        cfg = self.cfg
-        project = criteria_mod.ProjectCriteria()
-        if cfg.criteria_mode != "defaults_only":
-            project = self._resolve_project_criteria(ctx, files, caller, work_dir)
-        criteria = criteria_mod.assemble(self.default_rules(), project, cfg.criteria_mode, [f.path for f in files])
+    def resolve_criteria(self, ctx: PRContext, files: List[FileDiff]) -> criteria_mod.CriteriaSet:
+        """Explicit base-commit project rules, or enabled baseline rules when none load."""
+        self.emit("criteria_discovery_started")
+        project = self._resolve_project_criteria(ctx, files)
+        criteria = criteria_mod.assemble(self.default_rules(), project, [f.path for f in files])
         for warning in criteria.warnings:
             self.emit("warning", message=warning)
         self.emit(
@@ -95,28 +89,16 @@ class InputBuilder:
         )
         return criteria
 
-    def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff], caller: ModelCaller, work_dir: Path) -> criteria_mod.ProjectCriteria:
+    def _resolve_project_criteria(self, ctx: PRContext, files: List[FileDiff]) -> criteria_mod.ProjectCriteria:
         tree = git_ops.ls_tree(ctx.git_dir, ctx.base_sha)
-        agents_text = git_ops.git_show(ctx.git_dir, ctx.base_sha, "AGENTS.md") if "AGENTS.md" in tree else None
-        override: Optional[Dict[str, Any]] = None
-        if self.cfg.criteria_manifest:
-            try:
-                override = json.loads(Path(self.cfg.criteria_manifest).expanduser().read_text(encoding="utf-8"))
-                if not isinstance(override, dict):
-                    raise ValueError('manifest must be an object')
-                for field in ('criteria_files', 'inline_sections', 'ignored_references'):
-                    if field in override and not isinstance(override[field], list):
-                        raise ValueError('manifest entries must be lists')
-            except (OSError, ValueError) as exc:
-                raise ConfigError('cannot read valid criteria_manifest JSON object') from exc
         return criteria_mod.resolve_project(
-            agents_text, tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
-            None, override, self.cfg.criteria_max_chars, self.scope_paths(files),
+            tree, lambda path: git_ops.git_show(ctx.git_dir, ctx.base_sha, path),
+            self.cfg.criteria_max_chars, self.scope_paths(files),
         )
 
     @staticmethod
     def scope_paths(files: List[FileDiff]) -> List[str]:
-        """The files whose directories decide which nested AGENTS.md and .claude/rules files apply: the ones under review.
+        """The files whose directories decide which ancestor README/AGENTS instructions apply: the ones under review.
         A change in an excluded file (a planning document, a lockfile) does not pull in the rules of its directory."""
         return [f.path for f in reviewable(files)]
 

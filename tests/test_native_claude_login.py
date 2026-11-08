@@ -56,7 +56,7 @@ class NativeLoginTests(unittest.TestCase):
         self.binary.write_text(FAKE.format(python=sys.executable))
         self.binary.chmod(0o700)
         self.cfg=Config(tracing=False, sandbox=False, auth_mode='subscription', claude_bin=str(self.binary),
-            criteria_mode='defaults_only', persona_passes=1,
+            persona_passes=1,
             runs_dir=str(self.root/'runs'))
         self.set_status(dict(loggedIn=True,authMethod='claude.ai',email='PRIVATE_IDENTITY_CANARY'))
         environment=patch.dict(os.environ,dict(HOME=str(self.home),USER='synthetic-native-user',PATH='/usr/bin:/bin',
