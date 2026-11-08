@@ -127,40 +127,31 @@ How to read the report:
 
 ## Preparing your project (optional, recommended)
 
-Criteria selection is automatic:
+The reviewer uses explicit project review instructions when available. Otherwise it uses its thirteen built-in [baseline criteria](persona-criteria.md). Project criteria replace the baseline; all four perspectives retain the shared evidence and verification requirements.
 
-- **Explicit project criteria**, when available: review instructions from the pinned base commit.
-- **Baseline criteria**, otherwise: the enabled generic rules shipped with the agent ([the persona criteria](persona-criteria.md)).
+### Point to your review instructions
 
-Project criteria replace the baseline; no mode or manual source override is needed. All four perspectives still run, with the same shared evidence and verification requirements. Older `criteria_mode` and `criteria_manifest` settings and the `--criteria` option are no longer supported; remove them from operator configuration or commands. `model_resolver` is retained as the model setting for the project-rule Classifier, not a criteria-discovery model.
-
-Project guidance is discovered deterministically from explicit code-review instructions, not inferred from general coding conventions, architecture, or setup documentation. No criteria-resolver model call is made.
-
-Supported sources at the pinned base commit:
-
-- `Code review`, `Review guidelines`, `Review instructions`, `Review criteria`, `Review checklist` or `Review policy` sections in root and applicable ancestor `README.md` / `AGENTS.md` files. Their subsections are included; unrelated sections are excluded.
-- Dedicated Markdown review documents named `review.md`, `reviews.md`, `reviewing.md`, `code-review-guidelines.md`, `code-review-checklist.md`, `code-review.md`, `code-reviewing.md`, `review-guidelines.md` or `review-checklist.md`, and Markdown documents under root `review/`, `code-review/` or `code-reviewing/` directories, or those directory names immediately inside `docs/`, `documentation/`, `skills/` or `rules/`. Implementation packages such as `src/tool/review/` are not automatically treated as guidance. Underscores are accepted in these names.
-- `SKILL.md` files explicitly identifying code review in their front-matter name/description, or under a dedicated review directory. Other skills are not activated.
-- In-repository Markdown files explicitly referenced by accepted review guidance, including skill references. References can be relative to the containing document or repository-root paths. Cycles are deduplicated. Skill scripts/hooks are never executed; permissions remain Read/Grep/Glob.
-
-For example:
+Add a `Code review` section to your root `AGENTS.md` or `README.md`. Write instructions there or link to a repository Markdown file **with any name**:
 
 ```markdown
 ## Code review
-Check error propagation and cleanup.
-Follow [our checklist](docs/review/checklist.md).
+Follow [our review instructions](engineering/change-checks.md).
 ```
 
-Nested README/AGENTS sources apply only when their directory contains a reviewed file. A source with front-matter `paths:` globs is included only when those match reviewed paths. General `.claude/rules` content is no longer automatically treated as review criteria; use an explicit review section, review document, or reference.
+Linked files can reference further Markdown guidance, including skill references. Paths resolve relative to the containing document, with repository-root paths also supported. Only links inside accepted review guidance are followed. General architecture and setup documents do not become criteria merely because they exist.
 
-Only regular repository files count; symlinks, external URLs and absolute paths are not loaded. External references in accepted guidance are recorded as ignored. Jira/MCP retrieval remains planned, not implemented. Guidance comes from the base commit, so PR edits cannot redefine its own review instructions. Accepted paths, inclusion reasons and citable rule IDs are retained in private input artifacts.
+The reviewer also discovers conventionally named review documents, such as `code-review.md` or `review-checklist.md`, and review directories in documentation, skill and rule locations. These are discovery shortcuts, not required project layouts. An unlinked document with an arbitrary name is not automatically discovered; link it from your review section.
 
-Discovery inspects at most 200 sources and at most `criteria_max_chars` characters (default 200,000); skipped content produces warnings. Accepted guidance is also subject to the criteria size cap. When no explicit project review guidance is loaded, enabled baseline rules are used. Missing or oversized guidance produces warnings rather than a claim of complete coverage.
+Review skills use `SKILL.md` with front-matter name or description explicitly identifying code review, or live in a dedicated review skill directory. Skill scripts and hooks do not execute; model tools remain Read/Grep/Glob.
 
+### Scope and limits
 
-The default criteria use `COR-*`, `SAFE-*`, `TEST-*` and `CQ-*` by subject. Saved runs retain their original criteria; compare the saved criteria blocks/indexes as well as prompt hashes when evaluating runs. Tests verify criteria loading and delivery; they do not establish review quality. Reports and the PR comment name each criterion by its title and source; the IDs stay internal.
+- Instructions come from the pinned base commit. A PR changing instructions is reviewed against the base version.
+- Nested README/AGENTS review sections apply to reviewed files beneath their directory. Front-matter `paths:` globs restrict a source to matching reviewed paths.
+- Only regular repository Markdown files are loaded. Symlinks, external URLs and absolute paths are excluded; external references are recorded as ignored.
+- Discovery inspects at most 200 sources within `criteria_max_chars` characters (default 200,000). Omitted or unavailable guidance produces warnings. Enabled baseline rules apply when no project rules load.
 
-The baseline has thirteen canonical rules with static assignments; see the [persona criteria guide](persona-criteria.md). Accepted project rules are classified to at least one persona; unresolved assignments fall back to all personas with a warning.
+Accepted sources, inclusion reasons and rule IDs are saved in private input artifacts. Project rules are assigned to relevant personas; unresolved assignments go to all personas with a warning. Reports display criterion titles and sources.
 
 ### Customizing the default rules
 

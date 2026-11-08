@@ -13,3 +13,12 @@ Small-sample experiments inform the [review-quality comparison policy](proposal.
 ## Review scope
 
 The project uses four review perspectives as its sole pipeline. The single-agent flow, mode selector, convergence settings, generic GEN-* defaults and replay helper were removed. Retained persona prompts, schemas and rule text were moved to `src/code_reviewer/review/` without content changes.
+
+
+## Explicit review guidance discovery
+
+A repository-local discovery check exposed implementation Markdown under `src/code_reviewer/review/` being treated as project guidance. Automatic review-directory discovery is now limited to root review directories and review directories immediately inside documentation, skill or rule locations; explicit references remain supported. Regression tests distinguish implementation packages from policy documents. The local repository now selects its AGENTS review section and review skill (eight rules), without loading implementation prompts or exhausting the discovery cap. This is offline selection evidence, not live review-quality qualification.
+
+Explicit project review guidance is selected deterministically from README/AGENTS review sections, dedicated review documents and review skills. General documentation is no longer inferred into criteria; explicit project criteria replace the baseline when available, otherwise enabled baseline rules apply. Discovery caches bounded reads, honors explicit references even after an initial section-only inspection, and prioritizes entry instructions. Synthetic tests cover source selection, reference upgrades, scope and baseline fallback through the production input builder. No live before/after quality comparison has been run for this discovery change; no precision/recall improvement is claimed.
+
+Criteria selection uses explicit project rules when available and enabled baseline rules otherwise. The criteria mode and manual manifest options were removed. `model_resolver` remains the project-rule classification model setting.
