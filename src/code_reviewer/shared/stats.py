@@ -19,6 +19,7 @@ class Stats:
             "attempt": attempt,
             "ok": result.ok,
             "error": result.error,
+            **({"budget_exceeded": True} if result.budget_exceeded else {}),
             "model": result.model or model,
             "cost_usd": result.cost_usd,
             "tokens": dict(result.tokens),

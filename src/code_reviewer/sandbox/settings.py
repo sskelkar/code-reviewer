@@ -13,7 +13,7 @@ from ..backends.factory import configuration_errors, credential
 CORE = ('provider', 'auth_mode', 'chatgpt_account', 'call_budget_tokens', 'model_reviewer', 'model_comparator', 'model_resolver', 'model_verifier',
         'self_check', 'disabled_default_rules', 'max_consecutive_failures', 'tier_high', 'tier_medium', 'max_diff_lines', 'criteria_max_chars', 'exclude_patterns',
         'extra_exclude_patterns', 'grounding_line_window', 'redact_emails', 'call_budget_usd', 'call_timeout_s',
-        'run_budget_usd', 'run_budget_tokens', 'post_tiers', 'persona_prompt_max_chars', 'persona_passes',
+        'run_budget_usd', 'round_budget_tokens', 'run_budget_tokens', 'post_tiers', 'persona_prompt_max_chars', 'persona_passes',
         'persona_parallel', 'openai_input_price', 'openai_cached_input_price', 'openai_output_price', 'tracing')
 ENDPOINTS = {'openai': ('api.openai.com',), 'claude': ('api.anthropic.com', 'platform.claude.com')}
 

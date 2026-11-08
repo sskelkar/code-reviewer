@@ -20,7 +20,7 @@ class Budget:
         self.cfg = cfg
         self.subscription = cfg.auth_mode == 'subscription'
         self.unit = 'tokens' if self.subscription else 'usd'
-        cents = cfg.run_budget_tokens if self.subscription else math.floor((cfg.run_budget_usd + 1e-9) * 100)
+        cents = cfg.effective_run_budget_tokens if self.subscription else math.floor((cfg.run_budget_usd + 1e-9) * 100)
         shared = [cents * weight // 30 for weight in (3, 3, 4)]
         remainder = cents - sum(shared)
         each, extra = divmod(remainder, len(PERSONAS))
@@ -38,7 +38,7 @@ class Budget:
         with self.lock:
             if self.cancelled.is_set():
                 raise KeyboardInterrupt
-            if self.tokens >= self.cfg.run_budget_tokens:
+            if self.tokens >= self.cfg.effective_run_budget_tokens:
                 raise RunStopped('global')
             p = self.pools[pool]
             if p['allocated_' + self.unit] - p['spent_' + self.unit] - p['reserved_' + self.unit] + 1e-9 < (1 if self.subscription else .01):

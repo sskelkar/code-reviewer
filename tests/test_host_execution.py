@@ -46,7 +46,7 @@ class HostExecutionTests(unittest.TestCase):
                 store=RunStore.create(root/'runs',ctx)
                 from code_reviewer.shared import git_ops
                 with patch.object(git_ops, '_run'):
-                    git_ops.ensure_cache_clone(git_ops.PRRef('github.com','example','project',1), root/'cache')
+                    git_ops.ensure_snapshot_store(git_ops.PRRef('github.com','example','project',1), root/'cache')
                 store.dump('config.json',{'synthetic':True})
                 passes=store.pass_dir(1)
             finally:

@@ -4,8 +4,7 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Checklist
 
-- [ ] Handle post-call token overruns without discarding otherwise valid completed output.
-- [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
+- [ ] Complete native Claude review qualification with the current overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
 - [ ] Evaluate persona specialization and qualify long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
 - [ ] Measure real-model precision and genuine findings suppressed using a manually adjudicated before/after comparison set.
@@ -15,9 +14,15 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Qualification evidence
 
+Offline budget tests cover round-scaled token allowances after pass overrides, explicit whole-run caps, unchanged API dollar allocations and host/VM configuration parity. These are accounting checks, not provider spending guarantees.
+
+Offline Git integration tests use real filtered transfers against temporary local remotes. They check pinned merge-base diffs after target-branch advancement, absence of historical commits/blobs and known binary assets, preserved text/docs, disabled lazy fetching, unmodified existing clones, and four-perspective core wiring. Anonymous public HTTPS acquisition also confirms merge-base metadata without patches, filtered snapshot transfer and local materialization without history. Full deployed VM qualification of filtered acquisition remains pending; no live model calls were made.
+
+Synthetic native-process and OpenAI response tests preserve complete overrun output for validation, record actual usage, block further calls from exhausted budgets, and keep invalid/incomplete or unverified candidates private. They cover shared-role verification after persona exhaustion and global exhaustion before consolidation. No live inference was run to qualify this budget-handling change.
+
 Offline regressions cover accepted-criteria accounting separately from discovery resource bounds, bounded Git source reads, refusal on overflow without inference, and actionable host/guest failure reports. These checks establish input handling, not live model quality.
 
-Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native Claude VM tools, long-running refresh and provider usage/cache reconciliation remain unqualified.
+Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. A completed native Claude review with current overrun handling, native Claude VM tools, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
 Local synthetic Langfuse ingestion covers both adapters and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
 
@@ -35,7 +40,7 @@ Compare one versus multiple passes per persona, self-check on/off, models and pa
 
 | Stage | Work |
 |---|---|
-| Now | Compare real-model verification quality and candidate coverage under the existing Verifier budget; fix token-overrun handling where it prevents review qualification |
+| Now | Compare real-model verification quality and candidate coverage under the existing Verifier budget and qualify native Claude completion |
 | Next | Continue provider/deployment qualification and criterion/context traceability based on observed failures |
 
 ### Verification milestone: supported-only publication

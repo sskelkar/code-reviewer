@@ -15,6 +15,21 @@ SAMPLE_BYTES = 8000
 MAX_DETAILS = 200
 
 
+# Filename filtering avoids transferring common binary assets. Unknown extensions
+# still require a bounded content sample; SVG, JSON, docs and source remain text candidates.
+BINARY_SUFFIXES = frozenset(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.ico', '.bmp', '.tif', '.tiff',
+    '.pdf', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.mp3', '.mp4', '.mov', '.avi', '.wav', '.ogg', '.webm',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.psd', '.icns', '.heic',
+    '.zip', '.gz', '.tgz', '.bz2', '.xz', '.7z', '.rar', '.tar', '.jar', '.war', '.class', '.pyc', '.pyo',
+    '.exe', '.dll', '.so', '.dylib', '.a', '.o', '.wasm', '.bin', '.db', '.sqlite', '.sqlite3', '.parquet'))
+
+
+def known_binary_path(path):
+    from pathlib import PurePosixPath
+    name = path.decode('utf-8', 'replace') if isinstance(path, bytes) else path
+    return PurePosixPath(name).suffix.lower() in BINARY_SUFFIXES
+
+
 def binary_sample(data):
     """NUL or invalid UTF-8 in the first 8000 bytes; a split final character is OK.
 
@@ -33,7 +48,7 @@ def blob_is_binary(repo, oid, size):
     # even a highly compressed huge binary must not expand onto temporary storage.
     if not re.fullmatch(r'[a-f0-9]{40}|[a-f0-9]{64}', oid) or size < 0:
         raise ValueError('invalid blob identity')
-    proc = subprocess.Popen(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false',
+    proc = subprocess.Popen(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'protocol.allow=never',
                              '-C', str(repo), 'cat-file', 'blob', oid], stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     data = bytearray()
@@ -71,13 +86,13 @@ def omission_section(ctx):
     if not ctx.binary_omissions:
         return ''
     lines = ['\n## Binary contents omitted\n', omission_notice(ctx),
-             'Detection uses an 8000-byte prefix (NUL or invalid UTF-8); it is a heuristic. '
+             'Known binary suffixes are filtered before transfer; other binary contents are detected from an 8000-byte prefix. Both are heuristics. '
              'Sizes refer to Git blobs. Unchanged binaries are listed for checkout completeness.\n']
     for item in ctx.binary_omissions[:MAX_DETAILS]:
         path = html.escape(json.dumps(item['path'], ensure_ascii=True)[:256], quote=False)
         lines.append('- <code>%s</code>: %s; base %s bytes, head %s bytes.' %
-                     (path, item['status'], item['base_bytes'] if item['base_bytes'] is not None else 'absent',
-                      item['head_bytes'] if item['head_bytes'] is not None else 'absent'))
+                     (path, item['status'], item['base_bytes'] if item['base_bytes'] is not None else ('absent' if item['status'] == 'added' else 'unknown (not downloaded)'),
+                      item['head_bytes'] if item['head_bytes'] is not None else ('absent' if item['status'] == 'deleted' else 'unknown (not downloaded)')))
     if len(ctx.binary_omissions) > MAX_DETAILS:
         lines.append('- Detail list capped at %d; %d additional omissions. Full metadata is in stats.json.' %
                      (MAX_DETAILS, len(ctx.binary_omissions) - MAX_DETAILS))

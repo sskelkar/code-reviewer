@@ -134,6 +134,53 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertTrue(result.budget_exceeded)
         self.assertEqual(result.cost_usd, 0)
 
+    def test_completed_overrun_keeps_final_output_for_both_auth_modes(self):
+        usage={'input_tokens':100000, 'output_tokens':10, 'input_tokens_details':{'cached_tokens':90000}}
+        for mode in ('api-key','subscription'):
+            for status in ('completed','incomplete'):
+                with self.subTest(mode=mode,status=status):
+                    calls=[]
+                    def transport(*args):
+                        calls.append(args)
+                        return response(final({'findings':[]}),usage=usage,status=status)
+                    runner=openai.OpenAIRunner('synthetic',model='synthetic-model',prices=self.prices,
+                                               transport=transport,billing_mode=mode)
+                    result=runner.run(**dict(self.kwargs,budget_usd=.04,token_limit=10000))
+                    self.assertEqual(result.ok,status=='completed',result.error)
+                    self.assertTrue(result.budget_exceeded)
+                    self.assertFalse(result.retryable)
+                    self.assertEqual(len(calls),1)
+                    self.assertEqual(result.total_tokens,100010)
+                    if result.ok:
+                        self.assertEqual(result.parsed,{'findings':[]})
+                        self.assertIsNone(result.error)
+
+    def test_overrun_tool_reply_cannot_start_another_turn(self):
+        for mode in ('api-key','subscription'):
+            with self.subTest(mode=mode):
+                calls=[]
+                def transport(*args):
+                    calls.append(args)
+                    return response([{'type':'function_call','namespace':'reviewer','name':'Read','call_id':'one',
+                                      'arguments':'{"path":"app.py"}'}],
+                                    usage={'input_tokens':100000,'output_tokens':10})
+                runner=openai.OpenAIRunner('synthetic',model='synthetic-model',prices=self.prices,
+                                           transport=transport,billing_mode=mode)
+                with patch.object(ReadOnlyTools,'execute',side_effect=AssertionError('no tools after overrun')):
+                    result=runner.run(**dict(self.kwargs,tools='Read',budget_usd=.04,token_limit=10000))
+                self.assertFalse(result.ok)
+                self.assertTrue(result.budget_exceeded)
+                self.assertEqual(len(calls),1)
+                self.assertIn('no further tool turns',result.error)
+
+    def test_overrun_does_not_turn_invalid_final_json_into_success(self):
+        runner=self.runner(lambda *args: response([{'type':'message','content':[
+            {'type':'output_text','text':'not JSON'}]}],usage={'input_tokens':100000,'output_tokens':10}))
+        result=runner.run(**dict(self.kwargs,budget_usd=.04))
+        self.assertFalse(result.ok)
+        self.assertTrue(result.budget_exceeded)
+        self.assertIn('not valid JSON',result.error)
+
     def test_turn_limit_is_bounded(self):
         def transport(*a):
             return response([{'type': 'function_call', 'name': 'Glob', 'call_id': 'synthetic', 'arguments': '{"pattern":"*"}'}])

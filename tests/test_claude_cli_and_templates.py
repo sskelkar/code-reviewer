@@ -44,6 +44,33 @@ class EnvelopeTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(result.budget_exceeded)
 
+    def test_native_completed_output_survives_token_overrun_but_errors_stay_errors(self):
+        import sys
+        import tempfile
+        from pathlib import Path
+        for failed in (False, True):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as name:
+                root=Path(name)
+                binary=root/'synthetic-claude'
+                envelope=self.envelope(is_error=failed, subtype='error_test' if failed else 'success',
+                                       result='synthetic failure' if failed else json.dumps({'findings':[]}))
+                binary.write_text('#!'+sys.executable+'\nimport sys\n'
+                                  'assert "--max-budget-usd" not in sys.argv\n'
+                                  'print('+repr(envelope)+')\n')
+                binary.chmod(0o700)
+                result=claude_cli.ClaudeRunner(str(binary),isolation_flags=[],env={},
+                    billing_mode='subscription').run(system_prompt='rules',user_prompt='diff',schema={},
+                    model='haiku',tools='',cwd=root,budget_usd=.5,timeout_s=5,token_limit=50)
+                self.assertEqual(result.ok,not failed)
+                self.assertTrue(result.budget_exceeded)
+                self.assertFalse(result.retryable)
+                self.assertEqual(result.total_tokens,100)
+                if failed:
+                    self.assertIn('synthetic failure',result.error)
+                else:
+                    self.assertEqual(result.parsed,{'findings':[]})
+                    self.assertIsNone(result.error)
+
     def test_not_json_and_empty(self):
         self.assertFalse(claude_cli.parse_envelope("").ok)
         self.assertIn("not JSON", claude_cli.parse_envelope("oops").error)

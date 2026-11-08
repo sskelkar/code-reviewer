@@ -38,6 +38,9 @@ class BudgetRunner:
         result = None
         try:
             result = self.runner.run(**kwargs)
+            used = (result.total_tokens if result.usage_known else None) if self.budget.subscription else result.cost_usd
+            if used is not None and used > allowance:
+                result.budget_exceeded, result.retryable = True, False
             return result
         finally:
             self.budget.settle(self.pool, allowance, result)

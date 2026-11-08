@@ -226,8 +226,9 @@ class ClaudeRunner:
                 if self.billing_mode == 'subscription':
                     result.cost_usd = None
                     if token_limit is not None and result.total_tokens > token_limit:
-                        result.ok, result.budget_exceeded, result.retryable = False, True, False
-                        result.error = 'subscription token allowance exceeded'
+                        # Usage arrives after native completion. Keep the returned result for
+                        # validation; accounting prevents calls from exhausted pools.
+                        result.budget_exceeded, result.retryable = True, False
                 if proc.returncode and result.ok:
                     result.ok, result.error = False, 'claude exited with status %d: %s' % (proc.returncode, err[-300:])
                 elif result.raw is None and not result.ok and err:

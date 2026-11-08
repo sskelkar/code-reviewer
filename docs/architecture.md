@@ -32,13 +32,15 @@ flowchart TD
     VM --> ADMIT["Revoke source access, seal input and verify boundaries"]
     ADMIT --> KEY["Private selected-credential handoff"]
     KEY --> CORE["Engine → ReviewFlow"]
-    LOCATION -->|Explicit host| HOST["Factory selects adapter, host Git pins commits"]
+    LOCATION -->|Explicit host| HOST["Factory selects adapter, GitHub pins snapshots<br/>Filtered Git fetch + text materialization"]
     HOST --> CORE
     CORE --> RESULT["Validated findings, reports and usage"]
     RESULT --> CLEANUP["Checkout or VM/network/worker cleanup"]
     CLEANUP --> TRACE["Persist trace metadata, optional host Langfuse export"]
     TRACE --> OUTPUT["CLI summary and private report path"]
 ```
+
+Both paths use GitHub's pinned base/head comparison to identify the merge base, fetch depth-one commit/tree snapshots without blobs, and explicitly materialize needed text candidates. Known binary suffixes are filtered before transfer; unrecognized binaries are omitted after content sampling. Shared ownership is in `shared/snapshots.py` and `git_content.py`; `sandbox/acquire.py` owns the no-credential guest transport. Missing text fails before inference, and source-network access cannot be lazily reopened. Host acquisition reuses a complete local object store or a private bare snapshot cache without mutating the operator's clone.
 
 The host dry-run path acquires input and saves defaults-only persona prompts without credentials, model calls or checkout creation. VM dry-run is unsupported. Failed VM requests never switch to host execution. Preflight and doctor check configuration only. See [execution boundaries](security-contract.md).
 

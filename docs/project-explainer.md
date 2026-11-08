@@ -31,7 +31,7 @@ flowchart TD
     STATUS --> ENGINE
     NATIVE -->|no| ENGINE
     ENGINE --> PREPARE["Engine.prepare() → ReviewFlow.prepare()<br/>pr_source.load_pr_context()"]
-    PREPARE --> HOSTINPUT["gh_pr_view() → _object_store()<br/>fetch_pr_refs() → merge_base()<br/>commit_messages() → PRContext"]
+    PREPARE --> HOSTINPUT["gh_pr_view() → gh_compare_base()<br/>ensure_snapshot_store() if needed<br/>fetch_objects() → materialize() → PRContext"]
     HOSTINPUT --> KIND{"--dry-run?"}
     KIND -->|yes| PREVIEW["Engine.dry_run() → ReviewFlow.dry_run()<br/>presentation.render_dry_run(); exit"]
     KIND -->|no| REVIEW["Engine.review() → ReviewFlow.review()<br/>LLM role calls in diagram 3<br/>Actual provider I/O in diagram 4"]
@@ -45,7 +45,9 @@ flowchart TD
     GITHUB --> EXIT
 ```
 
-`_object_store()` selects a matching local clone or calls `git_ops.ensure_cache_clone()` for a cached bare clone. Fetches pin base/head into private refs; they do not switch the operator's working branch. A VM result is an `ExportedReview`: presentation uses its exported summary rather than reconstructing the guest's master list. Configuration errors stop before acquisition or credential access; VM failures have no edge to host execution.
+Token accounting uses `Config.effective_run_budget_tokens`: 10 million tokens per requested round unless an explicit whole-run cap is set. `Budget` applies the resolved threshold to independent role pools; each subscription conversation requests up to 2 million tokens from its own remaining pool. Host and guest resolve the same settings after pass selection.
+
+`gh_pr_view()` returns pinned base/head IDs; `gh_compare_base()` asks GitHub for their merge base. A complete matching local object store is reused without changing its refs, branch, configuration or shallow boundaries. Otherwise `ensure_snapshot_store()` initializes a private bare object cache and `source_transport()` selects the operator's existing SSH/HTTPS Git access. Shared `snapshots.fetch_objects()` fetches the three snapshot commits with depth one and `blob:none`; `materialize()` transfers missing text candidates for the head/merge base and only Markdown guidance for a distinct target tip. Known binary suffixes are excluded before blob transfer. Promisor remotes are removed after each transfer and reads cannot initiate network access. Acquisition supplies no commit-message history. A VM result is an `ExportedReview`: presentation uses its exported summary rather than reconstructing the guest's master list. Configuration errors stop before acquisition or credential access; VM failures have no edge to host execution.
 
 ### 2. VM execution and process boundaries
 
@@ -68,7 +70,7 @@ sequenceDiagram
     Worker->>VM: connected.exchange(): settings + acquisition request over vsock
     VM->>VM: guest.main() → run_job() → validate_settings()
     Note over VM: Optional guest Recorder wraps _run_job()
-    VM->>VM: acquire.in_guest() pins PR commits
+    VM->>VM: acquire.in_guest(): PR + comparison metadata<br/>fetch_objects(depth=1, blob:none) → materialize()
     VM->>Worker: Send acquired identity, wait for source-access revocation
     Worker->>Worker: Network.inference()
     Worker->>VM: Acknowledge source-access revocation
@@ -112,7 +114,7 @@ The guest receives an already pinned `PRContext` from acquisition and calls `Eng
 
 ### 3. Four-perspective review orchestration
 
-`Engine.review()` delegates to `ReviewFlow.review()` in `review/flow.py`. `InputBuilder.redact()` handles PR metadata, `load_diff()` enforces diff/exclusion/binary limits, and `RunStore` owns artifacts. Host runs use `prepare_checkout()` and `git_ops.export_tree()`; VM runs reuse the admitted sealed snapshot.
+`Engine.review()` delegates to `ReviewFlow.review()` in `review/flow.py`. `InputBuilder.redact()` handles PR metadata, `load_diff()` enforces diff/exclusion/binary limits, and `RunStore` owns artifacts. Host runs use `prepare_checkout()` and `git_ops.export_tree()` to write local text blobs without archives; VM runs reuse the admitted sealed snapshot.
 
 Orange nodes invoke an LLM when their condition applies. Every invocation expands into diagram 4.
 
@@ -166,7 +168,7 @@ These controls do not prove that a model's judgment is correct. The [verificatio
 
 ### 4. Every LLM invocation, actual I/O, tools and validation
 
-The actual shared adapter invocation is `self.runner.run(...)` in [ModelCaller._attempts()](../src/code_reviewer/shared/llm.py). The object is a budget wrapper around a cancellation wrapper around the selected provider adapter. Runner construction and authentication status checks do not request an LLM review.
+The actual shared adapter invocation is `self.runner.run(...)` in [ModelCaller._attempts()](../src/code_reviewer/shared/llm.py). The object is a budget wrapper around a cancellation wrapper around the selected provider adapter. Runner construction and authentication status checks do not request an LLM review. A post-call allowance overrun records actual usage and a warning; complete output still enters normal validation. Budget checks govern later calls, while incomplete replies and unfinished tool conversations remain failures. Exhausted consolidation/verification budgets cannot bypass the publication gate.
 
 ```mermaid
 flowchart TD
@@ -188,7 +190,7 @@ flowchart TD
     FILES --> REQUEST
     TOOLS -->|No, final output| RESULT["LLMResult"]
     PARSE --> RESULT
-    RESULT --> ACCOUNT["Budget.settle() → Stats.record()<br/>save raw log, run role validator"]
+    RESULT --> ACCOUNT["Budget.settle() → Stats.record()<br/>record usage/overruns, save raw log<br/>run role validator"]
     ACCOUNT --> RETRY{"Rejected and retry allowed?"}
     RETRY -->|Yes, at most once with feedback| SHARED
     RETRY -->|No, valid| RETURN["Validated output returns to role"]
@@ -209,6 +211,7 @@ One role invocation can involve several provider requests: OpenAI tool continuat
 | VM launcher → Linux supervisor → guest | [review.py](../src/code_reviewer/sandbox/review.py), [review_worker.py](../src/code_reviewer/sandbox/review_worker.py), [connected.py](../src/code_reviewer/sandbox/connected.py), [guest.py](../src/code_reviewer/sandbox/guest.py) |
 | Persona orchestration and call guards | [review/flow.py](../src/code_reviewer/review/flow.py), [roles.py](../src/code_reviewer/review/roles.py), [caller.py](../src/code_reviewer/review/caller.py), [runner.py](../src/code_reviewer/review/runner.py) |
 | Criteria discovery, selection and assignment | [review_inputs.py](../src/code_reviewer/shared/review_inputs.py), [shared/criteria.py](../src/code_reviewer/shared/criteria.py), [review_guidance.py](../src/code_reviewer/shared/review_guidance.py), [review/criteria.py](../src/code_reviewer/review/criteria.py), [roles.py](../src/code_reviewer/review/roles.py) |
+| Snapshot acquisition and binary filtering | [pr_source.py](../src/code_reviewer/shared/pr_source.py), [snapshots.py](../src/code_reviewer/shared/snapshots.py), [git_content.py](../src/code_reviewer/shared/git_content.py), [acquire.py](../src/code_reviewer/sandbox/acquire.py) |
 | Shared input, calls, evidence and storage | [review_inputs.py](../src/code_reviewer/shared/review_inputs.py), [llm.py](../src/code_reviewer/shared/llm.py), [findings.py](../src/code_reviewer/shared/findings.py), [run_store.py](../src/code_reviewer/shared/run_store.py) |
 | Adapter creation and implementations | [factory.py](../src/code_reviewer/backends/factory.py), [claude.py](../src/code_reviewer/backends/claude.py), [openai.py](../src/code_reviewer/backends/openai.py), [read_tools.py](../src/code_reviewer/backends/read_tools.py) |
 

@@ -64,7 +64,7 @@ Keep the source checkout: role prompts and criteria load from `src/code_reviewer
 
 VM execution requires a compatible Apple Silicon Mac, a dedicated mountless Lima Linux worker with nested virtualization and pinned Firecracker artifacts. Follow [VM setup](docs/sandbox-check.md#persistent-first-time-setup) and [operator configuration](docs/usage.md#vm-review-configuration). VM acquisition supports public github.com PRs; private in-VM source authentication is unsupported.
 
-For a trusted repository, `--no-sandbox` explicitly runs acquisition and review on the host using your Git/GitHub access, without VM setup. Run `gh auth login` if GitHub CLI is not already authenticated. The reviewer can use an existing clone or acquire the PR itself. A VM failure never falls back to the host.
+For a trusted repository, `--no-sandbox` explicitly runs acquisition and review on the host using your Git/GitHub access, without VM setup. Run `gh auth login` if GitHub CLI is not already authenticated. The reviewer reuses complete local objects or fetches pinned snapshots itself, without downloading branch history. Known binary assets are filtered before content transfer. A VM failure never falls back to the host.
 
 Choose [provider and authentication](docs/llm.md). Claude host subscription reviews can reuse the normal Claude Code SSO login:
 

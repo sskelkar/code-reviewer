@@ -122,7 +122,7 @@ class SavedInputsTests(TempDirTestMixin, unittest.TestCase):
         with mock.patch.object(git_ops, "_run", fake_run):
             git_ops.gh_pr_view(git_ops.parse_pr_ref("acme/project#7"))
         fields = set(captured[0][captured[0].index("--json") + 1].split(","))
-        self.assertEqual(fields, {"title", "body", "baseRefName", "headRefName", "headRefOid", "url", "state", "author",
+        self.assertEqual(fields, {"title", "body", "baseRefName", "baseRefOid", "headRefName", "headRefOid", "url", "state", "author",
                                   "isCrossRepository"})
         for forbidden in ("comments", "reviews", "latestReviews", "reviewRequests", "statusCheckRollup"):
             self.assertNotIn(forbidden, fields)

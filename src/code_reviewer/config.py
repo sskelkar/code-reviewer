@@ -83,7 +83,8 @@ class Config:
     call_budget_usd: float = 0.50
     call_timeout_s: int = 600
     run_budget_usd: float = 3.00
-    run_budget_tokens: int = 2000000
+    round_budget_tokens: int = 10000000
+    run_budget_tokens: int | None = None
 
     # Claude Code invocation
     claude_bin: str = "claude"
@@ -116,8 +117,13 @@ class Config:
     vm_claude_sha256: str = ""
     auth_mode: str = "api-key"
     chatgpt_account: str = "default"
-    call_budget_tokens: int = 200000
+    call_budget_tokens: int = 2000000
     tracing: bool = True
+
+    @property
+    def effective_run_budget_tokens(self) -> int:
+        """Resolve after CLI overrides; an explicit whole-run cap takes precedence."""
+        return self.run_budget_tokens if self.run_budget_tokens is not None else self.round_budget_tokens * self.persona_passes
 
     def __post_init__(self) -> None:
         self._resolve_model_defaults()
@@ -131,10 +137,12 @@ class Config:
     def validate(self) -> None:
         self._resolve_model_defaults()
         for name in ('max_consecutive_failures', 'max_diff_lines',
-                     'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars', 'call_budget_tokens'):
+                     'criteria_max_chars', 'call_timeout_s', 'round_budget_tokens', 'persona_prompt_max_chars', 'call_budget_tokens'):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
                 raise ConfigError('%s must be a positive integer' % name)
+        if self.run_budget_tokens is not None and (type(self.run_budget_tokens) is not int or self.run_budget_tokens < 1):
+            raise ConfigError('run_budget_tokens must be a positive integer when set')
         import re
         if not isinstance(self.chatgpt_account, str) or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}', self.chatgpt_account):
             raise ConfigError('chatgpt_account must be a local label of 1..64 letters, digits, underscores or hyphens')

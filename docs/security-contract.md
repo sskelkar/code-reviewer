@@ -34,7 +34,7 @@ Optional Langfuse tracing returns only a closed, bounded metadata schema through
 
 ## Direct-host execution
 
-The operator deliberately selects the host boundary. Acquisition uses the existing host/local-clone path and the same review core. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.
+The operator deliberately selects the host boundary. Acquisition reuses a complete local object store or fetches pinned snapshots into a private object cache, using the operator's GitHub access and the same review core. It does not make the operator's clone shallow or change its configuration/refs. It avoids VM setup, VM transport and external guest networking. It retains read-only model tools, separate checkout, validation, budgets and cleanup, but does not claim the VM's kernel/filesystem/network isolation. VM readiness checks must not become requirements for this explicit direct path.
 
 Host Claude subscription authentication may reuse Claude Code’s own cached login after the native CLI reports an active subscription method. The reviewer does not read/copy the credential cache or add a token store. Explicit environment tokens take precedence; API-key/unknown native methods cannot trigger automatic billing fallback. This host-only reuse grants no VM access to the Mac’s keychain or login files. Details are in [Claude authentication](llm.md#claude-subscription-sign-in).
 

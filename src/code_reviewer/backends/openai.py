@@ -309,8 +309,9 @@ class OpenAIRunner:
                 if cancelled is not None and cancelled.is_set():
                     raise KeyboardInterrupt
                 if (subscription and result.total_tokens > token_limit) or (not subscription and result.cost_usd > budget_usd):
-                    result.budget_exceeded = True
-                    raise ProviderError('subscription token allowance exceeded' if subscription else 'OpenAI estimated call allowance exceeded')
+                    # A completed final reply still goes through JSON and shared validation.
+                    # An unfinished tool conversation cannot request another turn on overrun.
+                    result.budget_exceeded, result.retryable = True, False
                 if reply.get('status') != 'completed' or not isinstance(reply.get('output'), list):
                     raise ProviderError('OpenAI response did not complete')
                 items = reply['output']
@@ -323,6 +324,8 @@ class OpenAIRunner:
                     raise ProviderError('invalid OpenAI output item collection')
                 calls = [item for item in items if isinstance(item, dict) and item.get('type') == 'function_call']
                 if calls:
+                    if result.budget_exceeded:
+                        raise ProviderError('call allowance exceeded before a final answer; no further tool turns')
                     tool_count += len(calls)
                     if tool_count > MAX_TOOL_CALLS:
                         raise ProviderError('OpenAI tool-call limit exceeded')

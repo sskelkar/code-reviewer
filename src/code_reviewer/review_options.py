@@ -114,6 +114,10 @@ def review_banner(pr: str, cfg: Config) -> str:
         "",
         "Options you can add to this command:",
     ]
+    token_line = 'Token allowance: %s for this review' % format(cfg.effective_run_budget_tokens, ',')
+    if cfg.auth_mode == 'subscription':
+        token_line += ' (%s per conversation)' % format(cfg.call_budget_tokens, ',')
+    lines.insert(3, token_line + '.')
     lines.insert(3, 'Schedule: %d passes per persona; fixed rounds.' % cfg.persona_passes)
     lines.insert(3, 'Execution: %s · provider %s · auth %s' % ('VM' if cfg.sandbox else 'direct host (explicitly selected)', cfg.provider, cfg.auth_mode))
     lines += ["  %s%s" % (flag.ljust(width), description) for flag, description in BANNER_OPTIONS]

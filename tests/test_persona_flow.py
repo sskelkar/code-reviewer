@@ -564,6 +564,54 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
         self.assertTrue(result.assignments)
         self.assertIn('criteria budget exhausted', ' '.join(result.warnings))
 
+    def overrun_runner(self, payload=None, tokens=600):
+        class OverrunRunner(PersonaRunner):
+            def run(self, **kwargs):
+                result=super().run(**kwargs)
+                result.tokens={'input':tokens if self.calls[-1]['role']=='reviewer' else 1, 'output':1}
+                result.billing_mode='subscription'
+                result.cost_usd=None
+                return result
+        return OverrunRunner(reviewer=[payload or {'findings':[finding(rule_id='none')]}])
+
+    def test_completed_overruns_are_validated_merged_and_verified_before_publication(self):
+        runner=self.overrun_runner()
+        result=self.run_flow(runner,auth_mode='subscription',run_budget_tokens=3000,
+                             call_budget_tokens=100,persona_passes=2)
+        self.assertEqual(runner.counts,{'reviewer':4,'comparator':4,'verifier':1})
+        self.assertEqual(result.passes_completed,4)
+        self.assertEqual(result.stop_reason,'incomplete')
+        calls=[c for c in result.stats.calls if c['role']=='reviewer']
+        self.assertTrue(all(c['ok'] and c['budget_exceeded'] and c['budget_tokens_used']==601 for c in calls))
+        self.assertTrue(all(result.budget_pools[p]['spent_tokens']==601 for p in PERSONAS))
+        artifact=json.loads((result.run_dir/'findings.json').read_text())
+        self.assertEqual(len(artifact['findings']),1)
+        self.assertEqual(artifact['findings'][0]['verification']['status'],'supported')
+        self.assertIn('exceeded their allowance',result.report_path.read_text())
+        self.assertTrue(all(c['token_limit']==100 for c in runner.calls if c['role']=='reviewer'))
+
+    def test_global_exhaustion_retains_reviewer_results_without_unverified_publication(self):
+        runner=self.overrun_runner(tokens=1000)
+        result=self.run_flow(runner,auth_mode='subscription',run_budget_tokens=3000,
+                             call_budget_tokens=100,persona_passes=1)
+        self.assertEqual(result.stop_reason,'budget_exceeded')
+        self.assertTrue(all(c['ok'] for c in result.stats.calls))
+        self.assertGreaterEqual(result.stats.total_tokens(),3000)
+        self.assertNotIn('comparator',runner.counts)
+        self.assertNotIn('verifier',runner.counts)
+        self.assertEqual(json.loads((result.run_dir/'findings.json').read_text())['findings'],[])
+        self.assertTrue(list(result.run_dir.glob('pass-*/reviewer.raw.json')))
+        self.assertNotIn('SQL built by concatenation',render_summary(result,['High'],[]))
+
+    def test_malformed_overrun_is_not_published_or_retried(self):
+        runner=self.overrun_runner({'findings':'invalid array'})
+        result=self.run_flow(runner,auth_mode='subscription',run_budget_tokens=3000,
+                             call_budget_tokens=100,persona_passes=1)
+        self.assertEqual(runner.counts,{'reviewer':4})
+        self.assertEqual(result.stop_reason,'failures')
+        self.assertTrue(result.diagnostics)
+        self.assertEqual(json.loads((result.run_dir/'findings.json').read_text())['findings'],[])
+
     def test_token_budget_stops_before_comparison_and_no_path_is_posted(self):
         runner = PersonaRunner(reviewer=[{'findings': [finding()]}])
         result = self.run_flow(runner, run_budget_tokens=1)

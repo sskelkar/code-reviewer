@@ -136,6 +136,12 @@ class ReviewFlow:
         finally:
             try:
                 self.emit('report_started')
+                overruns = sum(bool(c['ok'] and c.get('budget_exceeded')) for c in stats.calls)
+                if overruns:
+                    result.warnings.append(
+                        '%d returned model call(s) exceeded their allowance; output was retained for validation and '
+                        'actual usage was accounted. Further calls require remaining budget; verification is still required.'
+                        % overruns)
                 for group in result.master.conflicts.values():
                     if group['status'] == 'pending':
                         group['error'] = 'verification not completed: %s' % result.stop_reason

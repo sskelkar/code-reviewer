@@ -1,12 +1,11 @@
 """Parse target objects only inside the guest, with bounded tree admission/export."""
 from __future__ import annotations
 
-import subprocess
 import json
-import tempfile
 from pathlib import Path
 
-from ..shared.git_content import blob_is_binary
+from ..shared.git_content import blob_is_binary, known_binary_path
+from ..shared.snapshots import read_git as git, tree, sizes
 from ..shared.models import PRContext
 from .capsule import unpack
 
@@ -23,44 +22,27 @@ class TreeFileTooLarge(ValueError):
         super().__init__('tree single file byte limit exceeded')
 
 
-def git(repo, *args, limit=2 * 1024 * 1024):
-    with tempfile.TemporaryFile() as out:
-        proc = subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false',
-                               '-C', str(repo), *args], stdout=out, stderr=subprocess.DEVNULL, timeout=60)
-        if proc.returncode:
-            raise ValueError('admitted Git operation failed')
-        if out.tell() > limit:
-            raise ValueError('Git output limit exceeded')
-        out.seek(0)
-        return out.read(limit + 1)
-
-
-def admit_tree(repo, sha):
-    output = git(repo, 'ls-tree', '-rzl', sha)
-    count = total = 0
-    entries = {}
-    for row in output.split(b'\x00'):
-        if not row:
+def admit_tree(repo, sha, *, criteria_only=False):
+    entries = tree(repo, sha, max_files=TREE_FILES)
+    local = sizes(repo, [e['oid'] for e in entries.values() if e['kind'] == b'blob'])
+    total = 0
+    for path, entry in entries.items():
+        if entry['kind'] != b'blob' or (criteria_only and not path.lower().endswith(b'.md')):
             continue
-        fields, path = row.split(b'\t', 1)
-        mode, kind, object_, size = fields.split()
-        count += 1
-        if count > TREE_FILES:
-            raise ValueError('tree file count limit exceeded')
-        if len(path) > 4096:
-            raise ValueError('tree path length limit exceeded')
-        if kind == b'blob':
-            size = int(size)
-            binary = mode in (b'100644', b'100755') and blob_is_binary(str(repo), object_.decode('ascii'), size)
-            entries[path] = dict(mode=mode, oid=object_.decode('ascii'), size=size, binary=binary)
-            if binary:
-                continue
-            total += size
-            if size > FILE_BYTES:
-                raise TreeFileTooLarge(path, size)
-            if total > TREE_BYTES:
-                raise ValueError('tree total byte limit exceeded')
-
+        size = local[entry['oid']]
+        binary = entry['mode'] in (b'100644', b'100755') and known_binary_path(path)
+        if not binary:
+            if size is None:
+                raise ValueError('required snapshot blobs are missing')
+            binary = entry['mode'] in (b'100644', b'100755') and blob_is_binary(str(repo), entry['oid'], size)
+        entry.update(size=size, binary=binary)
+        if binary:
+            continue
+        total += size
+        if size > FILE_BYTES:
+            raise TreeFileTooLarge(path, size)
+        if total > TREE_BYTES:
+            raise ValueError('tree total byte limit exceeded')
     return entries
 
 

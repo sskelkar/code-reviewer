@@ -6,7 +6,6 @@ import errno
 import json
 import os
 import re
-import signal
 import subprocess
 import sys
 import tempfile
@@ -17,11 +16,11 @@ from ..config import ConfigError
 from ..shared.models import PRContext
 from .git_input import TREE_BYTES, TREE_FILES, TreeFileTooLarge, admit_tree, bounded_export, git
 from .network import PROXY
+from ..shared.snapshots import comparison_base, fetch_objects, materialize
 
 META_BYTES = 512 * 1024
 GIT_BYTES = 128 * 1024 * 1024
 GIT_FILES = 10000
-DEPTH = 256
 
 
 class MetadataUnavailable(ConfigError):
@@ -39,7 +38,12 @@ class MetadataUnavailable(ConfigError):
 
 SOURCE_REASONS = {
     'git': 'Git could not read/init the admitted repository or find its merge base',
-    'fetch': 'pinned Git commits could not be fetched within the configured limits',
+    'fetch': 'pinned snapshot objects could not be fetched',
+    'filter': 'the Git server did not honor filtered snapshot acquisition',
+    'git-bytes': 'snapshot Git storage exceeded the 128 MiB limit',
+    'git-files': 'snapshot Git storage exceeded the 10,000-entry limit',
+    'comparison': 'GitHub comparison metadata did not identify the pinned merge base',
+    'objects': 'required snapshot text objects are missing',
     'tree': 'the repository exceeded archive/export limits',
     'file-bytes': 'a repository text file exceeds the current 2 MiB per-file admission limit',
     'tree-bytes': f'a repository text tree exceeds the current {TREE_BYTES // (1024 * 1024)} MiB total admission limit',
@@ -88,7 +92,9 @@ def acquisition_error(exc):
         'admitted Git operation failed': 'git', 'Git output limit exceeded': 'git',
         'pinned commits unavailable within acquisition limits': 'fetch',
         'public Git acquisition deadline exceeded': 'timeout',
-        'acquired Git bytes exceeded their limit': 'fetch', 'acquired Git file count exceeded its limit': 'fetch',
+        'acquired Git bytes exceeded their limit': 'git-bytes', 'acquired Git file count exceeded its limit': 'git-files',
+        'Git server did not honor snapshot filtering': 'filter', 'pinned snapshot objects unavailable': 'fetch',
+        'invalid pinned comparison metadata': 'comparison', 'required snapshot blobs are missing': 'objects',
         'tree single file byte limit exceeded': 'file-bytes', 'tree total byte limit exceeded': 'tree-bytes',
         'tree file count limit exceeded': 'tree-count', 'tree path length limit exceeded': 'tree-path',
         'archive generation failed or exceeded limits': 'tree', 'export byte/count limit exceeded': 'tree',
@@ -134,12 +140,18 @@ def pin(value, url):
     return value
 
 
-def metadata(url):
+def metadata(url, *, compare=None):
     repo, number = parse_pr(url)
+    path = '/repos/%s/pulls/%d' % (repo, number)
+    if compare is not None:
+        if (not isinstance(compare, tuple) or len(compare) != 2 or
+                any(not isinstance(x, str) or not re.fullmatch('[a-f0-9]{40}', x) for x in compare)):
+            raise ValueError('invalid pinned comparison metadata')
+        path = '/repos/%s/compare/%s...%s?per_page=1&page=2' % (repo, *compare)
     connection = http.client.HTTPSConnection(*PROXY, timeout=20)
     try:
         connection.set_tunnel('api.github.com', 443)
-        connection.request('GET', '/repos/%s/pulls/%d' % (repo, number), headers={
+        connection.request('GET', path, headers={
             'Accept': 'application/vnd.github+json', 'User-Agent': 'code-reviewer',
             'X-GitHub-Api-Version': '2022-11-28'})
         response = connection.getresponse()
@@ -184,57 +196,33 @@ def inventory(root):
                 raise ValueError('acquired Git bytes exceeded their limit')
 
 
-def fetch(root, repo, base, head):
-    # Configuration and URL are code-owned; no remote helpers, hooks, submodules,
-    # credentials, redirects or target-chosen protocol/branch names are admitted.
-    options = ['core.hooksPath=/dev/null', 'core.fsmonitor=false', 'credential.helper=',
-               'protocol.allow=never', 'protocol.https.allow=always', 'http.followRedirects=false',
-               'http.sslVerify=true', 'http.sslCAInfo=/etc/ssl/certs/ca-certificates.crt',
-               'http.proxy=http://%s:%d' % PROXY, 'http.maxRequests=1',
-               'pack.threads=1', 'gc.auto=0', 'maintenance.auto=false', 'fetch.fsckObjects=true']
-    argv = ['git']
-    for option in options:
-        argv.extend(['-c', option])
-    argv.extend(['-C', str(root), 'fetch', '--quiet', '--no-progress', '--no-tags',
-                 '--no-recurse-submodules', '--depth=%d' % DEPTH,
-                 'https://github.com/%s.git' % repo, base, head])
-    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, start_new_session=True)
-    try:
-        deadline = time.monotonic() + 120
-        while proc.poll() is None:
-            inventory(root)
-            if time.monotonic() >= deadline:
-                raise TimeoutError('public Git acquisition deadline exceeded')
-            time.sleep(.1)
-        if proc.returncode:
-            raise ValueError('pinned commits unavailable within acquisition limits')
-        inventory(root)
-    finally:
-        # The HTTPS transport helper must not outlive either success or failure.
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        proc.wait()
+def fetch(root, repo, oids, *, shallow=False, timeout=120):
+    options = ('credential.helper=', 'http.sslVerify=true',
+               'http.sslCAInfo=/etc/ssl/certs/ca-certificates.crt',
+               'http.proxy=http://%s:%d' % PROXY, 'http.maxRequests=1')
+    fetch_objects(root, 'https://github.com/%s.git' % repo, oids, shallow=shallow,
+                  options=options, monitor=lambda: inventory(root), timeout=timeout)
 
 
 def acquire(url, root):
     repo, number, base, head, title, body = describe(metadata(url), url)
+    merge_base = comparison_base(metadata(url, compare=(base, head)), base, head)
     root = Path(root)
     root.mkdir(mode=0o700)
-    templates = root.parent / 'empty-templates'
-    templates.mkdir(mode=0o700)
-    git(root, 'init', '--bare', '--quiet', '--template=' + str(templates))
-    fetch(root, repo, base, head)
-    for sha in (base, head):
-        if git(root, 'rev-parse', '--verify', sha + '^{commit}').decode().strip() != sha:
-            raise ValueError('fetched hash is not the pinned commit')
-        admit_tree(root, sha)
-    merge_base = git(root, 'merge-base', base, head).decode().strip()
+    git(root, 'init', '--bare', '--quiet', '--template=')
+    deadline = time.monotonic() + 120
+    def transfer(oids, *, shallow=False):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('public Git acquisition deadline exceeded')
+        fetch(root, repo, oids, shallow=shallow, timeout=remaining)
+    commits = list(dict.fromkeys((base, head, merge_base)))
+    transfer(commits, shallow=True)
+    criteria_only = base if base not in (head, merge_base) else None
+    materialize(root, commits, transfer, max_files=TREE_FILES, criteria_only=criteria_only)
+    for sha in commits:
+        admit_tree(root, sha, criteria_only=sha == criteria_only)
     pin(dict(repo=repo, number=number, base=base, head=head, merge_base=merge_base), url)
-    admit_tree(root, merge_base)
-    # All parsing/export runs unprivileged, before the setup parent seals mounts.
     bounded_export(root, head, root.parent / 'snapshot')
     return dict(repo=repo, number=number, base=base, head=head, merge_base=merge_base, title=title, body=body)
 

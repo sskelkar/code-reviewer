@@ -45,10 +45,10 @@ class BinaryOmissionTests(unittest.TestCase):
         for name, exporter in [('vm',git_input.bounded_export), ('host',git_ops.export_tree)]:
             dest = self.root/name
             stats = exporter(self.repo, self.ctx.head_sha, dest)
-            self.assertEqual(stats['skipped_binaries'],2)
+            self.assertEqual(stats['skipped_binaries'],3)
             self.assertFalse((dest/'small.py').exists())
             self.assertFalse((dest/'large.dat').exists())
-            self.assertEqual((dest/'looks-binary.jar').read_text(),'ordinary text\n')
+            self.assertFalse((dest/'looks-binary.jar').exists())
             self.assertTrue((dest/'app.py').exists())
 
     def test_large_text_and_total_text_limits_still_refuse(self):
@@ -67,13 +67,13 @@ class BinaryOmissionTests(unittest.TestCase):
     def test_larger_tree_is_admitted_but_the_new_file_cap_still_refuses(self):
         self.assertEqual(git_input.TREE_FILES, 10000)
         def row(number):
-            return b'100644 blob ' + b'a' * 40 + b' 1\tfile-' + str(number).encode() + b'.txt\0'
+            return b'100644 blob ' + b'a' * 40 + b'\tfile-' + str(number).encode() + b'.txt\0'
         data = b''.join(row(n) for n in range(git_input.TREE_FILES))
-        with patch.object(git_input, 'git', return_value=data), \
+        with patch('code_reviewer.shared.snapshots.read_git', return_value=data), patch.object(git_input, 'sizes', return_value={'a'*40:1}), \
              patch.object(git_input, 'blob_is_binary', return_value=False):
             entries = git_input.admit_tree(self.repo, self.ctx.head_sha)
         self.assertEqual(len(entries), 10000)
-        with patch.object(git_input, 'git', return_value=data + row(git_input.TREE_FILES)), \
+        with patch('code_reviewer.shared.snapshots.read_git', return_value=data + row(git_input.TREE_FILES)), patch.object(git_input, 'sizes', return_value={'a'*40:1}), \
              patch.object(git_input, 'blob_is_binary', return_value=False), \
              self.assertRaisesRegex(ValueError, 'file count limit exceeded'):
             git_input.admit_tree(self.repo, self.ctx.head_sha)
@@ -82,14 +82,13 @@ class BinaryOmissionTests(unittest.TestCase):
         self.assertEqual(git_input.TREE_BYTES, 64 * 1024 * 1024)
         self.assertEqual(git_input.FILE_BYTES, 2 * 1024 * 1024)
         def row(number):
-            return (b'100644 blob ' + b'a' * 40 + b' ' + str(git_input.FILE_BYTES).encode()
-                    + b'\tfile-' + str(number).encode() + b'.txt\0')
+            return (b'100644 blob ' + b'a' * 40 + b'\tfile-' + str(number).encode() + b'.txt\0')
         count = git_input.TREE_BYTES // git_input.FILE_BYTES
         data = b''.join(row(n) for n in range(count))
-        with patch.object(git_input, 'git', return_value=data), \
+        with patch('code_reviewer.shared.snapshots.read_git', return_value=data), patch.object(git_input, 'sizes', return_value={'a'*40:git_input.FILE_BYTES}), \
              patch.object(git_input, 'blob_is_binary', return_value=False):
             self.assertEqual(len(git_input.admit_tree(self.repo, self.ctx.head_sha)), count)
-        with patch.object(git_input, 'git', return_value=data + row(count)), \
+        with patch('code_reviewer.shared.snapshots.read_git', return_value=data + row(count)), patch.object(git_input, 'sizes', return_value={'a'*40:git_input.FILE_BYTES}), \
              patch.object(git_input, 'blob_is_binary', return_value=False), \
              self.assertRaisesRegex(ValueError, 'total byte limit exceeded'):
             git_input.admit_tree(self.repo, self.ctx.head_sha)
@@ -100,7 +99,7 @@ class BinaryOmissionTests(unittest.TestCase):
         target = self.root/'input.tar'
         capsule.prepare(self.repo,self.ctx.base_sha,self.ctx.head_sha,target)
         ctx = git_input.prepare_repository(target.read_bytes(),self.root/'admitted')
-        with patch.object(git_input.subprocess,'run', wraps=subprocess.run) as calls:
+        with patch('code_reviewer.shared.snapshots.subprocess.run', wraps=subprocess.run) as calls:
             git_input.bounded_export(ctx.git_dir,ctx.head_sha,self.root/'snapshot')
         self.assertFalse((self.root/'snapshot/asset.bin').exists())
         self.assertFalse(any('archive' in c.args[0] for c in calls.call_args_list))

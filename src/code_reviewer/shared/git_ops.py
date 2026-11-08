@@ -2,16 +2,14 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
-import tarfile
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from .git_content import binary_sample, blob_is_binary, SAMPLE_BYTES
+from .git_content import binary_sample, blob_is_binary, known_binary_path, SAMPLE_BYTES
+from .snapshots import read_git, tree, sizes
 from ..config import DATA_DIR
 
 
@@ -121,7 +119,7 @@ def same_repo(local: LocalRepo, ref: PRRef) -> bool:
 def gh_pr_view(ref: PRRef) -> Dict[str, object]:
     proc = _run([
         "gh", "pr", "view", str(ref.number), "-R", ref.gh_repo, "--json",
-        "title,body,baseRefName,headRefName,headRefOid,url,state,author,isCrossRepository",
+        "title,body,baseRefName,baseRefOid,headRefName,headRefOid,url,state,author,isCrossRepository",
     ], timeout=120)
     try:
         return json.loads(proc.stdout)
@@ -129,50 +127,52 @@ def gh_pr_view(ref: PRRef) -> Dict[str, object]:
         raise GitError("could not parse gh pr view output") from exc
 
 
-def ensure_cache_clone(ref: PRRef, cache_dir: Optional[Path] = None) -> Path:
+def ensure_snapshot_store(ref: PRRef, cache_dir: Optional[Path] = None) -> Path:
+    """Private object cache, initialized empty rather than cloning repository history."""
     cache = (cache_dir or DATA_DIR / "cache")
     cache.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = cache / ("%s__%s__%s.git" % (ref.host, ref.owner, ref.repo))
     if not path.exists():
-        _run(["gh", "repo", "clone", ref.gh_repo, str(path), "--", "--bare", "--quiet"], timeout=1800)
+        path.mkdir(mode=0o700)
+        _run(['git', 'init', '--bare', '--quiet', '--template=', str(path)])
     return path
 
 
-def fetch_pr_refs(git_dir: Path, number: int, base_ref: str) -> Tuple[str, str]:
-    """Fetch the PR head and the base branch tip into a private ref namespace; return (base_sha, head_sha)."""
-    head_ref = "refs/code-reviewer/pr-%d-head" % number
-    base_local = "refs/code-reviewer/pr-%d-base" % number
-    # Explicit destinations alone still allow configured remote-tracking updates.
-    # Ignore those mappings so IDE/background fetches do not contend with this review.
-    _run([
-        "git", "-C", str(git_dir), "fetch", "--quiet", "--no-tags", "--refmap=", "origin",
-        "+refs/pull/%d/head:%s" % (number, head_ref),
-        "+refs/heads/%s:%s" % (base_ref, base_local),
-    ], timeout=1800)
-    head = _run(["git", "-C", str(git_dir), "rev-parse", head_ref]).stdout.strip()
-    base = _run(["git", "-C", str(git_dir), "rev-parse", base_local]).stdout.strip()
-    return base, head
+def source_transport(ref: PRRef, local: Optional[LocalRepo] = None):
+    """Respect operator Git transport preferences without copying credentials into URLs."""
+    protocol = None
+    if local is not None:
+        origin = _run(['git', '-C', str(local.toplevel), 'remote', 'get-url', 'origin']).stdout.strip()
+        protocol = 'ssh' if origin.startswith(('git@', 'ssh://')) else 'https'
+    else:
+        preference = _run(['gh', 'config', 'get', 'git_protocol', '--host', ref.host], check=False, timeout=30)
+        protocol = preference.stdout.strip() if preference.returncode == 0 else 'https'
+    if protocol == 'ssh':
+        return 'git@%s:%s.git' % (ref.host, ref.slug), ('protocol.ssh.allow=always',)
+    if protocol != 'https':
+        raise GitError('unsupported operator Git transport; configure gh git_protocol as https or ssh')
+    return 'https://%s/%s.git' % (ref.host, ref.slug), ('credential.helper=', 'credential.helper=!gh auth git-credential')
 
 
-def merge_base(git_dir: Path, base_sha: str, head_sha: str) -> str:
-    proc = _run(["git", "-C", str(git_dir), "merge-base", base_sha, head_sha], check=False)
-    if proc.returncode != 0 or not proc.stdout.strip():
-        raise GitError('cannot determine a merge base for the pinned commits; refusing to change diff scope')
-    return proc.stdout.strip()
+def gh_compare_base(ref: PRRef, base: str, head: str) -> str:
+    from .snapshots import comparison_base
+    # Changed-file patches appear only on page 1. We need just comparison metadata.
+    endpoint = 'repos/%s/compare/%s...%s?per_page=1&page=2' % (ref.slug, base, head)
+    result = _run(['gh', 'api', '--hostname', ref.host, endpoint], timeout=120)
+    if len(result.stdout.encode()) > 512 * 1024:
+        raise GitError('comparison metadata exceeded its limit')
+    try:
+        return comparison_base(json.loads(result.stdout), base, head)
+    except ValueError as exc:
+        raise GitError('invalid pinned comparison metadata') from exc
 
 
-def git_diff(git_dir: Path, from_sha: str, to_sha: str) -> str:
+def git_diff(git_dir: Path, from_sha: str, to_sha: str, omitted_paths=()) -> str:
     return _run([
-        "git", "-C", str(git_dir), "-c", "core.quotepath=false", "diff",
+        "git", "-C", str(git_dir), "-c", "protocol.allow=never", "-c", "core.quotepath=false", "diff",
         "--no-color", "--no-ext-diff", "--no-textconv", "-M", "-U3", from_sha, to_sha,
+        "--", ".", *(":(exclude,literal)" + path for path in omitted_paths),
     ], timeout=300).stdout
-
-
-def commit_messages(git_dir: Path, from_sha: str, to_sha: str, max_chars: int = 6000) -> str:
-    proc = _run(["git", "-C", str(git_dir), "log", "--format=%B%x1e", "%s..%s" % (from_sha, to_sha)], check=False)
-    messages = [m.strip() for m in proc.stdout.split("\x1e") if m.strip()]
-    text = "\n---\n".join(messages)
-    return text[:max_chars] + ("\n[truncated]" if len(text) > max_chars else "")
 
 
 def ls_tree(git_dir: Path, sha: str) -> Dict[str, str]:
@@ -197,13 +197,13 @@ def ls_tree(git_dir: Path, sha: str) -> Dict[str, str]:
 def git_show(git_dir: Path, sha: str, path: str, *, max_bytes: Optional[int] = None) -> Optional[str]:
     if max_bytes is not None:
         # Query the immutable blob size before capturing content, including on the host.
-        size = subprocess.run(["git", "-C", str(git_dir), "cat-file", "-s", "%s:%s" % (sha, path)],
+        size = subprocess.run(["git", "-c", "protocol.allow=never", "-C", str(git_dir), "cat-file", "-s", "%s:%s" % (sha, path)],
                               capture_output=True, timeout=60)
         if size.returncode:
             return None
         if int(size.stdout) > max_bytes:
             raise GitContentTooLarge('Git content exceeds the requested read limit')
-    proc = subprocess.run(["git", "-C", str(git_dir), "show", "%s:%s" % (sha, path)], capture_output=True, timeout=60)
+    proc = subprocess.run(["git", "-c", "protocol.allow=never", "-C", str(git_dir), "show", "%s:%s" % (sha, path)], capture_output=True, timeout=60)
     if proc.returncode != 0:
         return None
     if binary_sample(proc.stdout[:SAMPLE_BYTES]):
@@ -212,37 +212,30 @@ def git_show(git_dir: Path, sha: str, path: str, *, max_bytes: Optional[int] = N
 
 
 def export_tree(git_dir: Path, sha: str, dest: Path) -> Dict[str, int]:
-    """Export the tree at `sha` into `dest` using git archive. Symlinks, special files and detected binary contents are skipped."""
+    """Export local regular text blobs; omitted assets never enter an archive."""
     dest.mkdir(parents=True, exist_ok=True)
     root = dest.resolve()
     stats = {"files": 0, "skipped_links": 0, "skipped_binaries": 0}
-    with tempfile.TemporaryDirectory() as tmp:
-        archive = os.path.join(tmp, "tree.tar")
-        _run(["git", "-C", str(git_dir), "archive", "--format=tar", "-o", archive, sha], timeout=900)
-        with tarfile.open(archive) as tar:
-            for member in tar:
-                if member.issym() or member.islnk() or member.isdev():
-                    stats["skipped_links"] += 1
-                    continue
-                target = (root / member.name).resolve()
-                if root != target and root not in target.parents:
-                    continue
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                elif member.isfile():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    source = tar.extractfile(member)
-                    if source is None:
-                        continue
-                    prefix = source.read(SAMPLE_BYTES)
-                    if binary_sample(prefix):
-                        stats["skipped_binaries"] += 1
-                        continue
-                    with open(target, "wb") as out:
-                        out.write(prefix)
-                        import shutil
-                        shutil.copyfileobj(source, out)
-                    stats["files"] += 1
+    entries = tree(git_dir, sha)
+    local = sizes(git_dir, [e['oid'] for e in entries.values() if e['kind'] == b'blob'])
+    for name, entry in entries.items():
+        if entry['mode'] not in (b'100644', b'100755'):
+            stats['skipped_links'] += 1
+            continue
+        size = local[entry['oid']]
+        if known_binary_path(name) or (size is not None and blob_is_binary(str(git_dir), entry['oid'], size)):
+            stats['skipped_binaries'] += 1
+            continue
+        if size is None:
+            raise GitError('required snapshot blobs are missing')
+        target = (root / name.decode('utf-8')).resolve()
+        if root not in target.parents:
+            raise GitError('unsafe exported path')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        data = read_git(git_dir, 'cat-file', 'blob', entry['oid'], limit=size)
+        with target.open('xb') as out:
+            out.write(data)
+        stats['files'] += 1
     return stats
 
 
@@ -254,22 +247,20 @@ def binary_omissions(ctx):
     """
     trees = []
     for sha in (ctx.merge_base, ctx.head_sha):
-        proc = subprocess.run(['git', '-C', str(ctx.git_dir), 'ls-tree', '-rzl', sha],
-                              capture_output=True, timeout=60)
-        if proc.returncode or len(proc.stdout) > 2 * 1024 * 1024:
-            raise GitError('Git tree metadata failed or exceeded its limit')
-        entries = {}
-        for row in proc.stdout.split(b'\0'):
-            if not row:
+        entries = tree(ctx.git_dir, sha)
+        local = sizes(ctx.git_dir, [e['oid'] for e in entries.values() if e['kind'] == b'blob'])
+        current = {}
+        for name, entry in entries.items():
+            if entry['mode'] not in (b'100644', b'100755'):
                 continue
-            fields, path = row.split(b'\t', 1)
-            mode, kind, oid, size = fields.split()
-            if kind != b'blob' or mode not in (b'100644', b'100755'):
-                continue
-            size = int(size)
-            entries[path] = (oid.decode('ascii'), size,
-                             blob_is_binary(str(ctx.git_dir), oid.decode('ascii'), size))
-        trees.append(entries)
+            size = local[entry['oid']]
+            binary = known_binary_path(name)
+            if not binary:
+                if size is None:
+                    raise GitError('required snapshot blobs are missing')
+                binary = blob_is_binary(str(ctx.git_dir), entry['oid'], size)
+            current[name] = (entry['oid'], size, binary)
+        trees.append(current)
     base, head = trees
     result = []
     for path in sorted(set(base) | set(head)):

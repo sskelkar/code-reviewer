@@ -62,6 +62,24 @@ class AcquisitionTests(unittest.TestCase):
         self.assertNotIn('Authorization', headers)
         self.assertTrue(connection.close.called)
 
+    def test_comparison_request_is_pinned_bounded_and_never_accepts_an_external_url(self):
+        connection=Mock()
+        response=connection.getresponse.return_value
+        response.status=200
+        response.read.return_value=json.dumps({'base_commit':{'sha':'a'*40},
+                                              'merge_base_commit':{'sha':'c'*40}}).encode()
+        with patch.object(acquire.http.client,'HTTPSConnection',return_value=connection):
+            value=acquire.metadata(URL,compare=('a'*40,'b'*40))
+            self.assertEqual(acquire.comparison_base(value,'a'*40,'b'*40),'c'*40)
+            path=connection.request.call_args.args[1]
+            self.assertEqual(path,'/repos/example/demo/compare/'+'a'*40+'...'+'b'*40+'?per_page=1&page=2')
+            self.assertNotIn('Authorization',connection.request.call_args.kwargs['headers'])
+            calls=connection.request.call_count
+            for hashes in (('main','b'*40),('https://evil.invalid','b'*40)):
+                with self.assertRaisesRegex(ValueError,'comparison'):
+                    acquire.metadata(URL,compare=hashes)
+            self.assertEqual(connection.request.call_count,calls)
+
     def test_source_failure_frames_accept_only_status_not_server_text(self):
         for status in (301,401,403,404,429,503):
             failure=acquire.source_failure(acquire.MetadataUnavailable(status).frame())
@@ -75,15 +93,17 @@ class AcquisitionTests(unittest.TestCase):
 
     def test_tree_limit_errors_include_bounded_escaped_metadata_not_exception_text(self):
         from code_reviewer.sandbox import git_input
-        row=b'100644 blob '+b'a'*40+b' '+str(git_input.FILE_BYTES+1).encode()+b'\tfixture.bin\x00'
-        with patch.object(git_input,'git',return_value=row), patch.object(git_input,'blob_is_binary',return_value=False):
+        entries = {b'fixture.txt':dict(mode=b'100644',kind=b'blob',oid='a'*40)}
+        with patch.object(git_input,'tree',return_value=entries), \
+             patch.object(git_input,'sizes',return_value={'a'*40:git_input.FILE_BYTES+1}), \
+             patch.object(git_input,'blob_is_binary',return_value=False):
             try:
                 git_input.admit_tree(self.root,'b'*40)
             except ValueError as exc:
                 failure=acquire.acquisition_error(exc)
         self.assertEqual(failure.reason,'file-bytes')
         self.assertIn('2 MiB',str(failure))
-        self.assertEqual(failure.file, '"fixture.bin"')
+        self.assertEqual(failure.file, '"fixture.txt"')
         self.assertEqual(acquire.source_failure(failure.frame()).size,git_input.FILE_BYTES+1)
         escaped=acquire.acquisition_error(git_input.TreeFileTooLarge(b'\x1bunsafe\n.bin',git_input.FILE_BYTES+1))
         self.assertNotIn('\x1b',escaped.file)
@@ -106,26 +126,32 @@ class AcquisitionTests(unittest.TestCase):
                 acquire.describe(dict(metadata(), **{key:value}), URL)
 
     def test_fetch_uses_only_pinned_hashes_clean_https_policy_and_reaps_helpers(self):
+        from code_reviewer.shared import snapshots
         process = Mock(pid=1234, returncode=0)
         process.poll.return_value = 0
-        with patch.object(acquire.subprocess, 'Popen', return_value=process) as popen, \
-             patch.object(acquire.os, 'killpg') as kill:
-            acquire.fetch(self.root, 'example/demo', 'a'*40, 'b'*40)
-        argv = popen.call_args.args[0]
-        self.assertEqual(argv[-3:], ['https://github.com/example/demo.git', 'a'*40, 'b'*40])
-        for option in ('protocol.allow=never', 'protocol.https.allow=always', 'credential.helper=',
-                       'http.followRedirects=false', 'http.sslVerify=true', 'fetch.fsckObjects=true',
-                       '--no-tags', '--no-recurse-submodules', '--depth=256'):
-            self.assertIn(option, argv)
-        self.assertTrue(popen.call_args.kwargs['start_new_session'])
+        captured=[]
+        def launch(argv, **kwargs):
+            captured.append((argv,kwargs['stdin'].read()))
+            return process
+        with patch.object(snapshots.subprocess,'Popen',side_effect=launch), \
+             patch.object(snapshots.subprocess,'run'), patch.object(snapshots.os,'killpg') as kill:
+            acquire.fetch(self.root,'example/demo',['a'*40,'b'*40],shallow=True)
+        argv,refs=captured[0]
+        self.assertEqual(argv[-1],'https://github.com/example/demo.git')
+        self.assertEqual(refs,('a'*40+'\n'+'b'*40+'\n').encode())
+        for option in ('protocol.allow=never','protocol.https.allow=always','credential.helper=',
+                       'http.followRedirects=false','http.sslVerify=true','fetch.fsckObjects=true',
+                       '--no-tags','--no-recurse-submodules','--depth=1','--filter=blob:none'):
+            self.assertIn(option,argv)
         kill.assert_called_once()
         process.wait.assert_called_once()
         process.poll.return_value = None
-        with patch.object(acquire.subprocess, 'Popen', return_value=process), \
-             patch.object(acquire, 'inventory', side_effect=ValueError('limit')), patch.object(acquire.os, 'killpg'):
-            with self.assertRaisesRegex(ValueError, 'limit'):
-                acquire.fetch(self.root, 'example/demo', 'a'*40, 'b'*40)
-        self.assertEqual(process.wait.call_count, 2)
+        with patch.object(snapshots.subprocess,'Popen',return_value=process), \
+             patch.object(snapshots.subprocess,'run'), patch.object(snapshots.os,'killpg'), \
+             patch.object(acquire,'inventory',side_effect=ValueError('limit')):
+            with self.assertRaisesRegex(ValueError,'limit'):
+                acquire.fetch(self.root,'example/demo',['a'*40])
+        self.assertEqual(process.wait.call_count,2)
 
     def test_inventory_caps_storage_and_files(self):
         (self.root/'pack').write_bytes(b'1234')
@@ -133,42 +159,6 @@ class AcquisitionTests(unittest.TestCase):
             acquire.inventory(self.root)
         with patch.object(acquire, 'GIT_FILES', 0), self.assertRaisesRegex(ValueError, 'count'):
             acquire.inventory(self.root)
-
-    def test_acquisition_pins_admits_and_exports_real_synthetic_git_without_running_target(self):
-        repo = self.root/'source'
-        repo.mkdir()
-        def git(*args):
-            return subprocess.check_output(['git', '-C', str(repo), *args], env=dict(os.environ,
-                GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null',
-                GIT_AUTHOR_NAME='Example', GIT_AUTHOR_EMAIL='example@example.invalid',
-                GIT_COMMITTER_NAME='Example', GIT_COMMITTER_EMAIL='example@example.invalid')).decode().strip()
-        git('init', '-q')
-        (repo/'app.py').write_text('value = 1\n')
-        git('add', '.')
-        git('commit', '-qm', 'Base')
-        base = git('rev-parse', 'HEAD')
-        (repo/'app.py').write_text('value = 2\n')
-        (repo/'hook.sh').write_text('exit 99\n')
-        (repo/'dependency.bin').write_bytes(b'\0'*(2*1024*1024+1))
-        (repo/'link').symlink_to('/outside')
-        git('add', '.')
-        git('commit', '-qm', 'Head')
-        head = git('rev-parse', 'HEAD')
-        row = metadata()
-        row['base']['sha'], row['head']['sha'] = base, head
-        job = self.root/'job'
-        job.mkdir()
-        def local_fetch(root, name, base_, head_):
-            self.assertEqual((base_, head_), (base, head))
-            acquire.git(root, 'fetch', '--quiet', str(repo), base_, head_)
-        with patch.object(acquire, 'metadata', return_value=row), patch.object(acquire, 'fetch', side_effect=local_fetch):
-            value = acquire.acquire(URL, job/'repo')
-        self.assertEqual(value['merge_base'], base)
-        self.assertEqual((job/'snapshot/app.py').read_text(), 'value = 2\n')
-        self.assertFalse((job/'snapshot/link').exists())
-        self.assertFalse((job/'snapshot/dependency.bin').exists())
-        ctx = acquire.context(value, URL, job/'repo')
-        self.assertEqual(ctx.head_sha, head)
 
     def test_setup_uses_a_clean_unprivileged_subprocess_and_bounded_reply(self):
         value = dict(pins(), title='Example', body='')

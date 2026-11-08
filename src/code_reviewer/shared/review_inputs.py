@@ -7,7 +7,7 @@ from ..tracing import traced
 
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 from . import criteria as criteria_mod
 from . import git_ops
@@ -41,8 +41,13 @@ class InputBuilder:
 
     def load_diff(self, ctx: PRContext) -> Tuple[List[FileDiff], Dict[str, int]]:
         """Parse the merge-base diff, drop lockfiles/generated files, and refuse PRs that are empty or too large."""
-        files = parse_unified_diff(git_ops.git_diff(ctx.git_dir, ctx.merge_base, ctx.head_sha))
         ctx.binary_omissions = git_ops.binary_omissions(ctx)
+        files = parse_unified_diff(git_ops.git_diff(ctx.git_dir, ctx.merge_base, ctx.head_sha,
+            omitted_paths=[item["path"] for item in ctx.binary_omissions]))
+        existing = {f.path for f in files}
+        for item in ctx.binary_omissions:
+            if item["path"] not in existing and item["status"] != "unchanged":
+                files.append(FileDiff(path=item["path"], status=item["status"], binary=True))
         omitted = {item['path'] for item in ctx.binary_omissions}
         # Target .gitattributes may force binary blobs to appear as text. Never
         # send those hunks merely because Git's diff driver called them text.
