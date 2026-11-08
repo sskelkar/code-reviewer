@@ -19,6 +19,7 @@ STAGES = {
     'acquiring': 'fetching and pinning PR input inside the VM',
     'admitting': 'sealing read-only input and checking boundaries',
     'credentials': 'preparing selected model authentication',
+    'checkout': 'review checkout: /work/snapshot (inside the disposable VM)',
     'criteria': 'resolving repository review criteria',
     'classifying': 'distributing project criteria among personas',
     'reviewing': 'reviewers are investigating the change',
@@ -139,7 +140,7 @@ class GuestProgress:
 
     def __call__(self, event: Event):
         kind, d = event.type, event.data
-        stages = {'checkout_ready': 'criteria', 'resolver_started': 'criteria',
+        stages = {'checkout_ready': 'checkout', 'resolver_started': 'criteria',
                   'classification_started': 'classifying',
                   'verification_started': 'verifying', 'report_ready': 'exporting', 'report_started': 'reporting'}
         if kind in stages:

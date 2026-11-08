@@ -1,6 +1,6 @@
 # Development
 
-Use Python 3.13 and the [README setup](../README.md#quick-start). The core runtime uses the standard library. Optional host tracing uses `langfuse==5.1.0`; no other runtime or test dependencies are required.
+Use Python 3.13 and the [README setup](../README.md#quick-start). From the reviewer checkout, use `source .venv/bin/activate` in each new terminal before running Python tests or developer commands; reviews can use the [one-line activation form](usage.md#running-from-a-new-terminal). The core runtime uses the standard library. Optional host tracing uses `langfuse==5.1.0`; no other runtime or test dependencies are required.
 
 ## Tests
 

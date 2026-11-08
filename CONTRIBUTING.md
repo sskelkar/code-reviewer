@@ -18,10 +18,10 @@ Keep API keys, OAuth tokens, private source, personal data and confidential PR i
 
 ## Set up and test
 
-Follow the [source installation](README.md#install), activate `.venv`, then run:
+Follow the [source installation](README.md#install), then run this from the reviewer checkout in any new terminal:
 
 ```bash
-python -m unittest discover -s tests -t .
+source .venv/bin/activate && python -m unittest discover -s tests -t .
 ```
 
 Ordinary tests need no model account, credentials, Docker, Lima or network access. Installing the optional tracing extra also enables the in-memory Langfuse SDK tests. Use [the test map](docs/development.md#tests) to find focused checks. The repository has no CI workflow; include the checks you ran in your pull request.

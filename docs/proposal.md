@@ -43,13 +43,9 @@ Remaining comparison work: independently adjudicate a small public/synthetic set
 
 ### Possible future improvement: pluggable review skills
 
-**Optional later extension.** Separate reusable review expertise from reviewer execution. Package focus, criteria, investigation procedures and supporting references as review skills; keep fresh sessions, pass counts, parallel rounds, budgets, validation, consolidation and agreement under the Python harness. The current four personas remain the default configuration.
+Projects could attach reusable review expertise—focus, criteria, investigation procedures and references—to the existing personas. Keep scheduling, validation, budgets and reporting in the harness. Additional skills should not automatically create more model sessions or expand tools; native scripts, hooks and MCP integrations remain outside the read-only review boundary.
 
-Projects could attach skills to existing personas—for example, PostgreSQL migration/transaction checks to production safety, or project-specific API/event contract guidance to correctness. Private project skills could stay in that project's repository. A later extension could let a project request a dedicated reviewer for a skill, with its own passes and budget. Attaching expertise should not automatically create another reviewer: additional sessions increase cost and overlapping findings. Skills should describe how to investigate and what constitutes evidence, beyond listing criteria.
-
-Prefer explicit project configuration and deterministic harness loading of selected skills over relying on model-triggered discovery for required coverage. Freeze/log the actual skill instructions, references and versions/hashes used by each reviewer; retain complete project-rule assignment, stable rule identities, common finding schemas and read-only permissions. Native skill scripts, hooks or tools must not implicitly expand execution privileges. Whether to adopt the standard `SKILL.md` format or a narrower review-specific format remains open.
-
-Suggested sequence if pursued: first attach skills to the existing four personas; then consider configurable reviewer definitions. The latter requires generalizing the four IDs currently embedded in routing, scheduling, budget allocation, categories and validation. Compare review quality, coverage and cost before replacing the existing defaults. This could complement the project context pack; it does not replace that work.
+Start with deterministic loading and complete assignment to the existing four personas. Freeze the selected instructions and versions alongside other review inputs. Dedicated project-defined personas would require generalizing IDs embedded in routing, scheduling, budgets, categories and validation; compare useful findings, false positives and cost before considering that extension. The skill format remains undecided.
 
 ### Review-report follow-ups: qualifications and criteria traceability
 

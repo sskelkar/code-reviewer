@@ -2,15 +2,6 @@
 
 [Architecture](../../../docs/architecture.md#review-pipeline) describes scheduling, consolidation and verification; [usage](../../../docs/usage.md#persona-budget-pools) specifies budgets; [criteria](../../../docs/persona-criteria.md) indexes defaults; [prompts](../../../docs/prompts.md#persona-prompts) defines model contracts.
 
-| Module | Responsibility |
-|---|---|
-| `flow.py` | Inputs, rounds and ordered consolidation |
-| `roles.py`, `prompt_contract.py`, `prompts/` | Model contracts and prompt assembly |
-| `caller.py`, `budget.py`, `runner.py` | Per-attempt checks, atomic pools and cancellation forwarding |
-| `contracts.py`, `master.py`, `models.py` | Validated proposals, sightings, categories, conflicts and results |
-| `evidence.py`, `verification.py` | Shared evidence validation, connected conflict groups, assessments and publication allowlist |
-| `report.py` | Supported-only summaries/reports and dry-run presentation |
-
 ## Canonical assets
 
 | Asset | Purpose |

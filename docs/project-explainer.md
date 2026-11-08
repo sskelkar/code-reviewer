@@ -4,7 +4,7 @@ A source-code walkthrough for contributors. It follows a pull request from the o
 
 ## Complete review call chain
 
-Start with `reviewer review <PR URL>`. The installed `reviewer` entry point in [pyproject.toml](../pyproject.toml) calls `code_reviewer.cli.main()`. The diagrams below expand that path in layers: dispatch, the VM boundary, the four-perspective pipeline and each model invocation. Labels name actual functions or methods; arrows show execution order, including returns where marked. They omit standard-library internals and small parsing/formatting helpers.
+From an installed reviewer checkout, start with `source .venv/bin/activate && reviewer review <PR URL>`. Activation makes the CLI available in the current terminal; the diagrams begin at the `reviewer` process. The installed `reviewer` entry point in [pyproject.toml](../pyproject.toml) calls `code_reviewer.cli.main()`. The diagrams below expand that path in layers: dispatch, the VM boundary, the four-perspective pipeline and each model invocation. Labels name actual functions or methods; arrows show execution order, including returns where marked. They omit standard-library internals and small parsing/formatting helpers.
 
 Orange **LLM call** nodes mark role invocations; orange **I/O** nodes mark the subprocess or network operation that performs them. Other nodes run locally without asking a model. The same call chain runs on the host or inside Firecracker, according to the selected execution location.
 
@@ -234,58 +234,6 @@ flowchart LR
 ```
 
 The exporter is optional, host-only and deadline-bounded. It has no provider credentials or guest network route. `finish()` also runs on failure, preserving available host metadata; an unavailable exporter cannot replace a review exception or result. Preflight/dry-run bypass the recorder/export lifecycle. See [trace configuration and limits](tracing.md).
-
-## Where to start reading
-
-| Module | Question it answers |
-|---|---|
-| `cli.py`, `review_options.py` | Which commands/options exist and how are overrides applied? |
-| `config.py`, `security.py`, `review_flow.py` | What is trusted configuration and when can target/credential activity begin? |
-| `review/flow.py` | How do concurrent rounds, fixed-order merges and publication verification work? |
-| `shared/review_inputs.py`, `criteria.py`, `resolver.py` | How are PR input and project rules assembled? |
-| `shared/diffview.py`, `findings.py` | How is a diff represented and evidence checked? |
-| `backends/contract.py`, `factory.py` | What does any LLM adapter promise and how is it selected? |
-| `backends/claude.py`, `openai.py` | How do native CLI and HTTPS calls satisfy that contract? |
-| `shared/llm.py`, `stats.py`, `run_store.py` | Who validates replies, accounts attempts and writes artifacts? |
-| `sandbox/review.py`, `review_worker.py`, `guest.py` | How does a normal review cross the VM boundary? |
-| `sandbox/vm.py`, `network.py`, `snapshot.py` | Which OS/network controls contain the job? |
-| `parked/` | Retained inactive frontend/REPL helpers; no normal CLI dependency |
-
-Tests and callers import the module that owns the implementation. `Engine` remains a small facade over `ReviewFlow`; orchestration lives in the review package.
-
-## Python concepts used here
-
-### Dataclasses are ordinary data objects
-
-`PRContext`, `CallSpec` and `LLMResult` use `@dataclass`. Their fields describe the data passed between components. Python generates the constructor and useful representations. `field(default_factory=list)` gives each instance its own list; a shared mutable default would leak state between runs.
-
-`dataclasses.replace(cfg, ...)` creates an option-adjusted copy. It prevents one review's CLI overrides from mutating configuration reused elsewhere. Paths use `pathlib.Path` rather than scattered string concatenation.
-
-### A protocol describes the dependency
-
-`Runner` is a `typing.Protocol`: code uses the runner's supported methods without depending on a concrete provider class. It is a static structural contract, not runtime validation. Claude and OpenAI adapters return `LLMResult`; FakeRunners in tests use the same result type. Runtime reply/schema/evidence checks remain mandatory.
-
-The interface carries system/user text, schema, model, allowed tools, cwd, estimated allowance and timeout. It returns structured output or failure, token/cost metadata, duration, retryability and billing mode. The adapter does not decide review criteria, merges, votes or posting.
-
-### Functions and callbacks connect the pieces
-
-The harness passes event sinks, validators, transport functions and fixture runners as ordinary function values. `emit(Event(...))` is progress output, not the review state. The master list, pass records and validators determine the result.
-
-Dependency injection keeps tests offline: a fixture can supply scripted provider responses without reading credentials, networking or starting a VM. Boundary tests exercise the real dispatcher with controlled infrastructure fakes rather than bypassing the boundary through a presentation seam.
-
-### Exceptions describe failure boundaries
-
-- `ConfigError`: invalid trusted operator settings or unsupported access selection.
-- `RunnerError`: adapter startup/use failure; callers never choose a fallback provider.
-- `PassFailed`: a call could not produce validated output after permitted retries.
-- `ReviewRefused`: no acceptable review input or unsupported execution request.
-- Persona `RunStopped`: a particular pool/global limit prevents more work.
-
-`try/finally` ensures cleanup even when these exceptions or cancellation interrupt execution. Context managers (`with`) close files/sockets/temporary state at the boundary they own. Never assume a temporary directory itself provides OS isolation.
-
-### Concurrency is bounded work, not extra agents created dynamically
-
-The reviewer uses a `ThreadPoolExecutor`: each round dispatches at most `persona_parallel` calls. Each active reviewer has separate caller/log state and an independent budget pool. Shared accounting/reservations are protected by locks. The harness waits for the round, merges in fixed order and only then starts another round. Cancellation reaches native process groups or API retry waits; join work before removing its checkout.
 
 ## Further reference
 

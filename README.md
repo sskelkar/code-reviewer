@@ -58,7 +58,7 @@ python -m pip install -e '.[tracing]'
 reviewer --help
 ```
 
-Keep the source checkout: role prompts and criteria load from `src/code_reviewer/review/`. The core uses the standard library; the tracing extra installs the optional Langfuse SDK.
+Keep the source checkout: role prompts and criteria load from `src/code_reviewer/review/`. The core uses the standard library; the tracing extra installs the optional Langfuse SDK. In each new terminal, run commands from this checkout. The examples activate `.venv` and invoke `reviewer` on one line; `&&` prevents execution if activation fails. See [running from another directory or through Python](docs/usage.md#running-from-a-new-terminal).
 
 ### Configure execution and authentication
 
@@ -70,15 +70,15 @@ Choose [provider and authentication](docs/llm.md). Claude host subscription revi
 
 ```bash
 claude  # complete your usual sign-in
-reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
 ```
 
 For an eligible ChatGPT subscription, sign into the selected execution identity and choose a model from the account catalog:
 
 ```bash
-reviewer auth login
-reviewer auth models
-reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
+source .venv/bin/activate && reviewer auth login
+source .venv/bin/activate && reviewer auth models
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
 ```
 
 Add `--no-sandbox` to both authentication and review commands for host execution. API-key access is a separate billing choice; [LLM access](docs/llm.md#selecting-access) lists the credential variables and required OpenAI token rates. Credentials belong in the invoking environment or protected sign-in store, never Git or TOML. CLI overrides apply to one command; save your provider, authentication, model and execution choices in the external [operator configuration](docs/usage.md#configuration) to reuse them.
@@ -88,10 +88,10 @@ Add `--no-sandbox` to both authentication and review commands for host execution
 ```bash
 # After configuring your selected provider, authentication and execution location:
 # Offline configuration only: no target, credential or model access.
-reviewer review OWNER/REPO#123 --preflight
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --preflight
 
 # One review per perspective, at most two reviewers concurrently.
-reviewer review OWNER/REPO#123 --passes 1 --parallel 2
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --passes 1 --parallel 2
 ```
 
 The CLI shows timed progress and verification-pending candidate counts, then prints the final summary and report path. Nothing is posted unless `--post` is supplied. Findings appear under **Correctness → Production safety → Test quality → Code quality**, sorted by severity within each section. Multi-category findings appear once and retain all labels.

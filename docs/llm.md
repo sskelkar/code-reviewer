@@ -38,9 +38,22 @@ flowchart TD
 - `backends/chatgpt/`: loopback OAuth/PKCE, signed identity validation, protected account records, serialized rotating refresh and model catalog.
 - `sandbox/`: worker/image policy, private credential transfer, external egress and cleanup.
 
+## Where model calls run
+
+| Execution | Claude | OpenAI |
+|---|---|---|
+| Explicit `--no-sandbox` | Native Claude Code process on the host; subscription mode can reuse its existing login | Python HTTPS adapter on the host |
+| VM default | Verified Linux ARM64 Claude Code binary inside Firecracker; subscription mode requires an explicit environment token | Python HTTPS adapter inside Firecracker; no separate OpenAI executable |
+
+For OpenAI VM reviews, the host hands off the selected API key or ChatGPT access token only after repository admission and boundary checks. The adapter contacts `api.openai.com` through the inference-only proxy. Read/Grep/Glob calls inspect the protected guest checkout. ChatGPT consent, credential storage and refresh stay on the host; the guest receives no refresh token. Reports return through the private result channel before VM cleanup. See [VM architecture](sandbox-architecture.md) for the transport and network controls.
+
+Provider selection does not change execution location. Use `--no-sandbox` on individual commands when you want host execution while retaining VM defaults for other reviews.
+
 Only Reviewers and the persona Verifier receive Read/Grep/Glob. Resolver, Classifier and Comparator receive no code tools. The adapters do not choose criteria, merge findings or post comments.
 
 ## Selecting access
+
+Run the shell examples from the reviewer checkout after installation. Each command activates `.venv` before using the installed entry point; see [new-terminal usage](usage.md#running-from-a-new-terminal) for absolute-path and direct Python alternatives.
 
 Set `provider = "claude" | "openai"` and `auth_mode = "api-key" | "subscription"`, or use `--provider` and `--auth`. API-key access is the default. OpenAI requires one explicit model ID for all roles; Claude aliases are not mapped to OpenAI models.
 
@@ -58,7 +71,7 @@ For explicit **host execution**, complete your usual enterprise/subscription sig
 
 ```bash
 claude
-reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
 ```
 
 With no `CLAUDE_CODE_OAUTH_TOKEN` override, the factory runs the configured Claude executable's `auth status --json` with the configured isolation flags, in a temporary directory outside the reviewed checkout. It requires `loggedIn: true` and `authMethod: "claude.ai"` before starting model calls. Signed-out, Console/API-key, third-party and unrecognized methods fail with a sign-in instruction; they do not switch billing modes. This is a native status check, not an account entitlement or model-access test. Preflight and dry-run never perform it.
@@ -74,11 +87,11 @@ Claude's [authentication](https://code.claude.com/docs/en/authentication) and [C
 VM is the default execution location. Sign in for the location you intend to use:
 
 ```bash
-reviewer auth login
-reviewer auth status
-reviewer auth models
-reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
-reviewer auth logout
+source .venv/bin/activate && reviewer auth login
+source .venv/bin/activate && reviewer auth status
+source .venv/bin/activate && reviewer auth models
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
+source .venv/bin/activate && reviewer auth logout
 ```
 
 For direct-host execution, append `--no-sandbox` to **each** authentication and review command. Host and VM identities are separate. A VM identity is stable for the configured Lima home/instance; changing that deployment identity requires its own sign-in. The host conducts consent for the selected runtime, stores its registration and retains refresh credentials locally. This bounded-job design transfers only an access token, rather than installing a renewable session inside the guest.

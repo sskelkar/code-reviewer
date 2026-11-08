@@ -8,7 +8,7 @@ import os
 import shutil
 from typing import Optional, TextIO
 
-from .shared.events import Event
+from .shared.events import Event, display_text
 
 
 def _fmt_money(value: float) -> str:
@@ -41,8 +41,9 @@ class ProgressPrinter:
         elif kind == "diff_ready":
             self._say("diff: %d files, %d changed lines (%d excluded)" % (d["files"], d["changed_lines"], d["excluded"]))
         elif kind == "checkout_ready":
-            self._say("checkout ready (%d files, %d symlinks skipped); model tools are read-only%s" % (
-                d["files"], d["skipped_links"], "; kept at %s" % d["path"] if d.get("kept") else ""))
+            self._say("checkout ready at %s (%d files, %d symlinks skipped; %s); model tools are read-only" % (
+                display_text(str(d['path']), 4096), d["files"], d["skipped_links"],
+                'kept after review' if d.get('kept') else 'removed after review'))
         elif kind == "resolver_started":
             self._say("resolving project criteria from AGENTS.md (%d candidate files) ..." % d["candidates"])
         elif kind == "criteria_resolved":

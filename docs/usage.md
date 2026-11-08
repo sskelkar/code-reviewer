@@ -4,13 +4,37 @@ Start with the [README quick start](../README.md#quick-start). The REPL is parke
 
 [Commands](#reviewing-a-pull-request) · [Results](#reading-the-report) · [Project criteria](#preparing-your-project-optional-recommended) · [Configuration](#configuration) · [Storage](#where-things-are-stored-and-cleaning-up) · [Troubleshooting](#troubleshooting)
 
+## Running from a new terminal
+
+After the [source installation](../README.md#install), run this from the code-reviewer checkout, replacing the PR reference and selecting your usual provider/authentication options:
+
+```bash
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --passes 1
+```
+
+Activation makes the installed `reviewer` command available in that terminal. `&&` runs it only if activation succeeds. It does not install the package or choose provider, credentials or execution location; the existing configuration and flags still apply.
+
+From another directory, use the absolute activation path, replacing `/absolute/path/to/code-reviewer` with your installation:
+
+```bash
+source /absolute/path/to/code-reviewer/.venv/bin/activate && reviewer review OWNER/REPO#123 --passes 1
+```
+
+You can also invoke the Python entry point directly from the reviewer checkout without activation or a PATH change:
+
+```bash
+.venv/bin/python -m code_reviewer.cli review OWNER/REPO#123 --passes 1
+```
+
+The review commands below include activation so they can be copied into a fresh terminal from the reviewer checkout. Further commands in an already activated terminal can use `reviewer` directly.
+
 ## Reviewing a pull request
 
 ### Check configuration
 
 ```bash
-reviewer review OWNER/REPO#123 --preflight
-reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --passes 1 --preflight
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --preflight
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --provider openai --model MODEL_ID --passes 1 --preflight
 ```
 
 The CLI prints JSON with the provider, effective settings, configuration errors and execution choice. It performs no target-directory discovery, Git operations, model/version calls, credential reads or posting. Exit 1 means configuration is missing/unsupported. `ready: true` means offline settings passed, it does not verify files, the worker or authentication. `runtime_checked: false` makes clear this is an offline configuration report, not a live check. OpenAI needs explicit model IDs rather than Claude aliases. Preflight does not establish account access, price correctness or runtime compatibility.
@@ -55,6 +79,8 @@ Options override the settings file for that run only. Other settings, including 
 ## Live progress and candidate counts
 
 VM reviews stream bounded status messages through the existing private SSH/vsock channel. The CLI shows input acquisition/admission, criteria discovery/classification, scheduled reviewer calls and their completion, consolidation, candidate verification, report transfer and cleanup. During a stage without messages, a host-side heartbeat prints every 15 seconds. “Still waiting” identifies the last reported stage; it is not proof that a guest is making progress, an estimated completion time or permission to skip a failed check. Persona calls can be queued when `--parallel` is below four. Normal reviews use timestamped progress instead of duplicate `sandbox:` lifecycle lines, including image build/reuse summaries. Interactive terminals show a rotating ASCII activity indicator on one temporary line. It clears before logs/previews and on normal exit, cancellation or failure; it does not change cursor visibility. Redirected output and `TERM=dumb` terminals receive plain logs and heartbeats without animation.
+
+When the checkout is ready, host reviews print its temporary absolute path and whether it will be removed or kept. VM reviews print `/work/snapshot`, explicitly labelled as inside the disposable VM; there is no corresponding host checkout path.
 
 As soon as a reviewer returns, progress shows proposed/self-rejected counts and **Verification pending**. Round summaries show completed/incomplete slots, new candidates and the cumulative distinct total. Candidate titles, locations, severities and suggestions are withheld until final verification supports publication. Host and VM reviews use the same count-only presentation, so a later-refuted claim is not shown as a provisional defect.
 
@@ -225,8 +251,9 @@ git for-each-ref --format='%(refname)' refs/code-reviewer | xargs -n1 git update
 
 | Symptom | Cause and fix |
 |---|---|
-| `reviewer: command not found` | The virtual environment is not active: `source .venv/bin/activate` in the code-reviewer directory |
+| `reviewer: command not found` | From the code-reviewer checkout, use `source .venv/bin/activate && reviewer review ...`, or the direct Python invocation in [new-terminal usage](#running-from-a-new-terminal) |
 | `pip install -e .` says editable mode requires a setuptools-based build | Old pip. Run `python -m pip install --upgrade pip` first |
+| `set vm_claude_binary ... vm_claude_sha256 ... no host fallback` | A Claude review selected VM execution without its verified Linux ARM64 CLI artifact. To reuse the Mac's native Claude login, explicitly add `--no-sandbox`; for VM execution, configure the [native runtime artifact](llm.md#native-runtime-artifact). OpenAI VM reviews use the Python adapter and do not require this artifact |
 | Prompt asset not found | Check the active executable/virtual environment matches this checkout. Prompts live under `src/code_reviewer/review/prompts/`; keep the checkout when using an editable install |
 | `error: gh ... failed` | Run `gh auth status` and `gh auth login`. Check you can read the repository. For a company-hosted GitHub, log in to that host |
 | `cannot lock ref ... is at ... but expected ...` during fetch | A ref changed during Git's update, often because another fetch ran concurrently. Current review fetches ignore configured remote-tracking mappings and disable automatic tag fetching, updating only their private review refs. Retry with a fresh invocation. A new review fetches the latest branch tips; commits are pinned only within a run |
@@ -296,8 +323,7 @@ This behavior follows the [provider's rate-limit guidance](https://developers.op
 
 ## Optional local tracing
 
-Tracing is enabled by default; set `tracing = false` in trusted operator configuration to opt out. Metadata is exported to local Langfuse at **http://localhost:4000**. Install the optional `tracing` extra using Python 3.13 and supply local project keys through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Preflight/dry-run skip tracing credential/network access. After a review, open the printed `Trace:` link or `tracing.url` in its `stats.json`. See [viewing a review's trace](tracing.md#view-a-reviews-trace), [missing traces](tracing.md#missing-traces) and [setup/cache details](tracing.md); no new review command or guest-network permission is required.
-
+Tracing defaults on. Follow [local Langfuse setup and trace viewing](tracing.md) for installation, project keys, token/cost interpretation and troubleshooting. `tracing = false` opts out; preflight/dry-run do not read tracing credentials or contact Langfuse.
 
 ## Subscription commands and limits
 

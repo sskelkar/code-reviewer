@@ -25,6 +25,36 @@ def preview():
 
 
 class ProgressTests(unittest.TestCase):
+    def test_host_checkout_path_is_always_visible_with_its_retention_policy(self):
+        for kept in (False, True):
+            with self.subTest(kept=kept):
+                output = io.StringIO()
+                ProgressPrinter(output)(Event('checkout_ready', dict(path='/tmp/synthetic-review/checkout',
+                    files=3, skipped_links=0, kept=kept)))
+                text = output.getvalue()
+                self.assertIn('/tmp/synthetic-review/checkout', text)
+                self.assertIn('kept after review' if kept else 'removed after review', text)
+                self.assertIn('model tools are read-only', text)
+
+    def test_host_checkout_location_cannot_inject_terminal_lines_or_controls(self):
+        output = io.StringIO()
+        ProgressPrinter(output)(Event('checkout_ready', dict(path='/tmp/test\n\x1b[31m/checkout',
+            files=1, skipped_links=0, kept=False)))
+        self.assertEqual(len(output.getvalue().splitlines()), 1)
+        self.assertNotIn('\x1b', output.getvalue())
+
+    def test_vm_checkout_stage_has_only_a_fixed_guest_path(self):
+        with patch.object(progress, 'send_json') as send:
+            progress.GuestProgress(None)(Event('checkout_ready', dict(path='/private/HOST_PATH_CANARY')))
+        message = send.call_args.args[1]
+        progress.validate(message)
+        self.assertEqual(message, frame(stage='checkout'))
+        self.assertNotIn('HOST_PATH_CANARY', json.dumps(message))
+        output = io.StringIO()
+        LiveProgress(output)(message)
+        self.assertIn('/work/snapshot', output.getvalue())
+        self.assertIn('inside the disposable VM', output.getvalue())
+
     def test_closed_schema_refuses_early_previews_injections_and_terminal_controls(self):
         progress.validate(preview(), allow_preview=True)
         bad = [frame(stage='untrusted phase'), frame(stage='criteria', prompt='private'),

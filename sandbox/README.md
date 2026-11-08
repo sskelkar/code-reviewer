@@ -2,6 +2,8 @@
 
 [VM setup/checks/recovery](../docs/sandbox-check.md) is the operator runbook. [VM architecture](../docs/sandbox-architecture.md) explains the boundary; [alternatives](../docs/sandbox-alternatives.md) compares other designs.
 
+Run the developer commands below from the reviewer checkout with `source .venv/bin/activate`. Normal reviews can use the [one-line activation form](../docs/usage.md#running-from-a-new-terminal).
+
 This directory contains Firecracker image builders and the Lima worker profile. Runtime Python belongs in `src/code_reviewer/sandbox/`. Builders are development interfaces; the normal CLI uses the shared jailed lifecycle.
 
 To build a trusted source bundle for development:

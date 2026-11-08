@@ -144,6 +144,8 @@ class PersonaFlowTests(TempDirTestMixin, unittest.TestCase):
                 report = result.report_path.read_text()
                 self.assertIn('Multi-perspective review: %d/%d completed' % (4 * count, 4 * count), report)
                 self.assertIn('round %d/%d (slot %d/%d)' % (count, count, 4 * count, 4 * count), output.getvalue())
+                self.assertIn(str(runner.calls[0]['cwd']), output.getvalue())
+                self.assertFalse(runner.calls[0]['cwd'].exists())
                 rates = agreement(result.master.items['F-001'], result.completed_by_persona, self.cfg)
                 for persona in PERSONAS:
                     self.assertEqual(rates[persona], {'seen': count, 'completed': count, 'tier': 'Unrated' if count == 1 else 'High'})
