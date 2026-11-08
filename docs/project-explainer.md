@@ -119,9 +119,11 @@ Orange nodes invoke an LLM when their condition applies. Every invocation expand
 ```mermaid
 flowchart TD
     START["ReviewFlow.review()"] --> INPUT["InputBuilder + RunStore<br/>Budget + ParallelRunner + PersonaCaller + Roles"]
-    INPUT --> RES["InputBuilder.resolve_criteria()<br/>review_guidance.discover() → criteria.assemble()<br/>project criteria or enabled baseline"]
-    RES --> CLASS["LLM for project rules: Roles.classify()<br/>Roles.call('classifier')"]
-    CLASS --> FREEZE["Catalog.allocate() → _freeze()<br/>freeze() + save_frozen() per persona"]
+    INPUT --> RES["InputBuilder.resolve_criteria()<br/>criteria.resolve_project() → review_guidance.discover()<br/>criteria.assemble() selects the rule set"]
+    RES --> PROJECT{"Explicit project rules loaded?"}
+    PROJECT -->|Yes: project rules replace baseline| CLASS["LLM: Roles.classify()<br/>Roles.call('classifier') + validate_routes()<br/>unresolved rules go to all personas with a warning"]
+    PROJECT -->|No: enabled baseline, static assignments| FREEZE["Catalog.allocate() → _freeze()<br/>freeze() + save_frozen() per persona"]
+    CLASS --> FREEZE
     FREEZE --> ROUND["_passes(): ThreadPoolExecutor.submit()<br/>LLM: Roles.review() for each active persona"]
     ROUND --> WAIT["as_completed(): collect returned outputs<br/>round barrier"]
     WAIT --> MERGE["_consolidate() in scheduling order<br/>FindingsPreparer.prepare()<br/>LLM when findings exist: Roles.compare()"]
@@ -130,7 +132,7 @@ flowchart TD
     NEXT -->|Yes| ROUND
     NEXT -->|No| JOIN["finally: cancel + executor.shutdown(wait=True)"]
     JOIN --> JOBS["_verify() → verification.groups()<br/>connected conflicts + singleton candidates"]
-    JOBS --> VERIFY["candidate_inputs(): immutable claim data<br/>LLM: Roles.verify() → Roles.call('verifier')"]
+    JOBS --> VERIFY["candidate_inputs(): immutable claim data<br/>LLM for eligible groups: Roles.verify()<br/>Roles.call('verifier')"]
     VERIFY --> GATE["validate_assessments() → accepted assessment<br/>publishable() selects supported findings"]
     GATE --> REPORT["RunStore.save_inputs() + save_outputs()<br/>report.render_report() + render_summary()<br/>artifact() → findings.json"]
     REPORT --> CLEAN["finally: cleanup_checkout()<br/>unless explicitly kept on host"]
@@ -138,9 +140,29 @@ flowchart TD
     class CLASS,ROUND,MERGE,VERIFY llm
 ```
 
+Criteria selection and assignment are separate steps:
+
+1. **Discover without an LLM.** `InputBuilder._resolve_project_criteria()` lists files and reads guidance at `ctx.base_sha`. `criteria.resolve_project()` calls `review_guidance.discover()` to select explicit review sections in applicable README/AGENTS files, dedicated review documents, review skills and their repository-local Markdown references. General coding/setup documentation is not inferred into criteria. Discovery respects path scopes, regular-file checks and size/count limits, and records unavailable or omitted guidance. See [supported sources and limits](usage.md#preparing-your-project-optional-recommended).
+2. **Choose one rule set.** `criteria.assemble()` uses accepted project rules if any remain after validation and limits; otherwise it uses enabled baseline rules from `InputBuilder.default_rules()`. Project criteria replace the baseline. There is no criteria mode selector. Both paths retain the common review standard, four persona focuses and evidence/verification contracts. Host dry-run is a baseline-only preview: it skips project discovery and classification.
+3. **Assign and freeze.** For project rules, `Roles.classify()` asks the LLM to assign each rule to one or more personas without rewriting it. Python validates coverage and assigns unresolved rules to all personas with a warning. With baseline rules, `Roles.classify()` returns without a model call; `Catalog.allocate()` uses the static assignments in `personas.json`. `_freeze()` saves each persona's assigned instructions before review rounds. The Verifier later receives the complete accepted rule set, not just the discovering persona's subset.
+
 Each persona has frozen instructions, caller/log state and an independent pool. Pool exhaustion or repeated failures disable that persona; the others continue. Shared-role exhaustion, global cancellation or terminal failure prevents further calls. Workers are joined before checkout cleanup. Validated Verifier assessments gate publication. Refuted, unresolved and unfinished candidates remain private; severity and votes are unchanged. `review/verification.py` owns conflict components, assessment validation and the publication predicate shared by reporting and structured output.
 
+Empty candidate batches do not invoke the Comparator. With no eligible candidates, the Verifier makes no model calls. Cancelled runs skip verification; pending candidates cannot publish.
+
 `report._groups()` places each finding once under correctness, production safety, test quality or code quality. Display order is independent of scheduling order and never mutates the master.
+
+#### How candidates become publishable findings
+
+The pipeline separates proposed issues from the findings shown to users:
+
+1. **Require an argument.** Reviewer output uses a shared JSON contract for the claim, consequence, conditions, assumptions and evidence. Reviewers are instructed to report introduced/worsened issues and, by default, try to refute their own claims. Self-rejected sightings do not earn agreement votes.
+2. **Validate and ground.** Role validators check reply structure. `_consolidate()` uses `FindingsPreparer.prepare()` and `evidence_errors()` to reject malformed, excluded/out-of-scope or ungrounded candidates before consolidation. Quotes and absence anchors must match the admitted code or diff; criterion citations must refer to accepted rules. Matching a quote establishes its location, not the truth of the claim.
+3. **Deduplicate.** The Comparator proposes duplicate mappings and conflicts; Python validates them before `MasterList.apply()`. Repeated sightings become one candidate, not repeated report entries. Agreement does not establish correctness.
+4. **Investigate independently.** Every eligible candidate, not just conflicts, goes to a fresh Verifier with code access and the complete accepted criteria. It is instructed to seek counterevidence in callers, guards, tests and contracts. It receives no persona identities or agreement counts. Python validates its evidence and assessment; unresolved contradictions, missing assessments and invalid/incomplete investigations cannot pass publication.
+5. **Gate presentation and automation.** `verification.publishable()` admits only supported, self-check-eligible candidates with resolved group relationships. Reports, PR summaries and the supported-only `findings` array use this gate. Suggested fixes need separate support or are omitted. Withheld master candidates remain in the private audit, not the public findings or provisional progress.
+
+These controls do not prove that a model's judgment is correct. The [verification contract](verification.md) owns the exact evidence/status rules, private audit format and automation limits; the [roadmap](proposal.md#review-quality-experiments) tracks quality comparisons.
 
 ### 4. Every LLM invocation, actual I/O, tools and validation
 
@@ -186,6 +208,7 @@ One role invocation can involve several provider requests: OpenAI tool continuat
 | Command and boundary selection | [cli.py](../src/code_reviewer/cli.py), [review_flow.py](../src/code_reviewer/review_flow.py), [security.py](../src/code_reviewer/security.py) |
 | VM launcher → Linux supervisor → guest | [review.py](../src/code_reviewer/sandbox/review.py), [review_worker.py](../src/code_reviewer/sandbox/review_worker.py), [connected.py](../src/code_reviewer/sandbox/connected.py), [guest.py](../src/code_reviewer/sandbox/guest.py) |
 | Persona orchestration and call guards | [review/flow.py](../src/code_reviewer/review/flow.py), [roles.py](../src/code_reviewer/review/roles.py), [caller.py](../src/code_reviewer/review/caller.py), [runner.py](../src/code_reviewer/review/runner.py) |
+| Criteria discovery, selection and assignment | [review_inputs.py](../src/code_reviewer/shared/review_inputs.py), [shared/criteria.py](../src/code_reviewer/shared/criteria.py), [review_guidance.py](../src/code_reviewer/shared/review_guidance.py), [review/criteria.py](../src/code_reviewer/review/criteria.py), [roles.py](../src/code_reviewer/review/roles.py) |
 | Shared input, calls, evidence and storage | [review_inputs.py](../src/code_reviewer/shared/review_inputs.py), [llm.py](../src/code_reviewer/shared/llm.py), [findings.py](../src/code_reviewer/shared/findings.py), [run_store.py](../src/code_reviewer/shared/run_store.py) |
 | Adapter creation and implementations | [factory.py](../src/code_reviewer/backends/factory.py), [claude.py](../src/code_reviewer/backends/claude.py), [openai.py](../src/code_reviewer/backends/openai.py), [read_tools.py](../src/code_reviewer/backends/read_tools.py) |
 
