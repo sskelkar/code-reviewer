@@ -10,9 +10,9 @@ from ..shared.git_content import blob_is_binary
 from ..shared.models import PRContext
 from .capsule import unpack
 
-TREE_BYTES = 32 * 1024 * 1024
+TREE_BYTES = 64 * 1024 * 1024
 FILE_BYTES = 2 * 1024 * 1024
-TREE_FILES = 5000
+TREE_FILES = 10000
 
 
 class TreeFileTooLarge(ValueError):

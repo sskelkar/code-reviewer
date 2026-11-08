@@ -22,6 +22,51 @@ from code_reviewer.shared.stats import Stats
 
 
 class LLMInterfaceTests(unittest.TestCase):
+    def test_provider_defaults_follow_cli_selection_without_mutating_original(self):
+        original = Config()
+        roles = ('reviewer', 'comparator', 'resolver', 'verifier')
+        selected = apply_run_options(original, cli.build_parser().parse_args([
+            'review', 'example/project#7', '--provider', 'openai', '--auth', 'subscription']))
+        self.assertEqual([getattr(selected, 'model_' + r) for r in roles], ['gpt-6-luna'] * 4)
+        self.assertEqual([getattr(original, 'model_' + r) for r in roles], ['haiku'] * 4)
+        self.assertEqual(factory.configuration_errors(selected), [])
+        self.assertEqual(Config(provider='openai').model_reviewer, 'gpt-6-luna')
+        back = apply_run_options(selected, cli.build_parser().parse_args([
+            'review', 'example/project#7', '--provider', 'claude']))
+        self.assertEqual([getattr(back, 'model_' + r) for r in roles], ['haiku'] * 4)
+
+    def test_explicit_model_overrides_are_not_translated_between_providers(self):
+        cfg = Config(model_reviewer='haiku', model_comparator='haiku', model_resolver='haiku', model_verifier='haiku')
+        selected = apply_run_options(cfg, cli.build_parser().parse_args([
+            'review', 'example/project#7', '--provider', 'openai', '--auth', 'subscription']))
+        self.assertEqual(selected.model_reviewer, 'haiku')
+        self.assertTrue(factory.configuration_errors(selected))
+        override = apply_run_options(selected, cli.build_parser().parse_args([
+            'review', 'example/project#7', '--model', 'synthetic-model']))
+        self.assertEqual([getattr(override, 'model_' + r) for r in ('reviewer', 'comparator', 'resolver', 'verifier')],
+                         ['synthetic-model'] * 4)
+
+    def test_loaded_provider_defaults_and_explicit_models_survive_vm_serialization(self):
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / 'review.toml'
+            for explicit in (False, True):
+                text = 'provider = "openai"\nauth_mode = "subscription"\n'
+                if explicit:
+                    text += ''.join('model_%s = "synthetic-model"\n' % role
+                                    for role in ('reviewer', 'comparator', 'resolver', 'verifier'))
+                path.write_text(text)
+                path.chmod(0o600)
+                cfg = load_config(str(path))
+                expected = 'synthetic-model' if explicit else 'gpt-6-luna'
+                self.assertEqual(cfg.model_reviewer, expected)
+                # Cross the real JSON boundary: the guest receives resolved strings.
+                import json
+                job = json.loads(json.dumps(settings.job_settings(cfg)))
+                clone = settings.config_from_job(job, Path('/synthetic'))
+                self.assertEqual(clone.model_reviewer, expected)
+                self.assertEqual(factory.configuration_errors(clone), [])
+                self.assertEqual(cfg.to_dict()['model_verifier'], expected)
+
     def api_config(self):
         return Config(provider='openai',auth_mode='api-key',model_reviewer='synthetic-model',
                       model_comparator='synthetic-model',model_resolver='synthetic-model',

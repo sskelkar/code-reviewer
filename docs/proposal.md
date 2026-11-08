@@ -6,7 +6,7 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 - [ ] Handle post-call token overruns without discarding otherwise valid completed output.
 - [ ] Complete native Claude review qualification after fixing overrun handling, and qualify authentication/Read/Grep/Glob through the VM.
-- [ ] Qualify live persona coverage, long-running subscription refresh and additional failure paths.
+- [ ] Evaluate persona specialization and qualify long-running subscription refresh and additional failure paths.
 - [ ] Compare authenticated provider usage/cache fields against report and trace totals.
 - [ ] Measure real-model precision and genuine findings suppressed using a manually adjudicated before/after comparison set.
 - [ ] Improve criterion attribution and repository context after manually checking findings.
@@ -14,9 +14,11 @@ Current behavior belongs in the [architecture](architecture.md), [usage](usage.m
 
 ## Qualification evidence
 
-Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native VM tools, live persona coverage, long-running refresh and provider usage/cache reconciliation remain unqualified.
+Unit tests use synthetic inputs and simulated endpoints; they do not establish account eligibility or review quality. No-key deployment checks cover all four simulated perspectives, public acquisition/revocation, jailer/native confinement, resource limits, cancellation/supervisor loss, cleanup and worker recovery. Recorded end-to-end checks cover ChatGPT subscription access and local VM trace export. Native Claude host subscription authentication and inference returned structured output, but the post-call token allowance check rejected it before shared validation and grounding. A completed Claude review, native Claude VM tools, long-running refresh and provider usage/cache reconciliation remain unqualified.
 
 Local synthetic Langfuse ingestion covers both adapters and retry/quota failures. Stored observations are checked for one root, complete parent links, original timing, matching usage and absence of source/secret canaries. Native Claude traces expose aggregate invocation usage, not intermediate tool events.
+
+An authenticated OpenAI subscription VM review completed two rounds across all four perspectives and exercised Read/Grep/Glob after admission under the 10,000-entry / 64 MiB text-tree caps. It returned no candidates, so this run does not qualify live candidate verification or establish finding precision/recall.
 
 The supported-only pipeline passes the actual no-key sandbox check with simulated model replies, including the additional Verifier call, connected admission/file-tool/egress probes, cleanup and worker shutdown. Offline tests cover the four-file result allowlist and private audit export limits. This does not qualify live Verifier judgment or prove improved precision.
 

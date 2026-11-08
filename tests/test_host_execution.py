@@ -160,7 +160,8 @@ class HostExecutionTests(unittest.TestCase):
 
     def test_invalid_api_configuration_or_missing_key_refuses_before_host_acquisition(self):
         with patch.object(Engine, 'prepare', side_effect=AssertionError('no target')):
-            status, _, err = self.invoke(self.cfg, '--no-sandbox', '--provider', 'openai')
+            invalid = replace(self.cfg, model_reviewer='haiku')
+            status, _, err = self.invoke(invalid, '--no-sandbox', '--provider', 'openai')
             self.assertEqual(status, 1)
             self.assertIn('explicit OpenAI model', err)
             with patch.dict(os.environ, {}, clear=True):

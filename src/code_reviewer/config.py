@@ -40,6 +40,12 @@ DEFAULT_EXCLUDE_PATTERNS = [
 ]
 
 CRITERIA_MODES = ("merge", "project_only", "defaults_only")
+MODEL_ROLES = ('reviewer', 'comparator', 'resolver', 'verifier')
+DEFAULT_MODELS = {'claude': 'haiku', 'openai': 'gpt-6-luna'}
+
+
+class _DefaultModel(str):
+    """Preserve implicit defaults through dataclasses.replace; explicit strings stay explicit."""
 
 
 class ConfigError(ValueError):
@@ -48,10 +54,10 @@ class ConfigError(ValueError):
 
 @dataclass
 class Config:
-    # Models (aliases understood by `claude --model`)
-    model_reviewer: str = "haiku"
-    model_comparator: str = "haiku"
-    model_resolver: str = "haiku"
+    # Provider-dependent defaults; explicit operator/CLI strings are never translated.
+    model_reviewer: str = _DefaultModel('haiku')
+    model_comparator: str = _DefaultModel('haiku')
+    model_resolver: str = _DefaultModel('haiku')
 
     # Review behavior
     self_check: bool = True
@@ -93,7 +99,7 @@ class Config:
     # Storage
     runs_dir: str = ""
 
-    model_verifier: str = "haiku"
+    model_verifier: str = _DefaultModel('haiku')
     persona_prompt_max_chars: int = 500000
     persona_passes: int = 3
     persona_parallel: int = 4
@@ -116,7 +122,17 @@ class Config:
     call_budget_tokens: int = 200000
     tracing: bool = True
 
+    def __post_init__(self) -> None:
+        self._resolve_model_defaults()
+
+    def _resolve_model_defaults(self) -> None:
+        for role in MODEL_ROLES:
+            name = 'model_' + role
+            if isinstance(getattr(self, name), _DefaultModel):
+                setattr(self, name, _DefaultModel(DEFAULT_MODELS.get(self.provider, 'haiku')))
+
     def validate(self) -> None:
+        self._resolve_model_defaults()
         for name in ('max_consecutive_failures', 'max_diff_lines',
                      'criteria_max_chars', 'call_timeout_s', 'run_budget_tokens', 'persona_prompt_max_chars', 'call_budget_tokens'):
             value = getattr(self, name)

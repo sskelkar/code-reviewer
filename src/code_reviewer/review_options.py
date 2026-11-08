@@ -41,7 +41,7 @@ def add_run_options(parser: argparse.ArgumentParser) -> None:
              "Use --passes 1 for one review from each perspective")
     parser.add_argument(
         "--model", metavar="NAME",
-        help="model for all roles, an alias or full name such as haiku or sonnet (default: the model_* settings in review.toml)")
+        help="model for all roles, an alias or full name such as haiku or gpt-6-luna (default: model_* settings, otherwise haiku for Claude or gpt-6-luna for OpenAI)")
     parser.add_argument(
         "--criteria", choices=CRITERIA_MODES, metavar="MODE",
         help="which review criteria to apply: merge, project_only or defaults_only (default: criteria_mode in review.toml, merge)")
@@ -96,7 +96,7 @@ BANNER_OPTIONS = [
     ('--no-sandbox', 'explicit direct-host execution; default is VM, with no automatic fallback'),
     ("--parallel N", "concurrent reviewers, 1 to 4 (default 4)"),
     ("--passes N", "passes per persona (default 3)"),
-    ("--model NAME", "model for all roles, for example haiku or sonnet"),
+    ("--model NAME", "model for all roles; defaults: Claude haiku, OpenAI gpt-6-luna"),
     ("--criteria MODE", "merge (default), project_only or defaults_only"),
     ("--no-self-check", "skip the reviewer's self-refutation phase (cheaper)"),
     ("--keep-checkout", "keep the temporary checkout (its location is printed)"),

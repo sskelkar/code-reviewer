@@ -5,7 +5,7 @@ provider = "claude"  # runtime adapter: claude or openai
 auth_mode = "api-key" # subscription: Claude native host login or env token (VM requires token); OpenAI uses reviewer auth login
 sandbox = true       # default VM request; false or --no-sandbox explicitly selects the host
 
-# OpenAI: set one explicit model ID for all model_* roles. API-key mode requires positive USD/million token rates
+# OpenAI defaults to gpt-6-luna for all roles; explicit overrides must use one model across roles. API-key mode requires positive USD/million token rates
 # and OPENAI_API_KEY in the process environment. Subscription mode uses auth login and token allowances.
 # No key belongs in this TOML file or on the command line.
 openai_input_price = 0.0
@@ -18,11 +18,12 @@ persona_passes = 3
 # Persona Reviewers run concurrently within a round, then merge serially; --parallel N overrides.
 persona_parallel = 4
 
-# Models: any alias or full name accepted by `claude --model`.
-model_reviewer = "haiku"
-model_comparator = "haiku"
-model_resolver = "haiku"   # also used for project-rule classification
-model_verifier = "haiku"   # independent candidate verification
+# Models: defaults are haiku for Claude and gpt-6-luna for OpenAI.
+# Leave these commented to follow the selected provider; --model overrides all roles for one run.
+# model_reviewer = "haiku"
+# model_comparator = "haiku"
+# model_resolver = "haiku"   # also used for project-rule classification
+# model_verifier = "haiku"   # independent candidate verification
 
 # Reviewer refutes its own findings in a second phase.
 self_check = true

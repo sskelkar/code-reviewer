@@ -55,7 +55,7 @@ Only Reviewers and the persona Verifier receive Read/Grep/Glob. Resolver, Classi
 
 Run the shell examples from the reviewer checkout after installation. Each command activates `.venv` before using the installed entry point; see [new-terminal usage](usage.md#running-from-a-new-terminal) for absolute-path and direct Python alternatives.
 
-Set `provider = "claude" | "openai"` and `auth_mode = "api-key" | "subscription"`, or use `--provider` and `--auth`. API-key access is the default. OpenAI requires one explicit model ID for all roles; Claude aliases are not mapped to OpenAI models.
+Set `provider = "claude" | "openai"` and `auth_mode = "api-key" | "subscription"`, or use `--provider` and `--auth`. API-key access is the default. OpenAI defaults to `gpt-6-luna` for all roles; Claude defaults to `haiku`. Use `--model MODEL_ID` to override all roles for one run, or set all `model_*` options explicitly. OpenAI uses one model across roles; explicit Claude aliases are rejected rather than translated.
 
 | Selection | Credential source |
 |---|---|

@@ -64,6 +64,36 @@ class BinaryOmissionTests(unittest.TestCase):
         with patch.object(git_input,'TREE_FILES',1), self.assertRaisesRegex(ValueError,'file count'):
             git_input.admit_tree(self.repo,self.ctx.head_sha)
 
+    def test_larger_tree_is_admitted_but_the_new_file_cap_still_refuses(self):
+        self.assertEqual(git_input.TREE_FILES, 10000)
+        def row(number):
+            return b'100644 blob ' + b'a' * 40 + b' 1\tfile-' + str(number).encode() + b'.txt\0'
+        data = b''.join(row(n) for n in range(git_input.TREE_FILES))
+        with patch.object(git_input, 'git', return_value=data), \
+             patch.object(git_input, 'blob_is_binary', return_value=False):
+            entries = git_input.admit_tree(self.repo, self.ctx.head_sha)
+        self.assertEqual(len(entries), 10000)
+        with patch.object(git_input, 'git', return_value=data + row(git_input.TREE_FILES)), \
+             patch.object(git_input, 'blob_is_binary', return_value=False), \
+             self.assertRaisesRegex(ValueError, 'file count limit exceeded'):
+            git_input.admit_tree(self.repo, self.ctx.head_sha)
+
+    def test_larger_text_tree_is_admitted_but_total_and_per_file_caps_remain(self):
+        self.assertEqual(git_input.TREE_BYTES, 64 * 1024 * 1024)
+        self.assertEqual(git_input.FILE_BYTES, 2 * 1024 * 1024)
+        def row(number):
+            return (b'100644 blob ' + b'a' * 40 + b' ' + str(git_input.FILE_BYTES).encode()
+                    + b'\tfile-' + str(number).encode() + b'.txt\0')
+        count = git_input.TREE_BYTES // git_input.FILE_BYTES
+        data = b''.join(row(n) for n in range(count))
+        with patch.object(git_input, 'git', return_value=data), \
+             patch.object(git_input, 'blob_is_binary', return_value=False):
+            self.assertEqual(len(git_input.admit_tree(self.repo, self.ctx.head_sha)), count)
+        with patch.object(git_input, 'git', return_value=data + row(count)), \
+             patch.object(git_input, 'blob_is_binary', return_value=False), \
+             self.assertRaisesRegex(ValueError, 'total byte limit exceeded'):
+            git_input.admit_tree(self.repo, self.ctx.head_sha)
+
     def test_capsule_admission_skips_binary_without_expanding_an_archive(self):
         (self.repo/'asset.bin').write_bytes(b'\0'*(git_input.FILE_BYTES+1))
         self.commit()

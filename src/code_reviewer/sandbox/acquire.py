@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ..config import ConfigError
 from ..shared.models import PRContext
-from .git_input import TreeFileTooLarge, admit_tree, bounded_export, git
+from .git_input import TREE_BYTES, TREE_FILES, TreeFileTooLarge, admit_tree, bounded_export, git
 from .network import PROXY
 
 META_BYTES = 512 * 1024
@@ -42,8 +42,8 @@ SOURCE_REASONS = {
     'fetch': 'pinned Git commits could not be fetched within the configured limits',
     'tree': 'the repository exceeded archive/export limits',
     'file-bytes': 'a repository text file exceeds the current 2 MiB per-file admission limit',
-    'tree-bytes': 'a repository text tree exceeds the current 32 MiB total admission limit',
-    'tree-count': 'a repository tree exceeds the current 5000-file admission limit',
+    'tree-bytes': f'a repository text tree exceeds the current {TREE_BYTES // (1024 * 1024)} MiB total admission limit',
+    'tree-count': f'a repository tree exceeds the current {TREE_FILES:,}-file admission limit',
     'tree-path': 'a repository path exceeds the current 4096-byte path limit',
     'metadata': 'public PR metadata did not satisfy the requested repository/text limits',
     'permission': 'guest filesystem permissions prevented public acquisition',

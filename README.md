@@ -73,12 +73,12 @@ claude  # complete your usual sign-in
 source .venv/bin/activate && reviewer review OWNER/REPO#123 --no-sandbox --provider claude --auth subscription --model sonnet --passes 1
 ```
 
-For an eligible ChatGPT subscription, sign into the selected execution identity and choose a model from the account catalog:
+For an eligible ChatGPT subscription, sign into the selected execution identity. OpenAI defaults to `gpt-6-luna`; check account availability with `auth models`, or override it with `--model MODEL_ID`:
 
 ```bash
 source .venv/bin/activate && reviewer auth login
 source .venv/bin/activate && reviewer auth models
-source .venv/bin/activate && reviewer review OWNER/REPO#123 --provider openai --auth subscription --model MODEL_ID --passes 1
+source .venv/bin/activate && reviewer review OWNER/REPO#123 --provider openai --auth subscription --passes 1
 ```
 
 Add `--no-sandbox` to both authentication and review commands for host execution. API-key access is a separate billing choice; [LLM access](docs/llm.md#selecting-access) lists the credential variables and required OpenAI token rates. Credentials belong in the invoking environment or protected sign-in store, never Git or TOML. CLI overrides apply to one command; save your provider, authentication, model and execution choices in the external [operator configuration](docs/usage.md#configuration) to reuse them.
