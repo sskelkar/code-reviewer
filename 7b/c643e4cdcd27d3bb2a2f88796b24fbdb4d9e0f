@@ -1,0 +1,21 @@
+docs/project-explainer.md
+  s_68cd0db0a8fc3a::t_8ab3f191740c80 155-166
+  s_68cd0db0a8fc3a::t_50608bdb27c1fa 135,143-148,151
+  s_68cd0db0a8fc3a::t_ff53f41089cf8a 122-126,152,211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7bc643e4cdcd27d3bb2a2f88796b24fbdb4d9e0f",
+  "prompts": {},
+  "sessions": {
+    "s_68cd0db0a8fc3a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a150a5-9e79-7910-95fa-490cab0e53e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sskelkar <sojjwal.kelkar@deliveryhero.com>"
+    }
+  }
+}
